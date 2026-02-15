@@ -11,19 +11,33 @@ import { Directive } from '../engine/patterns';
 
 /**
  * AST 파싱 신뢰도 (명시적 선언이므로 매우 높음)
- * - 0.98: v1 파서로 완벽하게 구문 분석된 명시적 선언
- * (자유형 텍스트 기반이 아니라 explicit 문법이므로 거의 확실함)
+ * - 0.98: v1 파서로 완벽하게 구문 분석된 명시적 선언 (explicit 타입)
+ * - 0.833: 타입이 생략되어 intent에서 추론된 경우 (0.98 * 0.85)
+ * (자유형 텍스트 기반 추론이므로 약간의 불확실성 있음)
  */
-const AST_CONFIDENCE = 0.98;
+const AST_CONFIDENCE_EXPLICIT = 0.98;    // 명시적 타입
+const TYPE_INFERENCE_PENALTY = 0.85;     // 타입 추론 페널티 (× 0.85)
+const AST_CONFIDENCE_INFERRED = AST_CONFIDENCE_EXPLICIT * TYPE_INFERENCE_PENALTY; // 0.833
 
 /**
  * AST를 HeaderProposal로 변환
  *
- * .free 파일의 explicit 선언을 HeaderProposal 형식으로 변환하므로
- * 신뢰도는 매우 높음 (AST_CONFIDENCE = 0.98)
+ * .free 파일의 명시적 선언을 HeaderProposal 형식으로 변환합니다.
+ * 신뢰도는 타입 명시 여부에 따라 결정됩니다:
+ * - 타입 명시: 0.98 (높음)
+ * - 타입 생략 (추론): 0.833 (중간)
  */
 export function astToProposal(ast: MinimalFunctionAST): HeaderProposal {
-  const confidence = AST_CONFIDENCE;
+  // 타입이 생략된 경우 신뢰도 감소
+  const isInputInferred = !ast.inputType;
+  const isOutputInferred = !ast.outputType;
+
+  // 신뢰도 계산:
+  // - 타입이 모두 명시: 0.98
+  // - 타입이 생략되어 추론됨: 0.833
+  const confidence = (isInputInferred || isOutputInferred)
+    ? AST_CONFIDENCE_INFERRED
+    : AST_CONFIDENCE_EXPLICIT;
 
   // matched_op 추론: intent에서 동작 키워드 찾기
   const matched_op = inferOperation(ast.intent || '', ast.fnName);
@@ -31,7 +45,7 @@ export function astToProposal(ast: MinimalFunctionAST): HeaderProposal {
   // 이유 생성 (intent 또는 함수명 기반)
   const reason = ast.intent || `${ast.fnName} operation`;
 
-  // Phase 5: 타입 생략 시 intent에서 추론
+  // Phase 5 Task 2: 타입 생략 시 intent에서 추론
   const inputType = ast.inputType || inferTypeFromIntent(ast.intent || '', 'input');
   const outputType = ast.outputType || inferTypeFromIntent(ast.intent || '', 'output');
 

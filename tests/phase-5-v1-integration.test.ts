@@ -748,4 +748,77 @@ intent "배열 정렬"`;
       expect(proposal.output).toBe('array<number>'); // flatten은 배열 반환
     });
   });
+
+  // ============================================================================
+  // PART 9: 신뢰도 조정 (Confidence Adjustment)
+  // ============================================================================
+  describe('신뢰도 조정: 명시적 vs 추론 타입', () => {
+    test('명시적 타입: 신뢰도 0.98 (높음)', () => {
+      const freeCode = `fn sum
+input: array<number>
+output: number
+intent: "배열 합산"`;
+
+      const lexer = new Lexer(freeCode);
+      const buffer = new TokenBuffer(lexer);
+      const ast = parseMinimalFunction(buffer);
+      const proposal = astToProposal(ast);
+
+      // 타입이 명시되었으므로 높은 신뢰도
+      expect(proposal.confidence).toBe(0.98);
+    });
+
+    test('추론 타입: 신뢰도 0.833 (중간)', () => {
+      const freeCode = `fn sum
+input:
+output:
+intent: "배열 합산"`;
+
+      const lexer = new Lexer(freeCode);
+      const buffer = new TokenBuffer(lexer);
+      const ast = parseMinimalFunction(buffer);
+      const proposal = astToProposal(ast);
+
+      // 타입이 생략되어 추론되었으므로 감소된 신뢰도
+      expect(proposal.confidence).toBeCloseTo(0.833, 3);
+    });
+
+    test('부분 추론: input만 추론 (신뢰도 0.833)', () => {
+      const freeCode = `fn count
+input:
+output: number
+intent: "배열 개수"`;
+
+      const lexer = new Lexer(freeCode);
+      const buffer = new TokenBuffer(lexer);
+      const ast = parseMinimalFunction(buffer);
+      const proposal = astToProposal(ast);
+
+      // input이 추론되었으므로 감소된 신뢰도
+      expect(proposal.confidence).toBeCloseTo(0.833, 3);
+    });
+
+    test('부분 추론: output만 추론 (신뢰도 0.833)', () => {
+      const freeCode = `fn transform
+input: array<string>
+output:
+intent: "변환"`;
+
+      const lexer = new Lexer(freeCode);
+      const buffer = new TokenBuffer(lexer);
+      const ast = parseMinimalFunction(buffer);
+      const proposal = astToProposal(ast);
+
+      // output이 추론되었으므로 감소된 신뢰도
+      expect(proposal.confidence).toBeCloseTo(0.833, 3);
+    });
+
+    test('신뢰도 계산 공식: 0.98 × 0.85 = 0.833', () => {
+      const EXPLICIT = 0.98;
+      const PENALTY = 0.85;
+      const EXPECTED = EXPLICIT * PENALTY;
+
+      expect(EXPECTED).toBeCloseTo(0.833, 3);
+    });
+  });
 });
