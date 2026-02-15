@@ -31,6 +31,10 @@ export function astToProposal(ast: MinimalFunctionAST): HeaderProposal {
   // 이유 생성 (intent 또는 함수명 기반)
   const reason = ast.intent || `${ast.fnName} operation`;
 
+  // Phase 5: 타입 생략 시 intent에서 추론
+  const inputType = ast.inputType || inferTypeFromIntent(ast.intent || '', 'input');
+  const outputType = ast.outputType || inferTypeFromIntent(ast.intent || '', 'output');
+
   // 지시어 (directive) 추론: intent에서 최적화 방향 찾기
   const directive = inferDirective(ast.intent || '');
 
@@ -39,8 +43,8 @@ export function astToProposal(ast: MinimalFunctionAST): HeaderProposal {
 
   return {
     fn: ast.fnName,
-    input: ast.inputType,
-    output: ast.outputType,
+    input: inputType,
+    output: outputType,
     reason,
     directive,
     complexity,
@@ -169,6 +173,151 @@ function inferComplexity(intent: string): string {
 
   // 기본값
   return 'O(n)';
+}
+
+/**
+ * Phase 5: Intent에서 타입 추론
+ *
+ * 타입이 생략된 경우 intent 문자열에서 타입을 추론합니다.
+ * 예:
+ *   - "배열 합산" + "input" → "array<number>"
+ *   - "배열 합산" + "output" → "number"
+ *   - "배열 문자열 필터" + "input" → "array<string>"
+ *   - "배열 문자열 필터" + "output" → "array<string>"
+ */
+function inferTypeFromIntent(intent: string, position: 'input' | 'output'): string {
+  const intentLower = (intent || '').toLowerCase();
+
+  // 타입 힌트 키워드 매핑
+  const isArrayOperation = (kw: string) =>
+    intentLower.includes(kw) &&
+    (intentLower.includes('배열') || intentLower.includes('array'));
+
+  const isStringType = () =>
+    intentLower.includes('문자열') ||
+    intentLower.includes('string') ||
+    intentLower.includes('text') ||
+    intentLower.includes('str');
+
+  const isNumberType = () =>
+    intentLower.includes('숫자') ||
+    intentLower.includes('number') ||
+    intentLower.includes('num') ||
+    intentLower.includes('count');
+
+  // 연산 타입 검사
+  const isSumLike = () =>
+    intentLower.includes('합산') ||
+    intentLower.includes('합') ||
+    intentLower.includes('sum') ||
+    intentLower.includes('add') ||
+    intentLower.includes('total');
+
+  const isAverageLike = () =>
+    intentLower.includes('평균') ||
+    intentLower.includes('average') ||
+    intentLower.includes('avg') ||
+    intentLower.includes('mean');
+
+  const isMaxMinLike = () =>
+    (intentLower.includes('최대') || intentLower.includes('max')) ||
+    (intentLower.includes('최소') || intentLower.includes('min'));
+
+  const isSortLike = () =>
+    intentLower.includes('정렬') ||
+    intentLower.includes('sort') ||
+    intentLower.includes('reverse') ||
+    intentLower.includes('역순');
+
+  const isFilterLike = () =>
+    intentLower.includes('필터') ||
+    intentLower.includes('filter') ||
+    intentLower.includes('where') ||
+    intentLower.includes('검사') ||
+    intentLower.includes('조건');
+
+  const isMapLike = () =>
+    intentLower.includes('변환') ||
+    intentLower.includes('map') ||
+    intentLower.includes('transform');
+
+  const isCountLike = () =>
+    intentLower.includes('개수') ||
+    intentLower.includes('count') ||
+    intentLower.includes('length');
+
+  const isFlattenLike = () =>
+    intentLower.includes('평탄화') ||
+    intentLower.includes('flatten') ||
+    intentLower.includes('merge');
+
+  const isUniqueLike = () =>
+    intentLower.includes('유일') ||
+    intentLower.includes('unique') ||
+    intentLower.includes('distinct');
+
+  // Input 타입 추론
+  if (position === 'input') {
+    // 명시적 배열 언급이 없으면, 연산 특성으로 배열 여부 판단
+    if (
+      isSortLike() ||
+      isFilterLike() ||
+      isMapLike() ||
+      isFlattenLike() ||
+      isUniqueLike() ||
+      isAverageLike() ||
+      isSumLike() ||
+      isMaxMinLike() ||
+      isCountLike()
+    ) {
+      // 배열 연산이므로 input은 배열
+      if (isStringType()) {
+        return 'array<string>';
+      }
+      return 'array<number>'; // 기본값: 숫자 배열
+    }
+
+    // 일반적인 경우
+    if (isStringType()) {
+      return 'string';
+    }
+    if (isNumberType()) {
+      return 'number';
+    }
+
+    // 기본값: 배열 (대부분의 연산이 배열을 받음)
+    return 'array<number>';
+  }
+
+  // Output 타입 추론
+  if (position === 'output') {
+    // 단일 값을 반환하는 연산
+    if (isSumLike() || isAverageLike() || isMaxMinLike() || isCountLike()) {
+      return 'number';
+    }
+
+    // 배열을 반환하는 연산
+    if (isSortLike() || isFilterLike() || isMapLike() || isFlattenLike() || isUniqueLike()) {
+      if (isStringType()) {
+        return 'array<string>';
+      }
+      return 'array<number>';
+    }
+
+    // find/search 같은 경우: 개별 원소를 반환
+    if (intentLower.includes('찾기') || intentLower.includes('find') || intentLower.includes('search')) {
+      if (isStringType()) {
+        return 'string';
+      }
+      return 'number';
+    }
+
+    // 기본값: result (제네릭 타입)
+    return 'result';
+  }
+
+  // 위치가 잘못된 경우
+  return 'result';
 }
 
 /**

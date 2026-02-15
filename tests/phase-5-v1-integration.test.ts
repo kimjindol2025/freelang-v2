@@ -430,4 +430,163 @@ intent: "배열 합산"`;
       expect(types).toContain('GE');
     });
   });
+
+  // ============================================================================
+  // PART 7: Phase 5 Task 2 - 타입 생략 with Intent-based 추론
+  // ============================================================================
+  describe('Phase 5 Task 2: 타입 생략 및 intent 기반 추론', () => {
+    test('타입 생략: sum 연산', () => {
+      const freeCode = `fn process
+input:
+output:
+intent: "배열 합산"`; // 타입 완전 생략
+
+      const lexer = new Lexer(freeCode);
+      const buffer = new TokenBuffer(lexer);
+      const ast = parseMinimalFunction(buffer);
+      const proposal = astToProposal(ast);
+
+      // 타입이 없었으므로 intent에서 추론됨
+      expect(proposal.input).toBe('array<number>');
+      expect(proposal.output).toBe('number');
+      expect(proposal.fn).toBe('process');
+    });
+
+    test('타입 부분 생략: input만 지정, output 추론', () => {
+      const freeCode = `fn filter
+input: array
+output:
+intent: "필터링"`; // output만 생략
+
+      const lexer = new Lexer(freeCode);
+      const buffer = new TokenBuffer(lexer);
+      const ast = parseMinimalFunction(buffer);
+      const proposal = astToProposal(ast);
+
+      // input은 "array" 그대로, output은 intent에서 추론
+      expect(proposal.input).toBe('array');
+      expect(proposal.output).toBe('array<number>');
+    });
+
+    test('타입 부분 생략: output만 지정, input 추론', () => {
+      const freeCode = `fn count
+input:
+output: int
+intent: "배열 개수"`; // input만 생략
+
+      const lexer = new Lexer(freeCode);
+      const buffer = new TokenBuffer(lexer);
+      const ast = parseMinimalFunction(buffer);
+      const proposal = astToProposal(ast);
+
+      // input은 intent에서 추론, output은 "int" 그대로
+      expect(proposal.input).toBe('array<number>');
+      expect(proposal.output).toBe('int');
+    });
+
+    test('Intent 기반 타입 추론: 평균', () => {
+      const freeCode = `fn avg
+input:
+output:
+intent: "배열 평균 계산"`;
+
+      const lexer = new Lexer(freeCode);
+      const buffer = new TokenBuffer(lexer);
+      const ast = parseMinimalFunction(buffer);
+      const proposal = astToProposal(ast);
+
+      expect(proposal.input).toBe('array<number>');
+      expect(proposal.output).toBe('number');
+    });
+
+    test('Intent 기반 타입 추론: 정렬', () => {
+      const freeCode = `fn sort
+input:
+output:
+intent: "배열 정렬"`;
+
+      const lexer = new Lexer(freeCode);
+      const buffer = new TokenBuffer(lexer);
+      const ast = parseMinimalFunction(buffer);
+      const proposal = astToProposal(ast);
+
+      expect(proposal.input).toBe('array<number>');
+      expect(proposal.output).toBe('array<number>');
+    });
+
+    test('Intent 기반 타입 추론: 문자열 필터', () => {
+      const freeCode = `fn filterText
+input:
+output:
+intent: "배열 문자열 필터링"`;
+
+      const lexer = new Lexer(freeCode);
+      const buffer = new TokenBuffer(lexer);
+      const ast = parseMinimalFunction(buffer);
+      const proposal = astToProposal(ast);
+
+      expect(proposal.input).toBe('array<string>');
+      expect(proposal.output).toBe('array<string>');
+    });
+
+    test('Intent 기반 타입 추론: 검색 (find)', () => {
+      const freeCode = `fn search
+input:
+output:
+intent: "배열에서 찾기"`;
+
+      const lexer = new Lexer(freeCode);
+      const buffer = new TokenBuffer(lexer);
+      const ast = parseMinimalFunction(buffer);
+      const proposal = astToProposal(ast);
+
+      // find는 배열을 받아 단일 원소 반환
+      expect(proposal.input).toBe('array<number>');
+      expect(proposal.output).toBe('number');
+    });
+
+    test('타입 전부 명시: 추론 안 함', () => {
+      const freeCode = `fn customOp
+input: custom_type
+output: result_type
+intent: "복잡한 연산"`; // 타입 전부 명시
+
+      const lexer = new Lexer(freeCode);
+      const buffer = new TokenBuffer(lexer);
+      const ast = parseMinimalFunction(buffer);
+      const proposal = astToProposal(ast);
+
+      // 명시된 타입 사용
+      expect(proposal.input).toBe('custom_type');
+      expect(proposal.output).toBe('result_type');
+    });
+
+    test('Intent 없이 타입 생략: 기본값 사용', () => {
+      const freeCode = `fn unknown
+input:
+output:`; // intent 없이 타입 생략
+
+      const lexer = new Lexer(freeCode);
+      const buffer = new TokenBuffer(lexer);
+      const ast = parseMinimalFunction(buffer);
+      const proposal = astToProposal(ast);
+
+      // 기본값 사용
+      expect(proposal.input).toBe('array<number>');
+      expect(proposal.output).toBe('result');
+    });
+
+    test('복합 시나리오: 한 줄 형식 + 타입 생략', () => {
+      const freeCode = `@minimal fn flatten input: output: intent: "배열 평탄화"`;
+
+      const lexer = new Lexer(freeCode);
+      const buffer = new TokenBuffer(lexer);
+      const ast = parseMinimalFunction(buffer);
+      const proposal = astToProposal(ast);
+
+      expect(ast.decorator).toBe('minimal');
+      expect(proposal.input).toBe('array<number>');
+      expect(proposal.output).toBe('array<number>'); // flatten은 배열 반환
+    });
+  });
 });

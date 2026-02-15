@@ -113,12 +113,14 @@ export class Parser {
     // Parse input type declaration
     this.expect(TokenType.INPUT, 'Expected "input:" keyword');
     this.expect(TokenType.COLON, 'Expected ":" after "input"');
-    const inputType = this.parseType();
+    // Phase 5: 타입 생략 가능 (intent에서 추론)
+    const inputType = this.parseOptionalType();
 
     // Parse output type declaration
     this.expect(TokenType.OUTPUT, 'Expected "output:" keyword');
     this.expect(TokenType.COLON, 'Expected ":" after "output"');
-    const outputType = this.parseType();
+    // Phase 5: 타입 생략 가능 (intent에서 추론)
+    const outputType = this.parseOptionalType();
 
     // Parse optional intent
     let intent: string | undefined;
@@ -145,6 +147,31 @@ export class Parser {
       outputType,
       intent
     };
+  }
+
+  /**
+   * 선택적 타입 파싱 (Phase 5)
+   *
+   * 타입을 생략할 수 있으며, 이 경우 intent에서 추론
+   * 예:
+   *   - input: array<number>    → "array<number>" 반환
+   *   - input: array            → "array" 반환
+   *   - input: result           → "result" 반환
+   *   - input: (output 바로)    → "" 반환 (타입 생략)
+   */
+  private parseOptionalType(): string {
+    // intent나 output 또는 EOF를 만나면 타입 생략
+    if (
+      this.check(TokenType.INTENT) ||
+      this.check(TokenType.OUTPUT) ||
+      this.check(TokenType.INPUT) ||
+      this.check(TokenType.EOF)
+    ) {
+      return ''; // 타입 생략됨
+    }
+
+    // 타입이 있으면 파싱
+    return this.parseType();
   }
 
   /**
