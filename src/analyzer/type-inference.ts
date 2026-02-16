@@ -214,8 +214,8 @@ export class TypeInferenceEngine {
       return 'number';
     }
 
-    // Default: return 'any' instead of assuming number
-    return 'any';
+    // Default: assume number (most common return type in loops/arithmetic)
+    return 'number';
   }
 
   /**
@@ -253,10 +253,10 @@ export class TypeInferenceEngine {
         if (new RegExp(`${param}\\s*[\\-*/%]|[\\-*/%]\\s*${param}`).test(body)) {
           inferredType = 'number';
         }
-        // Addition: could be string or number
-        else if (new RegExp(`${param}\\s*\\+`).test(body)) {
+        // Addition: could be string or number (param + x or x + param)
+        else if (new RegExp(`${param}\\s*\\+|\\+\\s*${param}`).test(body)) {
           // Check context: if appears with string literals, it's string
-          const addContext = body.match(new RegExp(`[^\\n]*${param}[^\\n]*\\+[^\\n]*`));
+          const addContext = body.match(new RegExp(`[^\\n]*${param}[^\\n]*\\+[^\\n]*|[^\\n]*\\+[^\\n]*${param}[^\\n]*`));
           if (addContext && /["']/.test(addContext[0])) {
             inferredType = 'string';
           } else {
@@ -338,6 +338,11 @@ export class TypeInferenceEngine {
       const hasStringLiteral = /["']/.test(expr);
       if (hasStringLiteral) {
         return 'string';  // String concatenation
+      }
+      // Check if expression looks like number arithmetic (10 + 5 or 10 + 5 * 2)
+      // If there are other arithmetic operators (*, /, -), it's number arithmetic
+      if (/[\-*/%]/.test(expr)) {
+        return 'number';
       }
       // Check if both sides are numbers (e.g., 10 + 5)
       const parts = expr.split('+').map(s => s.trim());
