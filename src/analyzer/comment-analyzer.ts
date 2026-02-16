@@ -293,38 +293,62 @@ export class CommentAnalyzer {
     const range: CommentInfo['range'] = {};
     let hasRangeInfo = false;
 
-    // 범위 패턴: "0-100", "0 to 100", "min: 0, max: 100"
-    const rangePattern = /(\d+)\s*[-–to]+\s*(\d+)/g;
-    const rangeMatch = rangePattern.exec(comment);
-    if (rangeMatch) {
-      range.min = parseInt(rangeMatch[1], 10);
-      range.max = parseInt(rangeMatch[2], 10);
-      hasRangeInfo = true;
+    // 범위 패턴: "0-100", "0 to 100", "0..100", "min: 0, max: 100"
+    // 더 강력한 정규식: 선택적 음수 부호, 소수점 지원
+    const rangePatterns = [
+      /(?:range\s*:?\s*)?(-?\d+(?:\.\d+)?)\s*[-–to\.]+\s*(-?\d+(?:\.\d+)?)/,  // "0-100" 또는 "0..100"
+      /(?:min\s*:?\s*)?(-?\d+(?:\.\d+)?)\s*,\s*(?:max\s*:?\s*)?(-?\d+(?:\.\d+)?)/,  // "min: 0, max: 100"
+      /(?:from\s+)?(-?\d+(?:\.\d+)?)\s+(?:to|through)\s+(-?\d+(?:\.\d+)?)/,  // "from 0 to 100"
+    ];
+
+    for (const pattern of rangePatterns) {
+      const rangeMatch = comment.match(pattern);
+      if (rangeMatch) {
+        range.min = parseFloat(rangeMatch[1]);
+        range.max = parseFloat(rangeMatch[2]);
+        hasRangeInfo = true;
+        break;
+      }
     }
 
-    // 양수 패턴
-    if (comment.includes('positive') || comment.includes('> 0')) {
+    // 양수 패턴 (더 강력함)
+    if (/\b(?:positive|>0|> 0)\b/.test(comment)) {
       range.isPositive = true;
       hasRangeInfo = true;
     }
 
     // 음이 아닌 패턴
-    if (comment.includes('non-negative') || comment.includes('>= 0')) {
+    if (/\b(?:non-negative|non negative|>=0|>= 0)\b/.test(comment)) {
       range.isNonNegative = true;
       hasRangeInfo = true;
     }
 
     // 음수 패턴
-    if (comment.includes('negative') || comment.includes('< 0')) {
+    if (/\b(?:negative|<0|< 0)\b/.test(comment)) {
       range.isNegative = true;
       hasRangeInfo = true;
     }
 
-    // 단위 추출 (percent, bytes, etc)
-    const unitMatch = comment.match(/\b(percent|bytes|seconds?|hours?|days?|milliseconds?)\b/);
-    if (unitMatch) {
-      range.unit = unitMatch[1];
-      hasRangeInfo = true;
+    // 단위 추출 (더 강력한 패턴)
+    const unitPatterns = [
+      /\b(percent|percentage|%)\b/,
+      /\b(bytes?|kb|mb|gb)\b/,
+      /\b(second|seconds|sec|secs?)\b/,
+      /\b(hour|hours|hrs?)\b/,
+      /\b(day|days)\b/,
+      /\b(millisecond|milliseconds|ms)\b/,
+      /\b(microsecond|microseconds|µs|us)\b/,
+      /\b(nanosecond|nanoseconds|ns)\b/,
+      /\b(minute|minutes|mins?)\b/,
+    ];
+
+    for (const pattern of unitPatterns) {
+      const unitMatch = comment.match(pattern);
+      if (unitMatch) {
+        range.unit = unitMatch[1];
+        hasRangeInfo = true;
+        break;
+      }
     }
 
     if (hasRangeInfo) {
