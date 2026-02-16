@@ -1,0 +1,46 @@
+{
+  "timestamp": "2026-02-16T15:57:40.609Z",
+  "phase": 1,
+  "validation_type": "TypeInference_Accuracy",
+  "total_tests": 7,
+  "passed": 2,
+  "accuracy_percentage": "28.6",
+  "failed_logic": [
+    {
+      "type": "Intent_Inference_Failed",
+      "intent": "\"배열 처리 후 합계\"",
+      "expected": "number",
+      "actual": "unknown",
+      "confidence": 0,
+      "severity": "HIGH"
+    },
+    {
+      "type": "Nested_Type_Inference_Failed",
+      "code": "array<array<number>>",
+      "expected": "array<number>",
+      "actual": "unknown",
+      "reason": "Nested generic types not supported",
+      "severity": "HIGH"
+    },
+    {
+      "type": "Function_Call_Type_Inference_Failed",
+      "code": "s = sum_array(arr)",
+      "reason": "Function call resolution not implemented",
+      "expected": "number",
+      "severity": "CRITICAL"
+    }
+  ],
+  "insights": [
+    "1. Intent 기반 타입 추론은 60-70% 정도만 정확",
+    "2. 중첩된 제네릭 타입(array<array<T>>)은 미구현",
+    "3. 함수 호출 타입 추론: 아직 안 함",
+    "4. 메서드 체인: 구현 안 됨",
+    "5. 암시적 return(마지막 표현식): 부분적 구현"
+  ],
+  "next_steps": [
+    "Phase 2에서 Intent 추론 개선 (정확도 70% → 80%)",
+    "failed_logic.log를 학습 데이터로 사용",
+    "함수 호출 타입 추론은 Phase 3+ 계획",
+    "메서드 체인은 복잡도 높음, 우선순위 낮음"
+  ]
+}
