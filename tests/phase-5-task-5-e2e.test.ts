@@ -263,13 +263,15 @@ output: number
       expect(result.error).toContain('Unclosed');
     });
 
-    test('필수 키워드 누락: output 없음 → 에러', () => {
+    test('Phase 5 Stage 3: output 없음 → 유효 (출력 타입 추론됨)', () => {
+      // With Stage 3, output type is optional (will be inferred)
       const code = `fn incomplete
 input: array<number>`;
 
-      expect(() => {
-        e2eTest(code);
-      }).toThrow();
+      // This should now be valid and parse successfully
+      const result = e2eTest(code);
+      expect(result).toBeDefined();
+      expect(result.fn).toBe('incomplete');
     });
 
     test('잘못된 타입 문법: <> 안 닫음 → 에러', () => {
@@ -282,14 +284,16 @@ output: number`;
       }).toThrow();
     });
 
-    test('FN 키워드 누락 → 에러', () => {
+    test('Phase 5 Stage 3: FN 키워드 누락 → 유효 (함수 구조 감지됨)', () => {
+      // With Stage 3, fn keyword is optional if structure is detected
       const code = `sum
 input: array<number>
 output: number`;
 
-      expect(() => {
-        e2eTest(code);
-      }).toThrow();
+      // This should now be valid and parse successfully
+      const result = e2eTest(code);
+      expect(result).toBeDefined();
+      expect(result.fn).toBe('sum');
     });
 
     test('부분 복구: intent 잘못된 형식 → 무시하고 진행', () => {
