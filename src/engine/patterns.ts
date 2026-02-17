@@ -202,4 +202,14 @@ export const keywordToOp: Record<string, string> = {
   'flatten': 'flatten',
   'flat': 'flatten',
   'merge': 'flatten',
+
+  // HTTP operations (Phase 13)
+  'http_get': 'http_get',
+  'http_post': 'http_post',
+  'http_json_get': 'http_json_get',
+  'http_json_post': 'http_json_post',
+  'http_head': 'http_head',
+  'http_patch': 'http_patch',
+  'http_batch': 'http_batch',
+  'http_get_with_retry': 'http_get_with_retry',
 };

@@ -214,6 +214,91 @@ export const BUILTINS: Record<string, BuiltinSpec> = {
       if (Array.isArray(arr)) arr.push(element);
     },
   },
+
+  // ────────────────────────────────────────
+  // HTTP Client (Phase 13)
+  // ────────────────────────────────────────
+
+  http_get: {
+    name: 'http_get',
+    params: [{ name: 'url', type: 'string' }],
+    return_type: 'object',  // { status_code: number, body: string, headers: object, elapsed_ms: number }
+    c_name: 'http_get',
+    headers: ['curl.h'],
+    impl: async (url: string) => {
+      const { HttpWrapper } = await import('./http-wrapper');
+      return await HttpWrapper.get(url);
+    },
+  },
+
+  http_post: {
+    name: 'http_post',
+    params: [
+      { name: 'url', type: 'string' },
+      { name: 'body', type: 'string' },
+    ],
+    return_type: 'object',
+    c_name: 'http_post',
+    headers: ['curl.h'],
+    impl: async (url: string, body: string) => {
+      const { HttpWrapper } = await import('./http-wrapper');
+      return await HttpWrapper.post(url, body);
+    },
+  },
+
+  http_json_get: {
+    name: 'http_json_get',
+    params: [{ name: 'url', type: 'string' }],
+    return_type: 'object',
+    c_name: 'http_json_get',
+    headers: ['curl.h'],
+    impl: async (url: string) => {
+      const { HttpWrapper } = await import('./http-wrapper');
+      return await HttpWrapper.getJSON(url);
+    },
+  },
+
+  http_json_post: {
+    name: 'http_json_post',
+    params: [
+      { name: 'url', type: 'string' },
+      { name: 'data', type: 'object' },
+    ],
+    return_type: 'object',
+    c_name: 'http_json_post',
+    headers: ['curl.h'],
+    impl: async (url: string, data: any) => {
+      const { HttpWrapper } = await import('./http-wrapper');
+      return await HttpWrapper.postJSON(url, data);
+    },
+  },
+
+  http_head: {
+    name: 'http_head',
+    params: [{ name: 'url', type: 'string' }],
+    return_type: 'object',
+    c_name: 'http_head',
+    headers: ['curl.h'],
+    impl: async (url: string) => {
+      const { HttpWrapper } = await import('./http-wrapper');
+      return await HttpWrapper.head(url);
+    },
+  },
+
+  http_patch: {
+    name: 'http_patch',
+    params: [
+      { name: 'url', type: 'string' },
+      { name: 'body', type: 'string' },
+    ],
+    return_type: 'object',
+    c_name: 'http_patch',
+    headers: ['curl.h'],
+    impl: async (url: string, body: string) => {
+      const { HttpWrapper } = await import('./http-wrapper');
+      return await HttpWrapper.patch(url, body);
+    },
+  },
 };
 
 // ────────────────────────────────────────
