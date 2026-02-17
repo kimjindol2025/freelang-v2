@@ -397,6 +397,27 @@
       </table>
     </div>
 
+    <!-- Phase 13: 카테고리별 신뢰도 히트맵 -->
+    <div class="section">
+      <h2>🔥 카테고리별 신뢰도 히트맵</h2>
+      <div class="chart-container" style="height: 400px;">
+        <canvas id="confidence-heatmap"></canvas>
+      </div>
+      <div style="margin-top: 10px; display: flex; gap: 20px; font-size: 12px; flex-wrap: wrap;">
+        <span style="color: #f56565;">■ 낮음 (0-50%)</span>
+        <span style="color: #ed8936;">■ 중간 (50-70%)</span>
+        <span style="color: #48bb78;">■ 높음 (70-100%)</span>
+      </div>
+    </div>
+
+    <!-- Phase 13: 상위 변동 패턴 차트 -->
+    <div class="section">
+      <h2>🎯 상위 변동 패턴 비교</h2>
+      <div class="chart-container">
+        <canvas id="top-movers-chart"></canvas>
+      </div>
+    </div>
+
     <!-- 상위 개선 패턴 & 악화 패턴 -->
     <div class="section">
       <h2>🎯 상위 변동 패턴</h2>
@@ -512,7 +533,12 @@
           if (moversRes.ok) {
             const movers = await moversRes.json();
             updateTopMovers(movers);
+            // Phase 13: Stacked Bar 차트 업데이트
+            updateTopMoversChart(movers);
           }
+
+          // Phase 13: 히트맵 업데이트 (카테고리와 신뢰도 리포트 필요)
+          updateConfidenceHeatmap();
 
           // 신뢰도 추이
           const trendsRes = await fetch(`${API_BASE}/confidence-trends?days=7`);
@@ -866,8 +892,10 @@
       `;
     }
 
-    // ========== Phase 13: Chart.js 라인 차트 ==========
+    // ========== Phase 13: Chart.js 다중 차트 ==========
     let lineChartInstance = null;
+    let heatmapInstance = null;
+    let stackedBarInstance = null;
 
     /**
      * 신뢰도 추이 데이터를 라인 차트 형식으로 변환
@@ -990,6 +1018,289 @@
                 display: false,
                 drawBorder: false
               },
+              ticks: {
+                font: { size: 10 }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // ========== Heatmap: 카테고리별 신뢰도 분포 ==========
+
+    /**
+     * 히트맵 데이터 변환
+     */
+    function transformHeatmapData(categories, report) {
+      if (!categories || !report) {
+        return null;
+      }
+
+      // 신뢰도 구간: [0-30%, 30-50%, 50-70%, 70-90%, 90-100%]
+      const bins = [
+        { label: '0-30%', min: 0, max: 0.3 },
+        { label: '30-50%', min: 0.3, max: 0.5 },
+        { label: '50-70%', min: 0.5, max: 0.7 },
+        { label: '70-90%', min: 0.7, max: 0.9 },
+        { label: '90-100%', min: 0.9, max: 1.0 }
+      ];
+
+      const data = [];
+      const categoryNames = categories.map(c => c.categoryId);
+
+      categories.forEach(cat => {
+        const categoryPatterns = (report.patterns || []).filter(p =>
+          p.category === cat.categoryId || cat.categoryId.includes(p.category)
+        );
+
+        bins.forEach((bin, binIndex) => {
+          const count = categoryPatterns.filter(p =>
+            p.adjustedConfidence >= bin.min && p.adjustedConfidence < bin.max
+          ).length;
+
+          if (count > 0) {
+            data.push({
+              x: binIndex,
+              y: categoryNames.indexOf(cat.categoryId),
+              v: count
+            });
+          }
+        });
+      });
+
+      return {
+        data,
+        labels: bins.map(b => b.label),
+        categoryNames
+      };
+    }
+
+    /**
+     * 카테고리별 신뢰도 히트맵 업데이트
+     */
+    async function updateConfidenceHeatmap() {
+      if (typeof Chart === 'undefined') {
+        return;
+      }
+
+      try {
+        const categoriesRes = await fetch(`${API_BASE}/categories`);
+        const reportRes = await fetch(`${API_BASE}/confidence-report`);
+
+        if (!categoriesRes.ok || !reportRes.ok) {
+          return;
+        }
+
+        const categories = await categoriesRes.json();
+        const report = await reportRes.json();
+        const heatData = transformHeatmapData(categories, report);
+
+        if (!heatData || !heatData.data || heatData.data.length === 0) {
+          return;
+        }
+
+        const ctx = document.getElementById('confidence-heatmap');
+        if (!ctx) return;
+
+        if (heatmapInstance) {
+          heatmapInstance.destroy();
+        }
+
+        // 정규화: 최댓값 계산
+        const maxCount = Math.max(...heatData.data.map(d => d.v), 1);
+
+        heatmapInstance = new Chart(ctx, {
+          type: 'bubble',
+          data: {
+            datasets: [{
+              label: '패턴 분포',
+              data: heatData.data.map(d => ({
+                x: d.x,
+                y: d.y,
+                r: Math.sqrt(d.v) * 5,
+                value: d.v
+              })),
+              backgroundColor: heatData.data.map(d => {
+                const intensity = d.v / maxCount;
+                if (intensity <= 0.33) return 'rgba(245, 101, 101, 0.6)';
+                if (intensity <= 0.66) return 'rgba(237, 137, 54, 0.6)';
+                return 'rgba(72, 187, 120, 0.6)';
+              }),
+              borderColor: heatData.data.map(() => 'rgba(0, 0, 0, 0.1)'),
+              borderWidth: 1
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  title: (ctx) => heatData.categoryNames[ctx[0].raw.y],
+                  label: (ctx) => `${heatData.labels[ctx.raw.x]}: ${ctx.raw.value}개 패턴`
+                },
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                padding: 10,
+                titleFont: { size: 12 },
+                bodyFont: { size: 11 }
+              }
+            },
+            scales: {
+              x: {
+                type: 'linear',
+                position: 'bottom',
+                min: -0.5,
+                max: 4.5,
+                ticks: {
+                  callback: (v) => heatData.labels[v] || '',
+                  font: { size: 10 }
+                },
+                title: {
+                  display: true,
+                  text: '신뢰도 범위',
+                  font: { size: 11 }
+                },
+                grid: { display: false }
+              },
+              y: {
+                type: 'category',
+                labels: heatData.categoryNames,
+                title: {
+                  display: true,
+                  text: '카테고리',
+                  font: { size: 11 }
+                },
+                grid: { display: false }
+              }
+            }
+          }
+        });
+      } catch (error) {
+        console.warn('Heatmap update failed:', error);
+      }
+    }
+
+    // ========== Stacked Bar: 상위 변동 패턴 비교 ==========
+
+    /**
+     * Stacked Bar 데이터 변환
+     */
+    function transformStackedBarData(movers) {
+      if (!movers || (!movers.improvements && !movers.degradations)) {
+        return null;
+      }
+
+      // 개선과 악화 패턴 합치기 (최대 10개)
+      const allMovers = [
+        ...(movers.improvements || []).slice(0, 5),
+        ...(movers.degradations || []).slice(0, 5)
+      ];
+
+      if (allMovers.length === 0) {
+        return null;
+      }
+
+      const labels = allMovers.map(p => p.patternId);
+      const improvementData = allMovers.map(p => {
+        const delta = p.adjustedConfidence - p.originalConfidence;
+        return Math.max(0, delta * 100);
+      });
+      const degradationData = allMovers.map(p => {
+        const delta = p.adjustedConfidence - p.originalConfidence;
+        return Math.min(0, delta * 100);
+      });
+
+      return { labels, improvementData, degradationData };
+    }
+
+    /**
+     * 상위 변동 패턴 Stacked Bar 업데이트
+     */
+    function updateTopMoversChart(movers) {
+      if (!movers || typeof Chart === 'undefined') {
+        return;
+      }
+
+      const data = transformStackedBarData(movers);
+      if (!data) return;
+
+      const ctx = document.getElementById('top-movers-chart');
+      if (!ctx) return;
+
+      if (stackedBarInstance) {
+        stackedBarInstance.destroy();
+      }
+
+      stackedBarInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: data.labels,
+          datasets: [
+            {
+              label: '개선',
+              data: data.improvementData,
+              backgroundColor: '#48bb78',
+              borderColor: 'rgba(72, 187, 120, 0.8)',
+              borderWidth: 1,
+              stack: 'stack0'
+            },
+            {
+              label: '악화',
+              data: data.degradationData,
+              backgroundColor: '#f56565',
+              borderColor: 'rgba(245, 101, 101, 0.8)',
+              borderWidth: 1,
+              stack: 'stack0'
+            }
+          ]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false
+          },
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top',
+              labels: {
+                font: { size: 12 },
+                padding: 15,
+                usePointStyle: true
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  return `${ctx.dataset.label}: ${Math.abs(ctx.parsed.x).toFixed(1)}%`;
+                }
+              },
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              padding: 10,
+              titleFont: { size: 12 },
+              bodyFont: { size: 11 }
+            }
+          },
+          scales: {
+            x: {
+              stacked: true,
+              ticks: {
+                callback: (v) => `${Math.abs(v).toFixed(0)}%`,
+                font: { size: 10 }
+              },
+              grid: {
+                color: 'rgba(0, 0, 0, 0.05)',
+                drawBorder: false
+              }
+            },
+            y: {
+              stacked: true,
+              grid: { display: false },
               ticks: {
                 font: { size: 10 }
               }
