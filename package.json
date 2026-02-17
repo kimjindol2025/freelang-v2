@@ -12,8 +12,8 @@
     "start": "node dist/cli/index.js",
     "dev": "ts-node src/cli/index.ts",
     "clean": "rm -rf dist",
-    "lsp": "node dist/lsp/language-server.js",
-    "lsp:dev": "ts-node src/lsp/language-server.ts"
+    "lsp": "node dist/lsp/server.js",
+    "lsp:dev": "ts-node src/lsp/server.ts"
   },
   "keywords": [
     "ai",

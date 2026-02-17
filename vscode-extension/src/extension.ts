@@ -26,17 +26,17 @@ export async function activate(context: ExtensionContext) {
 
   // LSP 서버 옵션
   const serverModule = context.asAbsolutePath(
-    path.join('node_modules', '@freelang', 'runtime', 'dist', 'lsp', 'language-server.js')
+    path.join('node_modules', '@freelang', 'runtime', 'dist', 'lsp', 'server.js')
   );
 
   const serverOptions: ServerOptions = {
     run: {
       module: serverModule,
-      transport: TransportKind.ipc
+      transport: TransportKind.stdio
     },
     debug: {
       module: serverModule,
-      transport: TransportKind.ipc,
+      transport: TransportKind.stdio,
       options: { execArgv: ['--nolazy', '--inspect=6009'] }
     }
   };
