@@ -1,0 +1,23 @@
+* text=auto
+
+# FreeLang source files
+*.free linguist-language=FreeLang
+*.free linguist-detectable=true
+*.free linguist-documentation=false
+
+# Code generation
+src/self-host/*.free linguist-language=FreeLang
+examples/*.free linguist-language=FreeLang
+stdlib/**/*.free linguist-language=FreeLang
+
+# Vendored
+node_modules/ linguist-vendored
+dist/ linguist-generated
+
+# Documentation
+*.md linguist-documentation
+
+# Build & config
+*.json linguist-language=JSON
+*.ts linguist-language=TypeScript
+Makefile linguist-language=Makefile

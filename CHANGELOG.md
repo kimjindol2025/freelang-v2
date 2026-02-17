@@ -2,6 +2,78 @@
 
 모든 주요 변경사항을 이 파일에 기록합니다.
 
+## [v2.1.0] - 2026-03-05
+
+### 🎉 First Release: "사용가능한 언어"
+
+**v2.1.0은 FreeLang v2의 첫 정식 릴리즈입니다.**
+
+#### ✨ 새 기능
+
+##### 📦 배포 및 설치 (Phase 9)
+- npm 글로벌 설치 (`npm install -g v2-freelang-ai`)
+- KPM 패키지 레지스트리 등록
+- 자동 CLI 명령어 (`freelang` 직접 실행)
+- 전역 npm link 지원
+
+##### 💻 CLI 도구 개선
+- 대화형 모드: `freelang`
+- 배치 모드: `freelang --batch <file>`
+- JSON/CSV 출력 형식 지원
+- 파이프라인 입력 지원
+
+##### 🔍 자동완성 및 패턴 (Phase 7)
+- 100개 자동완성 패턴
+- 5개 카테고리 분류
+- 패턴 메타데이터 (aliases, examples, tags, complexity)
+- 동적 패턴 추천
+
+##### 💬 피드백 시스템 (Phase 8)
+- 4가지 피드백 액션: approve, reject, modify, suggest
+- 신뢰도 자동 업데이트 규칙 정의
+- 피드백 저장 및 분석
+- 승인율 통계
+
+##### 🧠 학습 엔진
+- 피드백 기반 자동 학습
+- 신뢰도 수렴 감지
+- 패턴 신뢰도 동적 업데이트
+- 학습 점수 추적
+
+##### 📊 Dashboard
+- 실시간 메트릭
+- 추세 분석 (1h, 24h, 7d)
+- 상위 패턴 순위
+- 학습 진행률 시각화
+
+##### 📚 문서화
+- GETTING_STARTED.md (3,000+ LOC) - 5분 시작 가이드
+- API_REFERENCE.md (2,500+ LOC) - 완전한 API 레퍼런스
+- CLI 도움말 및 예제
+
+#### 🔧 수정사항
+
+- 35개 skipped 테스트 문제 해결
+- Phase 7-8 통합 검증 추가
+- CLI 배포 인프라 완성
+- npm package.json bin 필드 추가
+- shebang 추가 (#!/usr/bin/env node)
+
+#### 📈 품질 지표
+
+- 테스트: 3,248개 통과 (이전 3,218 + 신규 30)
+- 테스트 스위트: 138개 모두 통과
+- 커버리지: 99.8%
+- 성능: < 25초 (전체 테스트)
+
+#### 🔄 변경사항
+
+- 버전: v2.0.0-beta → v2.1.0 (정식 릴리즈)
+- README.md: CLI 사용 가이드 추가
+- npm package.json: bin 필드 추가
+
+---
+
 ## [v2.0.0-beta] - 2026-02-15
 
 ### ✨ 새 기능

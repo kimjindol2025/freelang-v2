@@ -1,0 +1,55 @@
+# FreeLang Language Definition for Linguist (GitHub/Gogs)
+# Enables proper syntax highlighting and statistics
+
+name: FreeLang
+type: programming
+color: '#4B8BBE'  # Python-inspired color (AI-friendly)
+aliases:
+  - free
+  - freelang
+
+extensions:
+  - .free
+
+filenames:
+  - '.freelang'
+  - '.free-rc'
+
+shebangs:
+  - '^#!/usr/bin/env freelang'
+  - '^#!/usr/bin/freelang'
+
+tm_scope: source.freelang
+
+# Pattern matching for keyword detection
+keywords:
+  - fn
+  - intent
+  - input
+  - output
+  - do
+  - return
+  - for
+  - if
+  - else
+  - let
+  - const
+  - array
+  - string
+  - number
+  - boolean
+  - object
+
+# MIME types
+ace_mode: python  # Use Python syntax highlighting as approximation
+codemirror_mode: python
+codemirror_mime_type: text/x-python
+
+# Statistics
+wrap: false
+primary_extension: .free
+
+# Repository stats
+linguist-vendored: false
+linguist-documentation: false
+linguist-detectable: true

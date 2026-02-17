@@ -25,14 +25,55 @@
 
 ## 🚀 빠른 시작
 
-### 설치
+### 📦 설치 (v2.1.0)
+
+**Option 1: npm으로 설치 (권장)**
 
 ```bash
-npm install
-npm run build
+npm install -g v2-freelang-ai
+freelang --version
 ```
 
-### 기본 사용법
+**Option 2: KPM으로 설치**
+
+```bash
+kpm install v2-freelang-ai
+freelang --version
+```
+
+**Option 3: 로컬에서 빌드**
+
+```bash
+git clone https://gogs.dclub.kr/kim/v2-freelang-ai.git
+cd v2-freelang-ai
+npm install
+npm run build
+npm link
+```
+
+### 💬 대화형 모드 (1분)
+
+```bash
+freelang
+```
+
+출력:
+```
+Welcome to FreeLang v2.1.0!
+> 배열 합산
+Pattern matched: sum
+Input: array<number>
+Output: number
+Confidence: 0.95
+```
+
+### 📊 배치 모드 (여러 입력)
+
+```bash
+freelang --batch inputs.txt --output results.json --format json
+```
+
+### 🔧 프로그래밍 인터페이스
 
 ```typescript
 import { Lexer, TokenBuffer } from './src/lexer/lexer';
