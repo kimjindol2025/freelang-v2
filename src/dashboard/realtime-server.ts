@@ -15,6 +15,7 @@ import { IntentPattern } from '../phase-10/unified-pattern-database';
 import * as dashboardRoutes from '../api/routes/dashboard.routes';
 import { MessageBatcher, BatchedMessage, BatchingStats } from './message-batcher';
 import { CompressionLayer, CompressionStats } from './compression-layer';
+import { DeltaEncoder, Delta, DeltaStats } from './delta-encoder';
 
 /**
  * SSE 클라이언트 연결
