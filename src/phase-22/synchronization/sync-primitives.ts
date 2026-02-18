@@ -236,8 +236,8 @@ export class RWLock {
   private name: string;
   private readers: number = 0;
   private writer: boolean = false;
-  private waiting_readers: Array<() => void> = [];
-  private waiting_writers: Array<() => void> = [];
+  private waiting_readers: Array<(value?: any) => void> = [];
+  private waiting_writers: Array<(value?: any) => void> = [];
   private read_count: number = 0;
   private write_count: number = 0;
 
