@@ -1,7 +1,9 @@
 /**
  * Phase 4 Step 3: Module System - Module Resolver
+ * Phase 5 Step 5: Package Integration
  *
  * 모듈 파일을 찾고, 로드하고, 캐싱하며, 순환 의존성을 감지합니다.
+ * Phase 5에서 PackageResolver와 통합되어 패키지 기반 import를 지원합니다.
  */
 
 import * as path from 'path';
@@ -16,6 +18,8 @@ import {
   VariableDeclaration,
   ParseError
 } from '../parser/ast';
+import { PackageManifest } from '../package/manifest';
+import type { PackageResolver } from '../package/package-resolver';
 
 /**
  * 내보내기 심볼 (함수 또는 변수)
@@ -30,11 +34,12 @@ export interface ExportSymbol {
  * Module Resolver - 모듈 시스템의 핵심
  *
  * 역할:
- * 1. 모듈 경로 해석 (상대/절대 경로)
+ * 1. 모듈 경로 해석 (상대/절대 경로 + 패키지 이름)
  * 2. 모듈 파일 로드 및 파싱
  * 3. 모듈 캐싱 (중복 파싱 방지)
  * 4. 순환 의존성 감지
  * 5. 내보내기 심볼 추출
+ * 6. 패키지 기반 모듈 해석 (Phase 5 통합)
  */
 export class ModuleResolver {
   // 모듈 캐시: 경로 → 파싱된 Module
@@ -43,15 +48,61 @@ export class ModuleResolver {
   // 로딩 중인 모듈: 순환 의존성 감지용
   private loadingModules: Set<string> = new Set();
 
+  // 패키지 해석기 (Phase 5 통합)
+  private packageResolver?: PackageResolver;
+
+  // 프로젝트 매니페스트 (Version range 적용용)
+  private projectManifest?: PackageManifest;
+
+  // 프로젝트 루트 (패키지 해석용)
+  private projectRoot?: string;
+
+  /**
+   * PackageResolver 설정 (Phase 5 통합)
+   *
+   * ModuleResolver가 패키지 기반 import를 해석할 수 있도록
+   * PackageResolver 인스턴스를 주입합니다.
+   *
+   * @param resolver PackageResolver 인스턴스
+   */
+  public setPackageResolver(resolver: PackageResolver): void {
+    this.packageResolver = resolver;
+  }
+
+  /**
+   * 프로젝트 매니페스트 설정 (Phase 5 통합)
+   *
+   * 패키지 import 시 version range를 적용하기 위해
+   * 프로젝트의 freelang.json 내용을 설정합니다.
+   *
+   * @param manifest 프로젝트의 PackageManifest
+   */
+  public setProjectManifest(manifest: PackageManifest): void {
+    this.projectManifest = manifest;
+  }
+
+  /**
+   * 프로젝트 루트 디렉토리 설정 (Phase 5 통합)
+   *
+   * 패키지 해석 시 기준이 되는 프로젝트 루트를 설정합니다.
+   *
+   * @param root 프로젝트 루트 디렉토리 경로
+   */
+  public setProjectRoot(root: string): void {
+    this.projectRoot = root;
+  }
+
   /**
    * 모듈 경로 해석
    *
    * 상대 경로: ./path, ../path → 절대 경로로 변환
    * 절대 경로: /path → 그대로 사용
+   * 패키지 이름: package-name → fl_modules/package-name/src/index.fl
    *
    * @param fromFile 현재 파일 경로
    * @param modulePath 참조하는 모듈 경로
    * @returns 절대 경로
+   * @throws 패키지를 찾을 수 없거나 PackageResolver가 설정되지 않으면 에러
    */
   public resolveModulePath(fromFile: string, modulePath: string): string {
     // 상대 경로 처리
@@ -65,8 +116,25 @@ export class ModuleResolver {
       return modulePath;
     }
 
-    // 패키지 이름 (현재는 지원하지 않음)
-    throw new Error(`패키지 이름은 아직 지원하지 않습니다: ${modulePath}`);
+    // 패키지 이름 처리 (Phase 5 통합)
+    if (this.packageResolver) {
+      try {
+        // projectManifest에서 version range 추출
+        const versionRange = this.projectManifest?.dependencies?.[modulePath];
+        const resolved = this.packageResolver.resolve(modulePath, versionRange);
+        return resolved.main;
+      } catch (error) {
+        throw new Error(
+          `패키지 해석 실패 '${modulePath}': ${error}`
+        );
+      }
+    }
+
+    // PackageResolver가 없으면 패키지 이름 지원 안 함
+    throw new Error(
+      `패키지 기반 import는 지원하지 않습니다: '${modulePath}'\n` +
+      `파일 경로를 사용하세요: ./path.fl 또는 ../path.fl`
+    );
   }
 
   /**
