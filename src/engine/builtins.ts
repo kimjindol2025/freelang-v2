@@ -787,13 +787,25 @@ export const BUILTINS: Record<string, BuiltinSpec> = {
       };
 
       // Execute the task and update handle when complete
-      fn().then((result: any) => {
-        handle.result = result;
-        handle.state = 'completed';
-      }).catch((error: any) => {
+      try {
+        const result = fn();
+        // Handle both Promise and regular return values
+        if (result && typeof result.then === 'function') {
+          result.then((val: any) => {
+            handle.result = val;
+            handle.state = 'completed';
+          }).catch((error: any) => {
+            handle.error = String(error);
+            handle.state = 'failed';
+          });
+        } else {
+          handle.result = result;
+          handle.state = 'completed';
+        }
+      } catch (error) {
         handle.error = String(error);
         handle.state = 'failed';
-      });
+      }
 
       return handle;
     },
