@@ -48,7 +48,7 @@
  * ```
  */
 
-import { StubGenerator } from './stub-generator';
+import { StubGenerator } from './phase-2-stub-generator';
 import { ExpressionCompleter } from '../parser/expression-completer';
 import { IncompleteTypeInferenceEngine } from '../analyzer/incomplete-type-inference';
 import { SuggestionEngine, CompileWarning, WarningType } from './suggestion-engine';

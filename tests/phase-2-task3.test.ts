@@ -8,7 +8,7 @@
  * - Body generation
  */
 
-import { StubGenerator, GeneratedStub } from '../src/generator/stub-generator';
+import { StubGenerator, GeneratedStub } from '../src/generator/intent-stub-generator';
 
 describe('Phase 2 Task 2.3: Stub Generator', () => {
   let generator: StubGenerator;

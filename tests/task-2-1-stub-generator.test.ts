@@ -10,7 +10,7 @@ import {
   StubGeneratorConfig,
   StubResult,
   createStubGenerator,
-} from '../src/compiler/stub-generator';
+} from '../src/compiler/phase-2-stub-generator';
 
 describe('Task 2.1: Stub Generator for Incomplete Code', () => {
   let generator: StubGenerator;
