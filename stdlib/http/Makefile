@@ -10,7 +10,7 @@ BUILD_DIR = build
 DIST_DIR = ../../dist/stdlib
 
 # Shared library targets
-SOURCES = $(SRC_DIR)/event_loop.c $(SRC_DIR)/http_server_impl.c
+SOURCES = $(SRC_DIR)/event_loop.c $(SRC_DIR)/http_server_impl.c $(SRC_DIR)/http_client.c
 OBJECTS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SOURCES))
 SHARED_TARGET = $(DIST_DIR)/libhttp.so
 
