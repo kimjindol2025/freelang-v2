@@ -124,7 +124,6 @@ export class ThreadPool {
 
       const messageHandler = (result: any) => {
         clearTimeout(timeout);
-        worker.worker.off('message', messageHandler);
         resolve(result);
       };
 
@@ -133,8 +132,9 @@ export class ThreadPool {
         reject(error);
       };
 
-      worker.worker.on('message', messageHandler);
-      worker.worker.once('error', errorHandler);
+      // Store handlers for cleanup
+      (worker as any)._messageHandler = messageHandler;
+      (worker as any)._errorHandler = errorHandler;
 
       worker.send(task);
     });

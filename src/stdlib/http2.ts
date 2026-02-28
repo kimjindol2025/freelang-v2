@@ -4,7 +4,7 @@
  * HTTP/2 utilities
  */
 
-import { createSecureServer, createServer, ServerSession } from 'http2';
+import { createSecureServer, createServer } from 'http2';
 
 /**
  * HTTP/2 server response
