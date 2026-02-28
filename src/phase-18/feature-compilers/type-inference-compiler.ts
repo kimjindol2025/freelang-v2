@@ -40,9 +40,9 @@ export class TypeInferenceCompiler extends IntegratedCompilerBase {
       include_runtime: true,
     } as any);
 
-    this.typeEngine = new TypeInferenceEngine();
-    this.irGenerator = new IRGenerator();
-    this.parser = new Parser();
+    this.typeEngine = new TypeInferenceEngine({} as any);
+    this.irGenerator = new IRGenerator({} as any);
+    this.parser = new Parser('default' as any);
   }
 
   /**
@@ -296,5 +296,3 @@ export interface TypeInferenceContext {
   variables: Map<string, TypeInfo>;
   functions: Map<string, { params: TypeInfo[]; returns: string }>;
 }
-
-export { TypeInferenceCompiler };

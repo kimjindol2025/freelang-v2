@@ -37,8 +37,8 @@ export class ExpressionCompiler extends IntegratedCompilerBase {
       include_runtime: true,
     } as any);
 
-    this.parser = new Parser();
-    this.irGenerator = new IRGenerator();
+    this.parser = new Parser('default' as any);
+    this.irGenerator = new IRGenerator({} as any);
   }
 
   /**

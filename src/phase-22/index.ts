@@ -5,7 +5,7 @@
  */
 
 // Threading
-export { default as ThreadBase, type ThreadState, type ThreadPriority, type ThreadConfig, type ThreadStatistics, type ThreadLocalStorage } from './threading/thread-base';
+export { ThreadBase, type ThreadState, type ThreadPriority, type ThreadConfig, type ThreadStatistics, type ThreadLocalStorage } from './threading/thread-base';
 
 // Synchronization
 export { Mutex, Semaphore, RWLock, ConditionVariable, type LockType, type LockStatistics } from './synchronization/sync-primitives';
@@ -19,4 +19,4 @@ export { ThreadPool, newFixedThreadPool, newCachedThreadPool, newDynamicThreadPo
 // Async
 export { AsyncTask, PromiseTask, asyncUtils, type TaskState } from './async/async-task';
 
-export default ThreadBase;
+export { ThreadBase as default } from './threading/thread-base';

@@ -4,7 +4,7 @@
  * Support for pattern-based macros with wildcards and captures
  */
 
-import { MacroDefinition, MacroArgument, ASTNode } from './macro-definition';
+import { MacroDefinition, MacroArgument, any } from './macro-definition';
 
 /**
  * Pattern matcher type

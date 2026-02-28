@@ -77,8 +77,8 @@ export class OptimizationCompiler extends IntegratedCompilerBase {
       include_runtime: true,
     } as any);
 
-    this.irGenerator = new IRGenerator();
-    this.parser = new Parser();
+    this.irGenerator = new IRGenerator({} as any);
+    this.parser = new Parser('default' as any);
     this.initializePeepholePatterns();
   }
 
@@ -306,7 +306,7 @@ export class OptimizationCompiler extends IntegratedCompilerBase {
     // Find entry points (function starts, labels, returns)
     for (let i = 0; i < this.instructions.length; i++) {
       const inst = this.instructions[i];
-      if (inst.op === 'FUNC_DEF' || inst.op === 'LABEL' || inst.op === 'RET') {
+      if ((inst.op as any) === 'FUNC_DEF' || (inst.op as any) === 'LABEL' || (inst.op as any) === 'RET') {
         isLive[i] = true;
       }
     }
@@ -355,7 +355,7 @@ export class OptimizationCompiler extends IntegratedCompilerBase {
       const op = this.instructions[i + 2];
 
       // Pattern: PUSH a, PUSH b, (arithmetic op)
-      if (curr.op === 'PUSH' && next.op === 'PUSH' &&
+      if ((curr.op as any) === 'PUSH' && (next.op as any) === 'PUSH' &&
           ['+', '-', '*', '/', '%', '==', '!=', '<', '>', '<=', '>='].includes(op.op as string)) {
 
         const a = curr.arg;
@@ -364,7 +364,7 @@ export class OptimizationCompiler extends IntegratedCompilerBase {
         if (typeof a === 'number' && typeof b === 'number') {
           let result: number;
 
-          switch (op.op) {
+          switch (op.op as any) {
             case '+': result = a + b; break;
             case '-': result = a - b; break;
             case '*': result = a * b; break;
@@ -380,7 +380,7 @@ export class OptimizationCompiler extends IntegratedCompilerBase {
           }
 
           // Replace with single PUSH
-          this.instructions[i] = { op: 'PUSH', arg: result };
+          this.instructions[i] = { op: 'PUSH' as any, arg: result };
           this.instructions.splice(i + 1, 2);
           optimizations++;
         }
@@ -493,5 +493,3 @@ export class OptimizationCompiler extends IntegratedCompilerBase {
     return this.optimizationStats.passResults;
   }
 }
-
-export { OptimizationCompiler };

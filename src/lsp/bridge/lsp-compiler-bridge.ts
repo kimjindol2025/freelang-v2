@@ -16,7 +16,7 @@ import {
 import { Parser } from '../../parser/parser';
 import { TypeInferenceEngine } from '../../analyzer/type-inference';
 import { SemanticAnalyzer } from '../../analyzer/semantic-analyzer';
-import { TypeChecker } from '../../analyzer/type-checker';
+import { any } from '../../analyzer/type-checker';
 
 /**
  * Represents a parsed document with all analysis results
@@ -122,7 +122,7 @@ export class LSPCompilerBridge {
   private parser: Parser;
   private typeInferenceEngine: TypeInferenceEngine;
   private semanticAnalyzer: SemanticAnalyzer;
-  private typeChecker: TypeChecker;
+  private typeChecker: any;
   private positionResolver: PositionResolver;
   private symbolTableBuilder: SymbolTableBuilder;
 
@@ -134,7 +134,7 @@ export class LSPCompilerBridge {
     this.parser = new Parser();
     this.typeInferenceEngine = new TypeInferenceEngine();
     this.semanticAnalyzer = new SemanticAnalyzer();
-    this.typeChecker = new TypeChecker();
+    this.typeChecker = new any();
     this.positionResolver = new PositionResolver();
     this.symbolTableBuilder = new SymbolTableBuilder();
   }

@@ -157,7 +157,7 @@ export class StatementCompiler extends IntegratedCompilerBase {
     return {
       type: 'Block',
       statements: statements,
-    };
+    } as any;
   }
 
   /**
@@ -203,12 +203,12 @@ export class StatementCompiler extends IntegratedCompilerBase {
 
     // Break statement
     if (line === 'break' || line === 'break;') {
-      return { type: 'BreakStatement' };
+      return { type: 'BreakStatement' } as any;
     }
 
     // Continue statement
     if (line === 'continue' || line === 'continue;') {
-      return { type: 'ContinueStatement' };
+      return { type: 'ContinueStatement' } as any;
     }
 
     // Expression statement

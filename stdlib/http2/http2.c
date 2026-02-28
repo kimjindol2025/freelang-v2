@@ -11,8 +11,25 @@
 #include <pthread.h>
 #include "../ffi/freelang_ffi.h"
 
-/* Note: nghttp2 library would be linked separately */
-/* For now, this is a stub implementation */
+/* ===== nghttp2 Conditional Support ===== */
+
+#ifdef HAVE_NGHTTP2
+  #include <nghttp2/nghttp2.h>
+  #define H2_SESSION_TYPE nghttp2_session*
+  #define H2_CALLBACKS_TYPE nghttp2_session_callbacks*
+#else
+  #warning "nghttp2 not found - HTTP/2 support disabled (use 'sudo apt install libnghttp2-dev')"
+  #define H2_SESSION_TYPE void*
+  #define H2_CALLBACKS_TYPE void*
+#endif
+
+/* For SSL/TLS */
+#ifdef HAVE_OPENSSL
+  #include <openssl/ssl.h>
+  #define SSL_TYPE SSL*
+#else
+  #define SSL_TYPE void*
+#endif
 
 /* ===== Constants ===== */
 
@@ -65,8 +82,8 @@ typedef struct {
 typedef struct {
   int id;
   uv_tcp_t tcp;
-  void *ssl;  /* SSL * */
-  void *h2_session;  /* nghttp2_session * */
+  SSL_TYPE ssl;
+  H2_SESSION_TYPE h2_session;
   http2_session_state_t state;
   fl_http2_stream_t *streams;
   int stream_count;
@@ -79,8 +96,8 @@ typedef struct {
 typedef struct {
   int id;
   uv_tcp_t tcp;
-  void *ssl;  /* SSL * */
-  void *h2_session;  /* nghttp2_session * */
+  SSL_TYPE ssl;
+  H2_SESSION_TYPE h2_session;
   char *url;
   http2_session_state_t state;
   int on_response_cb;
@@ -96,6 +113,7 @@ typedef struct {
   int on_data_cb;
   int on_end_cb;
   int on_error_cb;
+  int on_response_cb;
   http2_stream_state_t state;
 } fl_http2_request_t;
 

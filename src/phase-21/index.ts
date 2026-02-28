@@ -4,7 +4,7 @@
  * Exports all runtime system components
  */
 
-export { default as RuntimeSystemBase, type RuntimeConfig, type RuntimeTarget, type GCStrategy, type MemoryStats, type ExceptionHandler, type LinkedSymbol } from './runtime-base/runtime-system-base';
+export { RuntimeSystemBase, type RuntimeConfig, type RuntimeTarget, type GCStrategy, type MemoryStats, type ExceptionHandler, type LinkedSymbol } from './runtime-base/runtime-system-base';
 
 export {
   NativeRuntime,
@@ -17,4 +17,4 @@ export {
   RuntimeFactory,
 } from './runtimes/runtime-systems';
 
-export default RuntimeSystemBase;
+export { RuntimeSystemBase as default } from './runtime-base/runtime-system-base';
