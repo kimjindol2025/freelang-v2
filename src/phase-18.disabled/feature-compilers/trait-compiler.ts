@@ -53,7 +53,7 @@ interface TraitImpl {
  * Trait Compiler
  * Validates trait definitions and implementations
  */
-export class TraitCompiler extends IntegratedCompilerBase {
+class TraitCompiler extends IntegratedCompilerBase {
   private irGenerator: IRGenerator;
   private parser: Parser;
   protected ast: any = null;

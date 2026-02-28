@@ -42,7 +42,7 @@ interface MatchArm {
  * Pattern Match Compiler
  * Transforms pattern matching with exhaustiveness checking
  */
-export class PatternMatchCompiler extends IntegratedCompilerBase {
+class PatternMatchCompiler extends IntegratedCompilerBase {
   private irGenerator: IRGenerator;
   private parser: Parser;
   protected ast: any = null;

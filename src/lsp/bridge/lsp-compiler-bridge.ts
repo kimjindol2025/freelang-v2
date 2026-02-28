@@ -16,7 +16,7 @@ import {
 import { Parser } from '../../parser/parser';
 import { TypeInferenceEngine } from '../../analyzer/type-inference';
 import { SemanticAnalyzer } from '../../analyzer/semantic-analyzer';
-import { TypeChecker } from '../../analyzer/type-checker';
+// import { TypeChecker } from '../../analyzer/type-checker'; // Temporarily disabled
 
 /**
  * Represents a parsed document with all analysis results

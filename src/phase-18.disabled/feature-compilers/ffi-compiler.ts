@@ -56,7 +56,7 @@ interface MarshalRule {
  * FFI Compiler
  * Generates and validates C bindings with memory safety
  */
-export class FFICompiler extends IntegratedCompilerBase {
+class FFICompiler extends IntegratedCompilerBase {
   private irGenerator: IRGenerator;
   private parser: Parser;
   protected ast: any = null;

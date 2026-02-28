@@ -22,7 +22,7 @@ import { Inst } from '../../types';
  * Type Inference Compiler
  * Transforms source code with automatic type deduction into typed IR
  */
-export class TypeInferenceCompiler extends IntegratedCompilerBase {
+class TypeInferenceCompiler extends IntegratedCompilerBase {
   private typeEngine: TypeInferenceEngine;
   private irGenerator: IRGenerator;
   private parser: Parser;

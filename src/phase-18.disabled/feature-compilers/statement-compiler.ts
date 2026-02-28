@@ -26,7 +26,7 @@ import { Inst } from '../../types';
  * Statement Compiler
  * Transforms statements and control flow into IR instructions
  */
-export class StatementCompiler extends IntegratedCompilerBase {
+class StatementCompiler extends IntegratedCompilerBase {
   private parser: Parser;
   private irGenerator: IRGenerator;
   protected ast: ASTNode | null = null;

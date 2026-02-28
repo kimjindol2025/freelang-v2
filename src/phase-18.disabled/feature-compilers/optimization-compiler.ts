@@ -54,7 +54,7 @@ interface OptimizationStats {
  * Optimization Compiler
  * Applies LLVM-style multi-pass optimization
  */
-export class OptimizationCompiler extends IntegratedCompilerBase {
+class OptimizationCompiler extends IntegratedCompilerBase {
   private irGenerator: IRGenerator;
   private parser: Parser;
   protected ast: any = null;

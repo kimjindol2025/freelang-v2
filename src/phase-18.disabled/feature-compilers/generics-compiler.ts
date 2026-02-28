@@ -40,7 +40,7 @@ interface GenericInstantiation {
  * Generics Compiler
  * Transforms generic code into monomorphized concrete implementations
  */
-export class GenericsCompiler extends IntegratedCompilerBase {
+class GenericsCompiler extends IntegratedCompilerBase {
   private irGenerator: IRGenerator;
   private parser: Parser;
   protected ast: any = null;

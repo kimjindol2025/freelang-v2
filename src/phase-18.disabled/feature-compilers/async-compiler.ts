@@ -32,7 +32,7 @@ interface AsyncState {
  * Async Compiler
  * Transforms async functions into state machines
  */
-export class AsyncCompiler extends IntegratedCompilerBase {
+class AsyncCompiler extends IntegratedCompilerBase {
   private irGenerator: IRGenerator;
   private parser: Parser;
   protected ast: any = null;
