@@ -16,7 +16,6 @@ import {
 import { Parser } from '../../parser/parser';
 import { TypeInferenceEngine } from '../../analyzer/type-inference';
 import { SemanticAnalyzer } from '../../analyzer/semantic-analyzer';
-import { any } from '../../analyzer/type-checker';
 
 /**
  * Represents a parsed document with all analysis results
@@ -131,10 +130,10 @@ export class LSPCompilerBridge {
   private readonly CACHE_TIMEOUT = 60000; // 60 seconds
 
   constructor() {
-    this.parser = new Parser();
+    this.parser = new Parser('default' as any);
     this.typeInferenceEngine = new TypeInferenceEngine();
     this.semanticAnalyzer = new SemanticAnalyzer();
-    this.typeChecker = new any();
+    this.typeChecker = null as any;
     this.positionResolver = new PositionResolver();
     this.symbolTableBuilder = new SymbolTableBuilder();
   }

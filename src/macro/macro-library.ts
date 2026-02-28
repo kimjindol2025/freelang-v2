@@ -22,7 +22,7 @@ export class StandardMacroLibrary {
    *   assert(x > 0, "x must be positive")
    */
   public static get assert(): MacroDefinition {
-    return new MacroBuilder('assert')
+    return (new MacroBuilder('assert')
       .withParameter('condition', 'expression')
       .withParameter('message', 'expression')
       .withBody(`
@@ -31,7 +31,7 @@ export class StandardMacroLibrary {
         }
       `)
       .withDocs('Assert condition is true, throw error if false')
-      .build();
+      .build()) as MacroDefinition;
   }
 
   /**
@@ -41,7 +41,7 @@ export class StandardMacroLibrary {
    *   repeat(3, { console.log("Hello") })
    */
   public static get repeat(): MacroDefinition {
-    return new MacroBuilder('repeat')
+    return (new MacroBuilder('repeat')
       .withParameter('n', 'expression')
       .withParameter('body', 'statement')
       .withBody(`
@@ -52,7 +52,7 @@ export class StandardMacroLibrary {
         }
       `)
       .withDocs('Repeat body statement n times')
-      .build();
+      .build()) as MacroDefinition;
   }
 
   /**
@@ -62,7 +62,7 @@ export class StandardMacroLibrary {
    *   times(5, fn(i) { console.log(i) })
    */
   public static get times(): MacroDefinition {
-    return new MacroBuilder('times')
+    return (new MacroBuilder('times')
       .withParameter('n', 'expression')
       .withParameter('callback', 'expression')
       .withBody(`
@@ -71,7 +71,7 @@ export class StandardMacroLibrary {
         }
       `)
       .withDocs('Execute callback n times with index 0..n-1')
-      .build();
+      .build()) as MacroDefinition;
   }
 
   /**
@@ -81,7 +81,7 @@ export class StandardMacroLibrary {
    *   let x = trace(calculate())
    */
   public static get trace(): MacroDefinition {
-    return new MacroBuilder('trace')
+    return (new MacroBuilder('trace')
       .withParameter('expr', 'expression')
       .withBody(`
         (function() {
@@ -91,7 +91,7 @@ export class StandardMacroLibrary {
         }())
       `)
       .withDocs('Print value for debugging and return it')
-      .build();
+      .build()) as MacroDefinition;
   }
 
   /**
@@ -101,14 +101,14 @@ export class StandardMacroLibrary {
    *   debug_print("x", x + 1)
    */
   public static get debug_print(): MacroDefinition {
-    return new MacroBuilder('debug_print')
+    return (new MacroBuilder('debug_print')
       .withParameter('label', 'expression')
       .withParameter('expr', 'expression')
       .withBody(`
         console.log(label, "=", expr)
       `)
       .withDocs('Print labeled debug information')
-      .build();
+      .build()) as MacroDefinition;
   }
 
   /**
@@ -118,7 +118,7 @@ export class StandardMacroLibrary {
    *   unless(x > 10, { console.log("x is not greater than 10") })
    */
   public static get unless(): MacroDefinition {
-    return new MacroBuilder('unless')
+    return (new MacroBuilder('unless')
       .withParameter('condition', 'expression')
       .withParameter('body', 'statement')
       .withBody(`
@@ -126,7 +126,7 @@ export class StandardMacroLibrary {
           body
         }
       `)
-      .withDocs('Execute body if condition is false (inverse of if)');
+      .withDocs('Execute body if condition is false (inverse of if)')) as MacroDefinition;
   }
 
   /**
@@ -139,7 +139,7 @@ export class StandardMacroLibrary {
    *   }
    */
   public static get defer(): MacroDefinition {
-    return new MacroBuilder('defer')
+    return (new MacroBuilder('defer')
       .withParameter('body', 'statement')
       .withBody(`
         try {
@@ -148,7 +148,7 @@ export class StandardMacroLibrary {
           body
         }
       `)
-      .withDocs('Execute body at end of scope');
+      .withDocs('Execute body at end of scope')) as MacroDefinition;
   }
 
   /**
@@ -158,7 +158,7 @@ export class StandardMacroLibrary {
    *   with_lock(mutex, { critical_section() })
    */
   public static get with_lock(): MacroDefinition {
-    return new MacroBuilder('with_lock')
+    return (new MacroBuilder('with_lock')
       .withParameter('lock', 'expression')
       .withParameter('body', 'statement')
       .withBody(`
@@ -169,7 +169,7 @@ export class StandardMacroLibrary {
           lock.release()
         }
       `)
-      .withDocs('Execute body with lock held');
+      .withDocs('Execute body with lock held')) as MacroDefinition;
   }
 
   /**
@@ -179,13 +179,13 @@ export class StandardMacroLibrary {
    *   let smallest = min(x, y)
    */
   public static get min(): MacroDefinition {
-    return new MacroBuilder('min')
+    return (new MacroBuilder('min')
       .withParameter('a', 'expression')
       .withParameter('b', 'expression')
       .withBody(`
         (a < b ? a : b)
       `)
-      .withDocs('Return minimum of two values');
+      .withDocs('Return minimum of two values')) as MacroDefinition;
   }
 
   /**
@@ -195,13 +195,13 @@ export class StandardMacroLibrary {
    *   let largest = max(x, y)
    */
   public static get max(): MacroDefinition {
-    return new MacroBuilder('max')
+    return (new MacroBuilder('max')
       .withParameter('a', 'expression')
       .withParameter('b', 'expression')
       .withBody(`
         (a > b ? a : b)
       `)
-      .withDocs('Return maximum of two values');
+      .withDocs('Return maximum of two values')) as MacroDefinition;
   }
 
   /**
@@ -211,14 +211,14 @@ export class StandardMacroLibrary {
    *   let clamped = clamp(x, 0, 100)
    */
   public static get clamp(): MacroDefinition {
-    return new MacroBuilder('clamp')
+    return (new MacroBuilder('clamp')
       .withParameter('value', 'expression')
       .withParameter('min', 'expression')
       .withParameter('max', 'expression')
       .withBody(`
         (value < min ? min : (value > max ? max : value))
       `)
-      .withDocs('Clamp value to range [min, max]');
+      .withDocs('Clamp value to range [min, max]')) as MacroDefinition;
   }
 
   /**
@@ -228,7 +228,7 @@ export class StandardMacroLibrary {
    *   swap(x, y)
    */
   public static get swap(): MacroDefinition {
-    return new MacroBuilder('swap')
+    return (new MacroBuilder('swap')
       .withParameter('a', 'identifier')
       .withParameter('b', 'identifier')
       .withBody(`
@@ -236,7 +236,7 @@ export class StandardMacroLibrary {
         a = b
         b = __temp
       `)
-      .withDocs('Swap values of two variables');
+      .withDocs('Swap values of two variables')) as MacroDefinition;
   }
 
   /**
@@ -246,12 +246,12 @@ export class StandardMacroLibrary {
    *   let len = strlen("hello")
    */
   public static get strlen(): MacroDefinition {
-    return new MacroBuilder('strlen')
+    return (new MacroBuilder('strlen')
       .withParameter('str', 'expression')
       .withBody(`
         str.length
       `)
-      .withDocs('Get length of string');
+      .withDocs('Get length of string')) as MacroDefinition;
   }
 
   /**

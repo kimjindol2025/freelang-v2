@@ -8,6 +8,7 @@ import { Iterator, IteratorEngine } from './engine/iterator';
 import { FunctionRegistry, LocalScope } from './parser/function-registry';
 import { FunctionTypeChecker } from './analyzer/type-checker';
 import { TypeParser } from './cli/type-parser';
+import { NativeFunctionRegistry, NativeFunctionConfig } from './vm/native-function-registry';
 
 const MAX_CYCLES = 100_000;
 const MAX_STACK  = 10_000;
@@ -33,6 +34,7 @@ export class VM {
   private currentScope?: LocalScope;  // Phase 19: variable scoping
   private typeChecker = new FunctionTypeChecker();  // Phase 21: type-safe execution
   private typeWarnings: TypeWarning[] = [];  // Phase 21: track type warnings
+  private nativeFunctionRegistry = new NativeFunctionRegistry();  // Phase 3: FFI native functions
 
   constructor(functionRegistry?: FunctionRegistry) {
     this.functionRegistry = functionRegistry;
@@ -362,6 +364,7 @@ export class VM {
       case Op.CALL: {
         // Phase 19: Support both user-defined functions and legacy sub-programs
         // Phase 21: Add type checking and validation
+        // Phase 3 FFI: Support native functions (C FFI)
         const funcName = inst.arg as string;
 
         // Try user-defined function first
@@ -408,7 +411,33 @@ export class VM {
           }
           this.functionRegistry!.trackCall(funcName);
           this.pc++;
-        } else if (inst.sub) {
+        }
+        // Phase 3 FFI: Try native function (C FFI)
+        else if (funcName && this.nativeFunctionRegistry.exists(funcName)) {
+          const nativeFunc = this.nativeFunctionRegistry.get(funcName);
+          if (!nativeFunc) throw new Error('native_function_not_found:' + funcName);
+
+          // Get arguments from stack
+          const args: any[] = [];
+          for (let i = 0; i < nativeFunc.signature.parameters.length; i++) {
+            if (this.stack.length === 0) throw new Error('stack_underflow');
+            args.unshift(this.stack.pop());
+          }
+
+          // Call native function and push result
+          try {
+            const result = this.nativeFunctionRegistry.call(funcName, args);
+            if (result !== null && result !== undefined) {
+              this.guardStack();
+              this.stack.push(result);
+            }
+          } catch (e: unknown) {
+            const err = e instanceof Error ? e.message : String(e);
+            throw new Error('native_call_error:' + err);
+          }
+          this.pc++;
+        }
+        else if (inst.sub) {
           // Legacy sub-program support
           const subResult = this.runSub(inst.sub);
           if (!subResult.ok) throw new Error('call_failed:' + subResult.error?.detail);
@@ -716,6 +745,41 @@ export class VM {
     this.pc = savedPc;
 
     return result;
+  }
+
+  /**
+   * Phase 3 FFI: Register a native (C FFI) function
+   */
+  registerNativeFunction(config: NativeFunctionConfig): boolean {
+    return this.nativeFunctionRegistry.register(config);
+  }
+
+  /**
+   * Phase 3 FFI: Get native function registry
+   */
+  getNativeFunctionRegistry(): NativeFunctionRegistry {
+    return this.nativeFunctionRegistry;
+  }
+
+  /**
+   * Phase 3 FFI: Get statistics about registered native functions
+   */
+  getNativeFunctionStats(): { totalFunctions: number; modules: Record<string, number> } {
+    return this.nativeFunctionRegistry.getStats();
+  }
+
+  /**
+   * Phase 3 FFI: Check if a native function exists
+   */
+  hasNativeFunction(name: string): boolean {
+    return this.nativeFunctionRegistry.exists(name);
+  }
+
+  /**
+   * Phase 3 FFI: List all available native functions
+   */
+  listNativeFunctions(): string[] {
+    return this.nativeFunctionRegistry.listAll();
   }
 
   // ── State inspection (for AI) ──

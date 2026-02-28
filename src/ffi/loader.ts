@@ -61,18 +61,51 @@ export class FFILoader {
   private registerFFIFunctions(vmInstance: any): void {
     const allModules = ffiRegistry.getAllModules();
     let functionCount = 0;
+    let failedCount = 0;
 
     for (const [moduleName, config] of allModules) {
       for (const funcName of config.functions) {
-        // 실제 구현에서는 여기서 VM에 함수 바인딩
-        // vmInstance.registerFunction(funcName, (...args: any[]) => {
-        //   return callFFIFunction(funcName, ...args);
-        // });
-        functionCount++;
+        // 함수 시그니처 조회
+        const signature = ffiRegistry.getFunctionSignature(funcName);
+        if (!signature) {
+          console.warn(`   ⚠️  No signature found for ${funcName}`);
+          failedCount++;
+          continue;
+        }
+
+        // NativeFunctionConfig 구성
+        const nativeConfig = {
+          name: funcName,
+          module: moduleName,
+          signature: signature,
+          executor: (args: any[]) => {
+            // 실제 C 함수 호출은 FFI 시스템이 처리
+            // 여기서는 placeholder 반환
+            console.log(`📞 Calling FFI function: ${funcName} with args:`, args);
+            return null;
+          }
+        };
+
+        // VM에 등록
+        if (vmInstance.registerNativeFunction && typeof vmInstance.registerNativeFunction === 'function') {
+          const success = vmInstance.registerNativeFunction(nativeConfig);
+          if (success) {
+            functionCount++;
+          } else {
+            console.warn(`   ⚠️  Failed to register ${funcName}`);
+            failedCount++;
+          }
+        } else {
+          console.warn('   ⚠️  VM does not have registerNativeFunction method');
+          failedCount++;
+        }
       }
     }
 
     console.log(`   ✓ Registered ${functionCount} FFI functions`);
+    if (failedCount > 0) {
+      console.log(`   ⚠️  Failed to register ${failedCount} functions`);
+    }
   }
 
   /**

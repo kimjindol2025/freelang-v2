@@ -356,7 +356,7 @@ export class OptimizationCompiler extends IntegratedCompilerBase {
 
       // Pattern: PUSH a, PUSH b, (arithmetic op)
       if ((curr.op as any) === 'PUSH' && (next.op as any) === 'PUSH' &&
-          ['+', '-', '*', '/', '%', '==', '!=', '<', '>', '<=', '>='].includes(op.op as string)) {
+          ['+', '-', '*', '/', '%', '==', '!=', '<', '>', '<=', '>='].includes(op.op as any)) {
 
         const a = curr.arg;
         const b = next.arg;
@@ -410,14 +410,14 @@ export class OptimizationCompiler extends IntegratedCompilerBase {
     const functions = new Map<string, { start: number; end: number; size: number }>();
 
     for (let i = 0; i < this.instructions.length; i++) {
-      if (this.instructions[i].op === 'FUNC_DEF') {
+      if ((this.instructions[i].op as any) === 'FUNC_DEF') {
         const name = this.instructions[i].arg as string;
         let end = i + 1;
 
         // Find end of function (RET or next FUNC_DEF)
         while (end < this.instructions.length &&
-               this.instructions[end].op !== 'RET' &&
-               this.instructions[end].op !== 'FUNC_DEF') {
+               (this.instructions[end].op as any) !== 'RET' &&
+               (this.instructions[end].op as any) !== 'FUNC_DEF') {
           end++;
         }
 

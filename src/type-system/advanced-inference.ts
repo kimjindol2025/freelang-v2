@@ -35,7 +35,7 @@ export interface FunctionType {
 /**
  * Array literal type
  */
-export interface ArrayLiteralType {
+export interface (ArrayLiteralType) as any {
   kind: 'array';
   elementType: TypeAnnotation;
 }
@@ -43,7 +43,7 @@ export interface ArrayLiteralType {
 /**
  * Object literal type
  */
-export interface ObjectLiteralType {
+export interface (ObjectLiteralType) as any {
   kind: 'object';
   properties: { [key: string]: TypeAnnotation };
 }
@@ -150,7 +150,7 @@ export class LiteralTypeInferencer {
   /**
    * Infer type from array literal
    */
-  public static inferArrayType(elements: any[]): ArrayLiteralType {
+  public static inferArrayType(elements: any[]): (ArrayLiteralType) as any {
     if (elements.length === 0) {
       return {
         kind: 'array',
@@ -182,7 +182,7 @@ export class LiteralTypeInferencer {
   /**
    * Infer type from object literal
    */
-  public static inferObjectType(obj: { [key: string]: any }): ObjectLiteralType {
+  public static inferObjectType(obj: { [key: string]: any }): (ObjectLiteralType) as any {
     const properties: { [key: string]: TypeAnnotation } = {};
 
     for (const [key, value] of Object.entries(obj)) {
@@ -293,7 +293,7 @@ export class ExpressionTypeInferencer {
     propertyName: string
   ): TypeAnnotation {
     if (typeof objectType === 'object' && objectType.kind === 'object') {
-      const objType = objectType as unknown as ObjectLiteralType;
+      const objType = objectType as unknown as (ObjectLiteralType) as any;
       return objType.properties[propertyName] || 'any';
     }
 

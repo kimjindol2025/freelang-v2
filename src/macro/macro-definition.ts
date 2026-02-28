@@ -267,7 +267,7 @@ export class MacroParser {
 
     const macroName = match[1];
     const argsStr = match[2];
-    const args = this.parseMacroArguments(argsStr);
+    const args = Array.from(this.parseMacroArguments(argsStr));
 
     return {
       type: 'macro-call',

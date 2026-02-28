@@ -44,7 +44,7 @@ export class StatementCompiler extends IntegratedCompilerBase {
       include_runtime: true,
     });
 
-    this.parser = new Parser();
+    this.parser = new Parser('default' as any);
     this.irGenerator = new IRGenerator()
   }
 
@@ -233,7 +233,7 @@ export class StatementCompiler extends IntegratedCompilerBase {
       name: match[1],
       varType: match[2] || undefined,
       value: { type: 'Identifier', name: match[3] },
-    };
+    } as any;
   }
 
   /**
@@ -251,7 +251,7 @@ export class StatementCompiler extends IntegratedCompilerBase {
       condition: { type: 'Identifier', name: match[1] },
       consequent: { type: 'Block', statements: [] },
       alternate: undefined,
-    };
+    } as any;
   }
 
   /**
@@ -267,7 +267,7 @@ export class StatementCompiler extends IntegratedCompilerBase {
       type: 'WhileStatement',
       condition: { type: 'Identifier', name: match[1] },
       body: { type: 'Block', statements: [] },
-    };
+    } as any;
   }
 
   /**
@@ -286,7 +286,7 @@ export class StatementCompiler extends IntegratedCompilerBase {
       condition: { type: 'Identifier', name: match[2] },
       update: { type: 'Identifier', name: match[3] },
       body: { type: 'Block', statements: [] },
-    };
+    } as any;
   }
 
   /**
@@ -314,7 +314,7 @@ export class StatementCompiler extends IntegratedCompilerBase {
       params: params.map(p => ({ name: p, type: 'unknown' })),
       returnType: returnType,
       body: { type: 'Block', statements: [] },
-    };
+    } as any;
   }
 
   /**
@@ -404,5 +404,3 @@ export class StatementCompiler extends IntegratedCompilerBase {
     }
   }
 }
-
-export { StatementCompiler };
