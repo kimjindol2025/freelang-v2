@@ -680,5 +680,149 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
     executor: (args) => String(args[0]).indexOf(args[1])
   });
 
+  // ────────────────────────────────────────────────────────────
+  // Phase A 추가: 누락된 함수들
+  // ────────────────────────────────────────────────────────────
+
+  // 수학: sqrt, ceil, floor, round, abs, min, max
+  registry.register({
+    name: 'sqrt',
+    module: 'math',
+    executor: (args) => Math.sqrt(args[0])
+  });
+
+  registry.register({
+    name: 'ceil',
+    module: 'math',
+    executor: (args) => Math.ceil(args[0])
+  });
+
+  registry.register({
+    name: 'floor',
+    module: 'math',
+    executor: (args) => Math.floor(args[0])
+  });
+
+  registry.register({
+    name: 'round',
+    module: 'math',
+    executor: (args) => Math.round(args[0])
+  });
+
+  registry.register({
+    name: 'abs',
+    module: 'math',
+    executor: (args) => Math.abs(args[0])
+  });
+
+  registry.register({
+    name: 'min',
+    module: 'math',
+    executor: (args) => Math.min(...(Array.isArray(args[0]) ? args[0] : args))
+  });
+
+  registry.register({
+    name: 'max',
+    module: 'math',
+    executor: (args) => Math.max(...(Array.isArray(args[0]) ? args[0] : args))
+  });
+
+  // 배열: map, filter, reduce, find
+  registry.register({
+    name: 'arr_map',
+    module: 'array',
+    executor: (args) => {
+      const arr = args[0] as any[];
+      const fn = args[1] as any;
+      return arr.map(fn);
+    }
+  });
+
+  registry.register({
+    name: 'arr_filter',
+    module: 'array',
+    executor: (args) => {
+      const arr = args[0] as any[];
+      const fn = args[1] as any;
+      return arr.filter(fn);
+    }
+  });
+
+  registry.register({
+    name: 'arr_reduce',
+    module: 'array',
+    executor: (args) => {
+      const arr = args[0] as any[];
+      const fn = args[1] as any;
+      const init = args[2];
+      return arr.reduce(fn, init);
+    }
+  });
+
+  registry.register({
+    name: 'arr_find',
+    module: 'array',
+    executor: (args) => {
+      const arr = args[0] as any[];
+      const fn = args[1] as any;
+      return arr.find(fn);
+    }
+  });
+
+  // 문자열: upper, lower (별칭)
+  registry.register({
+    name: 'upper',
+    module: 'string',
+    executor: (args) => String(args[0]).toUpperCase()
+  });
+
+  registry.register({
+    name: 'lower',
+    module: 'string',
+    executor: (args) => String(args[0]).toLowerCase()
+  });
+
+  // 배열 메서드: map, filter, find, reduce
+  registry.register({
+    name: '__method_map',
+    module: 'builtin_methods',
+    executor: (args) => {
+      const arr = args[0] as any[];
+      const fn = args[1] as any;
+      return arr.map(fn);
+    }
+  });
+
+  registry.register({
+    name: '__method_filter',
+    module: 'builtin_methods',
+    executor: (args) => {
+      const arr = args[0] as any[];
+      const fn = args[1] as any;
+      return arr.filter(fn);
+    }
+  });
+
+  registry.register({
+    name: '__method_find',
+    module: 'builtin_methods',
+    executor: (args) => {
+      const arr = args[0] as any[];
+      const fn = args[1] as any;
+      return arr.find(fn);
+    }
+  });
+
+  registry.register({
+    name: '__method_reduce',
+    module: 'builtin_methods',
+    executor: (args) => {
+      const arr = args[0] as any[];
+      const fn = args[1] as any;
+      const init = args[2];
+      return arr.reduce(fn, init);
+    }
+  });
+
   // Silent registration (no console output)
 }

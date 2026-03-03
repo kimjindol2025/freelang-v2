@@ -471,7 +471,9 @@ export class VM {
           }
           this.functionRegistry!.trackCall(funcName);
           // Phase 4: Track function call for JIT hotspot detection
-          trackFunctionCall(funcName);
+          if (funcName) {
+            trackFunctionCall(funcName);
+          }
           this.pc++;
         }
         // Phase 3 FFI: Try native function (C FFI)
