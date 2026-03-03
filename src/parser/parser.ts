@@ -269,11 +269,29 @@ export class Parser {
    * Format: fn name(param1, param2, ...) { ... }
    */
   private parseFunctionDeclaration(): FunctionStatement {
+    if (process.env.DEBUG_PARSER) console.log('[parseFnDecl] Starting');
     this.expect(TokenType.FN);
 
     // Function name
     const nameToken = this.expect(TokenType.IDENT, 'Expected function name');
     const name = nameToken.value;
+    if (process.env.DEBUG_PARSER) console.log(`[parseFnDecl] name=${name}`);
+
+    // Parse type parameters (fn foo<T, U>(param1, param2) { ... })
+    let typeParams: string[] = [];
+    if (this.check(TokenType.LT)) {
+      this.advance(); // consume '<'
+      while (!this.check(TokenType.GT) && !this.check(TokenType.EOF)) {
+        const paramName = this.expect(TokenType.IDENT, 'Expected type parameter name').value;
+        typeParams.push(paramName);
+        if (this.check(TokenType.COMMA)) {
+          this.advance();
+        } else {
+          break;
+        }
+      }
+      this.expect(TokenType.GT, 'Expected ">"');
+    }
 
     // Parameters
     this.expect(TokenType.LPAREN, 'Expected ( after function name');
@@ -290,13 +308,16 @@ export class Parser {
     }
 
     this.expect(TokenType.RPAREN, 'Expected ) after parameters');
+    if (process.env.DEBUG_PARSER) console.log(`[parseFnDecl] About to parse body, current=${this.current().type}`);
 
     // Function body
     const body = this.parseBlockStatement();
+    if (process.env.DEBUG_PARSER) console.log(`[parseFnDecl] Body parsed, current=${this.current().type}`);
 
     return {
       type: 'function',
       name,
+      ...(typeParams.length > 0 && { typeParams }),
       params,
       body,
       returnType: undefined
@@ -342,6 +363,22 @@ export class Parser {
     // Parse function name
     const nameToken = this.expect(TokenType.IDENT, 'Expected function name');
     const fnName = nameToken.value;
+
+    // Phase 5 Task 5: Parse type parameters (fn foo<T, U>(...))
+    let typeParams: string[] = [];
+    if (this.check(TokenType.LT)) {
+      this.advance(); // consume '<'
+      while (!this.check(TokenType.GT) && !this.check(TokenType.EOF)) {
+        const paramName = this.expect(TokenType.IDENT, 'Expected type parameter name').value;
+        typeParams.push(paramName);
+        if (this.check(TokenType.COMMA)) {
+          this.advance();
+        } else {
+          break;
+        }
+      }
+      this.expect(TokenType.GT, 'Expected ">"');
+    }
 
     // Phase 5 Stage 3: Parse input type with optional keyword
     // Support both:
@@ -403,6 +440,7 @@ export class Parser {
     return {
       decorator: decorator as 'minimal' | undefined,
       fnName,
+      ...(typeParams.length > 0 && { typeParams }),
       inputType,
       outputType,
       intent,
@@ -1201,6 +1239,8 @@ export class Parser {
 
     // 표현식 문장
     const expr = this.parseExpression();
+    // 선택적 세미콜론 처리 (expression statement)
+    this.match(TokenType.SEMICOLON);
     return {
       type: 'expression',
       expression: expr
@@ -1396,8 +1436,16 @@ export class Parser {
     this.expect(TokenType.LBRACE, 'Expected "{"');
 
     const body: Statement[] = [];
+    let count = 0;
     while (!this.check(TokenType.RBRACE) && !this.check(TokenType.EOF)) {
-      body.push(this.parseStatement());
+      if (process.env.DEBUG_PARSER) console.log(`[parseBlock] Statement ${++count}, current=${this.current().type}`);
+      try {
+        body.push(this.parseStatement());
+        if (process.env.DEBUG_PARSER) console.log(`[parseBlock] Statement ${count} parsed, new current=${this.current().type}`);
+      } catch (err) {
+        if (process.env.DEBUG_PARSER) console.log(`[parseBlock] Statement ${count} error:`, err instanceof Error ? err.message : String(err));
+        throw err;
+      }
     }
 
     this.expect(TokenType.RBRACE, 'Expected "}"');

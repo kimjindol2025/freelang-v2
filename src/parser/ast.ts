@@ -26,6 +26,7 @@ export interface MinimalFunctionAST {
 
   // 함수 정보
   fnName: string;        // 함수명
+  typeParams?: string[]; // 타입 매개변수 (예: ["T", "U"])  - Phase 5 Task 5
   inputType: string;     // 입력 타입 (예: "array<number>")
   outputType: string;    // 출력 타입 (예: "number")
 
@@ -275,6 +276,7 @@ export interface BlockStatement {
 export interface FunctionStatement {
   type: 'function';
   name: string;
+  typeParams?: string[];  // Type parameters (e.g., ["T", "U"]) - Phase 5 Task 5
   params: Parameter[];
   returnType?: string;
   body: BlockStatement;
