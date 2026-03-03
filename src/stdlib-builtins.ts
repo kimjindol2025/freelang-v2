@@ -601,5 +601,84 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
     }
   });
 
+  // ────────────────────────────────────────────────────────────
+  // Method Call Support (__method_* functions)
+  // ────────────────────────────────────────────────────────────
+
+  // Array methods
+  registry.register({
+    name: '__method_sort',
+    module: 'builtin_methods',
+    executor: (args) => {
+      const arr = args[0] as any[];
+      return arr.sort((a, b) => a - b);
+    }
+  });
+
+  registry.register({
+    name: '__method_reverse',
+    module: 'builtin_methods',
+    executor: (args) => {
+      const arr = args[0] as any[];
+      return arr.reverse();
+    }
+  });
+
+  registry.register({
+    name: '__method_join',
+    module: 'builtin_methods',
+    executor: (args) => {
+      const arr = args[0] as any[];
+      const sep = args[1] !== undefined ? String(args[1]) : ',';
+      return arr.join(sep);
+    }
+  });
+
+  registry.register({
+    name: '__method_includes',
+    module: 'builtin_methods',
+    executor: (args) => {
+      const arr = args[0] as any[];
+      return arr.includes(args[1]);
+    }
+  });
+
+  // String methods
+  registry.register({
+    name: '__method_toUpperCase',
+    module: 'builtin_methods',
+    executor: (args) => String(args[0]).toUpperCase()
+  });
+
+  registry.register({
+    name: '__method_toLowerCase',
+    module: 'builtin_methods',
+    executor: (args) => String(args[0]).toLowerCase()
+  });
+
+  registry.register({
+    name: '__method_trim',
+    module: 'builtin_methods',
+    executor: (args) => String(args[0]).trim()
+  });
+
+  registry.register({
+    name: '__method_split',
+    module: 'builtin_methods',
+    executor: (args) => String(args[0]).split(args[1] || ',')
+  });
+
+  registry.register({
+    name: '__method_substring',
+    module: 'builtin_methods',
+    executor: (args) => String(args[0]).substring(args[1], args[2])
+  });
+
+  registry.register({
+    name: '__method_indexOf',
+    module: 'builtin_methods',
+    executor: (args) => String(args[0]).indexOf(args[1])
+  });
+
   // Silent registration (no console output)
 }

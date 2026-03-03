@@ -151,6 +151,12 @@ export class VM {
         this.pc++;
         break;
 
+      case Op.PUSH_FLOAT:
+        this.guardStack();
+        this.stack.push(arg as number);  // JavaScript number is 64-bit float
+        this.pc++;
+        break;
+
       case Op.POP:
         this.need(1);
         this.stack.pop();
@@ -461,7 +467,16 @@ export class VM {
 
           // Get arguments from stack
           const args: any[] = [];
-          for (let i = 0; i < nativeFunc.signature.parameters.length; i++) {
+          let paramCount = 0;
+
+          if (nativeFunc.signature) {
+            paramCount = nativeFunc.signature.parameters.length;
+          } else if (nativeFunc.executor) {
+            // Use function length if signature is not available
+            paramCount = nativeFunc.executor.length;
+          }
+
+          for (let i = 0; i < paramCount; i++) {
             if (this.stack.length === 0) throw new Error('stack_underflow');
             args.unshift(this.stack.pop());
           }

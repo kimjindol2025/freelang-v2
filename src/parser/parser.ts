@@ -567,13 +567,13 @@ export class Parser {
   }
 
   /**
-   * Postfix 연산 파싱: . (member access) 및 [] (array indexing)
+   * Postfix 연산 파싱: . (member access), [] (array indexing), () (method call)
    */
   private parsePostfix(): Expression {
     let left = this.parsePrimaryExpression();
 
-    // Member access (obj.prop) and array indexing (arr[index])
-    while (this.check(TokenType.DOT) || this.check(TokenType.LBRACKET)) {
+    // Member access (obj.prop), array indexing (arr[index]), and method calls (obj.method())
+    while (this.check(TokenType.DOT) || this.check(TokenType.LBRACKET) || this.check(TokenType.LPAREN)) {
       if (this.check(TokenType.DOT)) {
         this.advance(); // consume .
         const propName = this.expect(TokenType.IDENT, 'Expected property name').value;
@@ -583,6 +583,24 @@ export class Parser {
           property: { type: 'identifier', name: propName },
           computed: false
         } as any;
+
+        // Check for method call: obj.method(args)
+        if (this.check(TokenType.LPAREN)) {
+          this.advance(); // consume (
+          const args: Expression[] = [];
+          while (!this.check(TokenType.RPAREN) && !this.check(TokenType.EOF)) {
+            args.push(this.parseExpression());
+            if (this.check(TokenType.COMMA)) {
+              this.advance();
+            }
+          }
+          this.expect(TokenType.RPAREN, 'Expected ")"');
+          left = {
+            type: 'call',
+            callee: left,  // MemberExpression as callee
+            arguments: args
+          } as any;
+        }
       } else if (this.check(TokenType.LBRACKET)) {
         this.advance(); // consume [
         const index = this.parseExpression();
@@ -593,6 +611,24 @@ export class Parser {
           property: index,
           computed: true
         } as any;
+      } else if (this.check(TokenType.LPAREN) && typeof left === 'object' && (left as any).type === 'identifier') {
+        // Regular function call (not method)
+        this.advance(); // consume (
+        const args: Expression[] = [];
+        while (!this.check(TokenType.RPAREN) && !this.check(TokenType.EOF)) {
+          args.push(this.parseExpression());
+          if (this.check(TokenType.COMMA)) {
+            this.advance();
+          }
+        }
+        this.expect(TokenType.RPAREN, 'Expected ")"');
+        left = {
+          type: 'call',
+          callee: (left as any).name,  // Extract function name from identifier
+          arguments: args
+        } as any;
+      } else {
+        break;
       }
     }
 

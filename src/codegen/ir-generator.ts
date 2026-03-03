@@ -458,16 +458,39 @@ export class IRGenerator {
 
       // ── Function Call ───────────────────────────────────────
       case 'CallExpression':
-        if (node.arguments && Array.isArray(node.arguments)) {
-          for (const arg of node.arguments) {
-            this.traverse(arg, out);
-          }
-        }
+      case 'call':
+        // Check if this is a method call (obj.method(...))
+        if (node.callee && typeof node.callee === 'object' && node.callee.type === 'member') {
+          // Method call: obj.method(args)
+          const memberExpr = node.callee as any;
+          const methodName = memberExpr.property?.name || memberExpr.property;
 
-        // Phase 4 Step 5: Cross-module function call support
-        // 예: math.add(1, 2) → qualified name으로 처리
-        const calleeNameWithContext = this.resolveCalleeForModule(node.callee);
-        out.push({ op: Op.CALL, arg: calleeNameWithContext, sub: [] });
+          // Push object as first argument
+          this.traverse(memberExpr.object, out);
+
+          // Push other arguments
+          if (node.arguments && Array.isArray(node.arguments)) {
+            for (const arg of node.arguments) {
+              this.traverse(arg, out);
+            }
+          }
+
+          // Convert method call to builtin function: arr_sort, str_upper, etc
+          const builtinMethodName = `__method_${methodName}`;
+          out.push({ op: Op.CALL, arg: builtinMethodName, sub: [] });
+        } else {
+          // Regular function call
+          if (node.arguments && Array.isArray(node.arguments)) {
+            for (const arg of node.arguments) {
+              this.traverse(arg, out);
+            }
+          }
+
+          // Phase 4 Step 5: Cross-module function call support
+          // 예: math.add(1, 2) → qualified name으로 처리
+          const calleeNameWithContext = this.resolveCalleeForModule(node.callee);
+          out.push({ op: Op.CALL, arg: calleeNameWithContext, sub: [] });
+        }
         break;
 
       // ── Range/Iterator (Lazy Evaluation) ─────────────────────
