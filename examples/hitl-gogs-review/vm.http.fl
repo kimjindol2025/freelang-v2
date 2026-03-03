@@ -1,0 +1,191 @@
+/**
+ * vm.http.fl - FreeLang v2 HTTP 프로토콜 처리 모듈
+ *
+ * HTTP 요청 파싱, 헤더 분석, 바디 추출
+ */
+
+// ============ HTTP 요청 타입 정의 ============
+
+type HttpRequest = {
+  method: string,
+  path: string,
+  version: string,
+  headers: map<string, string>,
+  body: string,
+  query_params: map<string, string>
+}
+
+type HttpResponse = {
+  status: i32,
+  headers: map<string, string>,
+  body: string
+}
+
+// ============ HTTP 요청 파싱 ============
+
+fn parse_http_request(raw_request: string) -> HttpRequest {
+  let lines = raw_request.split("\r\n")
+
+  if lines.length == 0 {
+    return HttpRequest {
+      method: "GET",
+      path: "/",
+      version: "HTTP/1.1",
+      headers: {},
+      body: "",
+      query_params: {}
+    }
+  }
+
+  // 첫 줄 파싱 (REQUEST LINE)
+  let first_line = lines[0]
+  let parts = first_line.split(" ")
+
+  let method = if parts.length > 0 { parts[0] } else { "GET" }
+  let path_with_query = if parts.length > 1 { parts[1] } else { "/" }
+  let version = if parts.length > 2 { parts[2] } else { "HTTP/1.1" }
+
+  // 경로와 쿼리 분리
+  let path = path_with_query
+  let query_params: map<string, string> = {}
+
+  if path_with_query.contains("?") {
+    let idx = path_with_query.index_of("?")
+    path = path_with_query.substring(0, idx)
+    let query_str = path_with_query.substring(idx + 1)
+
+    // 쿼리 파라미터 파싱
+    let params = query_str.split("&")
+    for param in params {
+      if param.contains("=") {
+        let kv = param.split("=")
+        if kv.length == 2 {
+          query_params[kv[0]] = kv[1]
+        }
+      }
+    }
+  }
+
+  // 헤더 파싱
+  let headers: map<string, string> = {}
+  let body_start = 0
+
+  for i in 1..lines.length {
+    let line = lines[i]
+
+    if line == "" {
+      body_start = i + 1
+      break
+    }
+
+    if line.contains(":") {
+      let idx = line.index_of(":")
+      let key = line.substring(0, idx).trim()
+      let value = line.substring(idx + 1).trim()
+      headers[key] = value
+    }
+  }
+
+  // 바디 추출
+  let body = ""
+  if body_start > 0 && body_start < lines.length {
+    body = lines.slice(body_start, lines.length).join("\r\n")
+  }
+
+  HttpRequest {
+    method: method,
+    path: path,
+    version: version,
+    headers: headers,
+    body: body,
+    query_params: query_params
+  }
+}
+
+// ============ HTTP 응답 생성 ============
+
+fn create_response(status: i32, body: string) -> HttpResponse {
+  let headers: map<string, string> = {}
+  headers["Content-Type"] = "application/json; charset=utf-8"
+  headers["Content-Length"] = str(body.length)
+  headers["Connection"] = "close"
+
+  HttpResponse {
+    status: status,
+    headers: headers,
+    body: body
+  }
+}
+
+fn create_html_response(status: i32, body: string) -> HttpResponse {
+  let headers: map<string, string> = {}
+  headers["Content-Type"] = "text/html; charset=utf-8"
+  headers["Content-Length"] = str(body.length)
+  headers["Connection"] = "close"
+
+  HttpResponse {
+    status: status,
+    headers: headers,
+    body: body
+  }
+}
+
+// ============ HTTP 응답을 문자열로 변환 ============
+
+fn response_to_string(response: HttpResponse) -> string {
+  let status_text = match response.status {
+    200 => "OK",
+    201 => "Created",
+    400 => "Bad Request",
+    404 => "Not Found",
+    500 => "Internal Server Error",
+    _ => "Unknown"
+  }
+
+  let result = ""
+  result = result + "HTTP/1.1 " + str(response.status) + " " + status_text + "\r\n"
+
+  for key in response.headers.keys {
+    result = result + key + ": " + response.headers[key] + "\r\n"
+  }
+
+  result = result + "\r\n"
+  result = result + response.body
+
+  result
+}
+
+// ============ 헬퍼 함수 ============
+
+fn get_header(request: HttpRequest, key: string) -> string {
+  if request.headers.contains(key) {
+    return request.headers[key]
+  }
+  return ""
+}
+
+fn get_query_param(request: HttpRequest, key: string) -> string {
+  if request.query_params.contains(key) {
+    return request.query_params[key]
+  }
+  return ""
+}
+
+fn is_json_request(request: HttpRequest) -> bool {
+  let content_type = get_header(request, "Content-Type")
+  content_type.contains("application/json")
+}
+
+// ============ 내보내기 ============
+
+pub mod {
+  parse_http_request,
+  create_response,
+  create_html_response,
+  response_to_string,
+  get_header,
+  get_query_param,
+  is_json_request,
+  HttpRequest,
+  HttpResponse
+}

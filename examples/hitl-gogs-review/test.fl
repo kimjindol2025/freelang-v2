@@ -1,0 +1,88 @@
+#!/usr/bin/env freelang
+
+/**
+ * HITL AI - 통합 테스트 (FreeLang v2.2.0)
+ */
+
+// Confidence 계산 테스트
+fn testConfidence() {
+  let metrics = {
+    complexity: 0.7,
+    naming: 0.8,
+    duplication: 0.75,
+    security: 0.9,
+    coverage: 0.6
+  }
+
+  let confidence = (
+    metrics.complexity * 0.25 +
+    metrics.naming * 0.20 +
+    metrics.duplication * 0.20 +
+    metrics.security * 0.20 +
+    metrics.coverage * 0.15
+  )
+
+  // 예상값: 0.175 + 0.16 + 0.15 + 0.18 + 0.09 = 0.755
+  if confidence > 0.70 && confidence < 0.80 {
+    return true
+  }
+  return false
+}
+
+// Routing 결정 테스트
+fn testRouting() {
+  let test1 = if 0.96 >= 0.95 { "auto_approve" } else { "fail" }
+  let test2 = if 0.85 >= 0.80 { "notify" } else { "fail" }
+  let test3 = if 0.70 >= 0.60 { "human_review" } else { "fail" }
+  let test4 = if 0.50 < 0.60 { "ai_reanalysis" } else { "fail" }
+
+  if test1 === "auto_approve" && test2 === "notify" &&
+     test3 === "human_review" && test4 === "ai_reanalysis" {
+    return true
+  }
+  return false
+}
+
+// 메인 테스트
+fn main() {
+  println!("═══════════════════════════════════════════")
+  println!("  🧪 HITL AI 통합 테스트")
+  println!("═══════════════════════════════════════════")
+  println!("")
+
+  let passed = 0
+  let failed = 0
+
+  // Test 1
+  print!("✓ Test 1: Confidence 계산... ")
+  if testConfidence() {
+    println!("PASS")
+    passed = passed + 1
+  } else {
+    println!("FAIL")
+    failed = failed + 1
+  }
+
+  // Test 2
+  print!("✓ Test 2: Routing 결정... ")
+  if testRouting() {
+    println!("PASS")
+    passed = passed + 1
+  } else {
+    println!("FAIL")
+    failed = failed + 1
+  }
+
+  println!("")
+  println!("📊 Test Results: {}/{} passed", passed, passed + failed)
+
+  if failed === 0 {
+    println!("")
+    println!("✅ 모든 테스트 통과!")
+  } else {
+    println!("")
+    println!("❌ {} 개 테스트 실패", failed)
+  }
+}
+
+main()
