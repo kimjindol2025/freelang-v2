@@ -723,6 +723,44 @@ export class Parser {
       } as ArrayExpression;
     }
 
+    // 객체 리터럴 {...}
+    if (this.check(TokenType.LBRACE)) {
+      this.advance(); // {
+      const properties: Array<{ key: string; value: Expression }> = [];
+
+      while (!this.check(TokenType.RBRACE) && !this.check(TokenType.EOF)) {
+        // Key (string 또는 identifier)
+        let key: string;
+        if (this.check(TokenType.STRING)) {
+          key = this.current().value;
+          this.advance();
+        } else if (this.check(TokenType.IDENT)) {
+          key = this.current().value;
+          this.advance();
+        } else {
+          throw new ParseError(
+            this.current().line,
+            this.current().column,
+            'Expected key in object literal'
+          );
+        }
+
+        this.expect(TokenType.COLON, 'Expected ":" after key');
+        const value = this.parseExpression();
+        properties.push({ key, value });
+
+        if (this.check(TokenType.COMMA)) {
+          this.advance();
+        }
+      }
+
+      this.expect(TokenType.RBRACE, 'Expected "}"');
+      return {
+        type: 'object',
+        properties
+      } as any;
+    }
+
     // 식별자 또는 함수 호출
     if (this.check(TokenType.IDENT)) {
       const name = token.value;

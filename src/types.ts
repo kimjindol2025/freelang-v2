@@ -112,6 +112,11 @@ export enum Op {
   CHANNEL_SEND = 0xB6,   // channel_send(channel, message)
   CHANNEL_RECV = 0xB7,   // channel_recv(channel, timeout) → message
 
+  // Object operations (Phase C)
+  OBJ_NEW   = 0xC0,  // Create new object: arg: varname → store in varname
+  OBJ_SET   = 0xC1,  // Set property: arg: "varname:key" → set varname[key] = stack_value
+  OBJ_GET   = 0xC2,  // Get property: stack: [obj, key] → [value]
+
   // Debug (AI reads structured output)
   DUMP      = 0xF0,
 }

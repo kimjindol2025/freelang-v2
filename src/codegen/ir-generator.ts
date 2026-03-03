@@ -465,6 +465,24 @@ export class IRGenerator {
         out.push({ op: Op.LOAD, arg: tmpVar });
         break;
 
+      // ── Object Operations ────────────────────────────────────
+      case 'ObjectLiteral':
+      case 'object':
+        // Create object in temporary variable
+        const tmpObjVar = `__tmp_obj_${this.tempVarCounter++}`;
+        out.push({ op: Op.OBJ_NEW, arg: tmpObjVar });
+        if (node.properties && Array.isArray(node.properties)) {
+          for (const prop of node.properties) {
+            // Evaluate the value expression
+            this.traverse(prop.value, out);
+            // Store it as a property (key, stack_value) → tmpObjVar[key] = stack_value
+            out.push({ op: Op.OBJ_SET, arg: `${tmpObjVar}:${prop.key}` });
+          }
+        }
+        // Load the object onto stack
+        out.push({ op: Op.LOAD, arg: tmpObjVar });
+        break;
+
       case 'IndexAccess':
         this.traverse(node.array, out);
         this.traverse(node.index, out);

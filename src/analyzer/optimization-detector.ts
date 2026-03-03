@@ -400,6 +400,9 @@ export class OptimizationDetector {
       [Op.CHANNEL_CREATE]: 'CHANNEL_CREATE',
       [Op.CHANNEL_SEND]: 'CHANNEL_SEND',
       [Op.CHANNEL_RECV]: 'CHANNEL_RECV',
+      [Op.OBJ_NEW]: 'OBJ_NEW',
+      [Op.OBJ_SET]: 'OBJ_SET',
+      [Op.OBJ_GET]: 'OBJ_GET',
       [Op.DUMP]: 'DUMP',
     };
 

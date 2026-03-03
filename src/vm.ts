@@ -284,37 +284,58 @@ export class VM {
       case Op.ARR_GET: {
         this.need(2);
         // If arg is provided, use variable-based access
-        // Otherwise use stack-based access: stack = [... array, index]
-        let arr;
-        let idx;
+        // Otherwise use stack-based access: stack = [... array/object, index/key]
+        let container;
+        let key;
 
         if (arg) {
-          // Variable-based: arr = vars[arg], idx = stack.pop()
-          arr = this.vars.get(arg as string);
-          if (!Array.isArray(arr)) throw new Error('not_array:' + arg);
-          idx = this.stack.pop() as number;
+          // Variable-based: container = vars[arg], key = stack.pop()
+          container = this.vars.get(arg as string);
+          if (!container || (typeof container !== 'object')) throw new Error('not_indexable:' + arg);
+          key = this.stack.pop();
         } else {
-          // Stack-based: pop index, then pop array
-          idx = this.stack.pop() as number;
-          arr = this.stack.pop();
-          if (!Array.isArray(arr)) throw new Error('not_array:stack_array');
+          // Stack-based: pop key, then pop container (array or object)
+          key = this.stack.pop();
+          container = this.stack.pop();
+          if (!container || typeof container !== 'object') throw new Error('not_indexable:stack');
         }
 
-        if (idx < 0 || idx >= arr.length) throw new Error('oob:' + idx);
+        // Handle both arrays and objects
+        let value;
+        if (Array.isArray(container)) {
+          const idx = key as number;
+          if (idx < 0 || idx >= container.length) throw new Error('oob:' + idx);
+          value = container[idx];
+        } else {
+          // Object: use string key
+          const strKey = String(key);
+          value = (container as any)[strKey];
+        }
+
         this.guardStack();
-        this.stack.push(arr[idx]);
+        this.stack.push(value);
         this.pc++;
         break;
       }
 
       case Op.ARR_SET: {
         this.need(2);
-        const arr = this.vars.get(arg as string);
-        if (!Array.isArray(arr)) throw new Error('not_array:' + arg);
-        const val = this.stack.pop() as number;
-        const idx = this.stack.pop() as number;
-        if (idx < 0 || idx >= arr.length) throw new Error('oob:' + idx);
-        arr[idx] = val;
+        const container = this.vars.get(arg as string);
+        if (!container || typeof container !== 'object') throw new Error('not_indexable:' + arg);
+        const val = this.stack.pop();
+        const key = this.stack.pop();
+
+        // Handle both arrays and objects
+        if (Array.isArray(container)) {
+          const idx = key as number;
+          if (idx < 0 || idx >= container.length) throw new Error('oob:' + idx);
+          container[idx] = val;
+        } else {
+          // Object: use string key
+          const strKey = String(key);
+          (container as any)[strKey] = val;
+        }
+
         this.pc++;
         break;
       }
@@ -333,6 +354,42 @@ export class VM {
         }
         this.guardStack();
         this.stack.push(arr.length);
+        this.pc++;
+        break;
+      }
+
+      // ── Object Operations ──────────────────
+      case Op.OBJ_NEW:
+        this.vars.set(arg as string, {});
+        this.pc++;
+        break;
+
+      case Op.OBJ_SET: {
+        this.need(1);
+        const argStr = arg as string;
+        const colonIdx = argStr.indexOf(':');
+        if (colonIdx === -1) throw new Error('invalid_obj_set:' + argStr);
+        const varName = argStr.substring(0, colonIdx);
+        const key = argStr.substring(colonIdx + 1);
+        const obj = this.vars.get(varName);
+        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+          throw new Error('not_object:' + varName);
+        }
+        const val = this.stack.pop();
+        (obj as any)[key] = val;
+        this.pc++;
+        break;
+      }
+
+      case Op.OBJ_GET: {
+        this.need(2);
+        const key = this.stack.pop() as string;
+        const obj = this.stack.pop();
+        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+          throw new Error('not_object:stack');
+        }
+        this.guardStack();
+        this.stack.push((obj as any)[key]);
         this.pc++;
         break;
       }
