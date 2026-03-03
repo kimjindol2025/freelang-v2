@@ -13,6 +13,7 @@
 
 import Database from 'better-sqlite3';
 import { NativeFunctionRegistry } from '../vm/native-function-registry';
+import { FFIFunctionSignature } from '../ffi/type-bindings';
 
 /**
  * SQLite 데이터베이스 풀 관리
