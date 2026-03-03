@@ -18,5 +18,3 @@ export { ThreadPool, newFixedThreadPool, newCachedThreadPool, newDynamicThreadPo
 
 // Async
 export { AsyncTask, PromiseTask, asyncUtils, type TaskState } from './async/async-task';
-
-export default ThreadBase;

@@ -152,7 +152,10 @@ export class WASMTarget implements CompileTarget {
     const magic = new Uint8Array([0x00, 0x61, 0x73, 0x6d]);  // \0asm
     const version = new Uint8Array([0x01, 0x00, 0x00, 0x00]);  // v1
 
-    return new Uint8Array([...magic, ...version]);
+    const result = new Uint8Array(magic.length + version.length);
+    result.set(magic);
+    result.set(version, magic.length);
+    return result;
   }
 
   /**

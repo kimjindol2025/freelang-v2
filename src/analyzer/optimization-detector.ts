@@ -324,7 +324,7 @@ export class OptimizationDetector {
    * Op 코드를 문자열로
    */
   private opName(op: Op): string {
-    const names: Record<Op, string> = {
+    const names: Partial<Record<Op, string>> = {
       [Op.PUSH]: 'PUSH',
       [Op.POP]: 'POP',
       [Op.DUP]: 'DUP',

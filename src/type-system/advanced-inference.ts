@@ -292,7 +292,7 @@ export class ExpressionTypeInferencer {
     objectType: TypeAnnotation,
     propertyName: string
   ): TypeAnnotation {
-    if (typeof objectType === 'object' && objectType.kind === 'object') {
+    if (typeof objectType === 'object' && (objectType as any).kind === 'object') {
       const objType = objectType as unknown as ObjectLiteralType;
       return objType.properties[propertyName] || 'any';
     }
@@ -396,10 +396,10 @@ export class ReturnTypeInferencer {
         return inferencer.inferIdentifierType(expr.name);
 
       case 'array-literal':
-        return LiteralTypeInferencer.inferArrayType(expr.elements || []);
+        return LiteralTypeInferencer.inferArrayType(expr.elements || []) as unknown as TypeAnnotation;
 
       case 'object-literal':
-        return LiteralTypeInferencer.inferObjectType(expr.properties || {});
+        return LiteralTypeInferencer.inferObjectType(expr.properties || {}) as unknown as TypeAnnotation;
 
       default:
         return 'any';
@@ -443,10 +443,10 @@ export class ComplexExpressionInferencer {
         return LiteralTypeInferencer.inferLiteralType((expr as any).value);
 
       case 'array-literal':
-        return LiteralTypeInferencer.inferArrayType((expr as any).elements || []);
+        return LiteralTypeInferencer.inferArrayType((expr as any).elements || []) as unknown as TypeAnnotation;
 
       case 'object-literal':
-        return LiteralTypeInferencer.inferObjectType((expr as any).properties || {});
+        return LiteralTypeInferencer.inferObjectType((expr as any).properties || {}) as unknown as TypeAnnotation;
 
       case 'conditional':
         const inferencer = new ExpressionTypeInferencer();

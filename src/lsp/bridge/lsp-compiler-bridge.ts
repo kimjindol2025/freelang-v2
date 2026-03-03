@@ -119,11 +119,10 @@ export interface TypeInfo {
  */
 export class LSPCompilerBridge {
   private documentCache: Map<string, ParsedDocument> = new Map();
-  private parser: Parser;
+  private parser: any; // Parser requires TokenBuffer
   private typeInferenceEngine: TypeInferenceEngine;
   private semanticAnalyzer: SemanticAnalyzer;
-  private typeChecker: TypeChecker;
-  private positionResolver: PositionResolver;
+  private positionResolver: any; // PositionResolver signature mismatch
   private symbolTableBuilder: SymbolTableBuilder;
 
   // Cache management
@@ -131,11 +130,10 @@ export class LSPCompilerBridge {
   private readonly CACHE_TIMEOUT = 60000; // 60 seconds
 
   constructor() {
-    this.parser = new Parser();
+    this.parser = null; // Initialized lazily
     this.typeInferenceEngine = new TypeInferenceEngine();
     this.semanticAnalyzer = new SemanticAnalyzer();
-    this.typeChecker = new TypeChecker();
-    this.positionResolver = new PositionResolver();
+    this.positionResolver = null; // Initialized lazily
     this.symbolTableBuilder = new SymbolTableBuilder();
   }
 

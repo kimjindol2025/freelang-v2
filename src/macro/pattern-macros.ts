@@ -4,7 +4,7 @@
  * Support for pattern-based macros with wildcards and captures
  */
 
-import { MacroDefinition, MacroArgument, ASTNode } from './macro-definition';
+import { MacroDefinition, MacroArgument, MacroParameter } from './macro-definition';
 
 /**
  * Pattern matcher type
@@ -32,8 +32,10 @@ export interface PatternCapture {
 /**
  * Pattern macro
  */
-export interface PatternMacroDefinition extends MacroDefinition {
+export interface PatternMacroDefinition {
   kind: 'pattern-macro';
+  name: string;
+  parameters: MacroParameter[];
   patterns: MacroPattern[];
 }
 

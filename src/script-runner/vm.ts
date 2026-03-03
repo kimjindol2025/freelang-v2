@@ -1,7 +1,9 @@
 // FreeLang v4 — Stack VM (SPEC_02 구현)
 // fetch-decode-execute + Actor cooperative scheduling
+// Phase 1 수정: GC 통합
 
 import { Op, Chunk, FuncInfo } from "./compiler";
+import { GCEngine, GCStats } from "../gc/gc-engine";
 import * as crypto from "crypto";
 
 // ============================================================
@@ -67,6 +69,11 @@ export class VM {
   private output: string[] = [];
   private instructionCount: number = 0;
   private maxInstructions: number = 1_000_000;
+
+  // Phase 1 추가: GC 엔진
+  private gc: GCEngine = new GCEngine();
+  private gcStats: GCStats[] = [];
+  private callCount: number = 0; // GC 트리거 카운터
 
   run(chunk: Chunk): { output: string[]; error: string | null } {
     this.chunk = chunk;
@@ -343,6 +350,10 @@ export class VM {
           break;
         }
         case Op.HALT:
+          // Phase 1: 프로그램 종료 전 최종 GC
+          const finalStat = this.gc.fullCollect();
+          this.gcStats.push(finalStat);
+
           actor.state = "done";
           return;
 
@@ -366,6 +377,14 @@ export class VM {
           });
 
           actor.ip = fn.offset;
+
+          // Phase 1: GC 자동 실행 (1000회 함수 호출마다)
+          this.callCount++;
+          if (this.callCount >= 1000) {
+            const stat = this.gc.autoCollect();
+            this.gcStats.push(stat);
+            this.callCount = 0;
+          }
           break;
         }
         case Op.CALL_BUILTIN: {
@@ -390,7 +409,20 @@ export class VM {
           for (let i = 0; i < count; i++) {
             elements.unshift(actor.stack.pop()!);
           }
-          actor.stack.push({ tag: "arr", val: elements });
+
+          // Phase 1: GC 메모리 할당
+          // 배열 크기 추정: 각 요소당 ~32바이트 (tag + val)
+          const arraySize = count * 32;
+          const gcId = this.gc.allocate(arraySize);
+
+          // 스택에 배열 전체를 root로 추가
+          this.gc.addRoot(gcId);
+
+          const arr: Value = { tag: "arr", val: elements };
+          // GC 메타데이터 추가 (실제 구현에서는 Value에 gcId를 추가할 수 있음)
+          (arr as any).__gcId = gcId;
+
+          actor.stack.push(arr);
           break;
         }
         case Op.ARRAY_GET: {
@@ -420,7 +452,20 @@ export class VM {
             const key = actor.stack.pop()!;
             fields.set((key as any).val, val);
           }
-          actor.stack.push({ tag: "struct", fields });
+
+          // Phase 1: GC 메모리 할당
+          // 구조체 크기 추정: 헤더(32바이트) + 각 필드당 ~32바이트
+          const structSize = 32 + count * 32;
+          const gcId = this.gc.allocate(structSize);
+
+          // 스택에 구조체를 root로 추가
+          this.gc.addRoot(gcId);
+
+          const struct: Value = { tag: "struct", fields };
+          // GC 메타데이터 추가
+          (struct as any).__gcId = gcId;
+
+          actor.stack.push(struct);
           break;
         }
         case Op.STRUCT_GET: {
@@ -966,5 +1011,45 @@ export class VM {
       default:
         return null;
     }
+  }
+
+  // ============================================================
+  // Phase 1: GC 통계 조회 (디버깅용)
+  // ============================================================
+
+  /**
+   * GC 통계 조회
+   */
+  getGCStats(): GCStats[] {
+    return this.gcStats;
+  }
+
+  /**
+   * 현재 힙 크기
+   */
+  getHeapSize(): number {
+    return this.gc.getHeapSize();
+  }
+
+  /**
+   * Young 세대 크기
+   */
+  getYoungGenSize(): number {
+    return this.gc.getYoungGenSize();
+  }
+
+  /**
+   * Old 세대 크기
+   */
+  getOldGenSize(): number {
+    return this.gc.getOldGenSize();
+  }
+
+  /**
+   * GC 통계 초기화
+   */
+  clearGCStats(): void {
+    this.gcStats = [];
+    this.gc.clearStats();
   }
 }

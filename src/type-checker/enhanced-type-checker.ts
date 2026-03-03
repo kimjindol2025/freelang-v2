@@ -489,7 +489,7 @@ export class EnhancedTypeChecker {
     typeArguments: TypeAnnotation[]
   ): FunctionInfo {
     const context = GenericTypeEvaluator.substitute(
-      { type: 'mapped', key: 'T', source: 'T', value: 'T' },
+      { type: 'mapped', key: 'T', source: 'T', value: 'T' } as any,
       this.buildGenericContext(func.genericParams, typeArguments)
     );
 

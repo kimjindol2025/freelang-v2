@@ -126,7 +126,8 @@ export class StandardMacroLibrary {
           body
         }
       `)
-      .withDocs('Execute body if condition is false (inverse of if)');
+      .withDocs('Execute body if condition is false (inverse of if)')
+      .build();
   }
 
   /**
@@ -148,7 +149,8 @@ export class StandardMacroLibrary {
           body
         }
       `)
-      .withDocs('Execute body at end of scope');
+      .withDocs('Execute body at end of scope')
+      .build();
   }
 
   /**
@@ -169,7 +171,8 @@ export class StandardMacroLibrary {
           lock.release()
         }
       `)
-      .withDocs('Execute body with lock held');
+      .withDocs('Execute body with lock held')
+      .build();
   }
 
   /**
@@ -185,7 +188,8 @@ export class StandardMacroLibrary {
       .withBody(`
         (a < b ? a : b)
       `)
-      .withDocs('Return minimum of two values');
+      .withDocs('Return minimum of two values')
+      .build();
   }
 
   /**
@@ -201,7 +205,8 @@ export class StandardMacroLibrary {
       .withBody(`
         (a > b ? a : b)
       `)
-      .withDocs('Return maximum of two values');
+      .withDocs('Return maximum of two values')
+      .build();
   }
 
   /**
@@ -218,7 +223,8 @@ export class StandardMacroLibrary {
       .withBody(`
         (value < min ? min : (value > max ? max : value))
       `)
-      .withDocs('Clamp value to range [min, max]');
+      .withDocs('Clamp value to range [min, max]')
+      .build();
   }
 
   /**
@@ -236,7 +242,8 @@ export class StandardMacroLibrary {
         a = b
         b = __temp
       `)
-      .withDocs('Swap values of two variables');
+      .withDocs('Swap values of two variables')
+      .build();
   }
 
   /**
@@ -251,7 +258,8 @@ export class StandardMacroLibrary {
       .withBody(`
         str.length
       `)
-      .withDocs('Get length of string');
+      .withDocs('Get length of string')
+      .build();
   }
 
   /**

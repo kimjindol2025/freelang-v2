@@ -220,7 +220,7 @@ export class PackageManager {
     this.installed.delete(name);
 
     // 패키지 정보도 제거
-    for (const key of this.packages.keys()) {
+    for (const key of Array.from(this.packages.keys())) {
       if (key.startsWith(`${name}@`)) {
         this.packages.delete(key);
       }

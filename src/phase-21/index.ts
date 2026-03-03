@@ -16,5 +16,3 @@ export {
   HybridRuntime,
   RuntimeFactory,
 } from './runtimes/runtime-systems';
-
-export default RuntimeSystemBase;

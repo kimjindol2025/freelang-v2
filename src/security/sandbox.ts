@@ -166,9 +166,17 @@ export class SandboxedVM {
       // 사이클 검증
       if (!this.validateCycles()) {
         return {
+          ok: false,
           value: 0,
-          type: 'error',
-          error: 'Execution cycle limit exceeded',
+          error: {
+            code: 1,
+            op: instr.op,
+            pc: 0,
+            stack_depth: stack.length,
+            detail: 'Execution cycle limit exceeded',
+          },
+          cycles: this.executionCycles,
+          ms: 0,
         };
       }
 
@@ -180,9 +188,17 @@ export class SandboxedVM {
           timestamp: Date.now(),
         });
         return {
+          ok: false,
           value: 0,
-          type: 'error',
-          error: `OpCode denied: ${Op[instr.op]}`,
+          error: {
+            code: 2,
+            op: instr.op,
+            pc: 0,
+            stack_depth: stack.length,
+            detail: `OpCode denied: ${Op[instr.op]}`,
+          },
+          cycles: this.executionCycles,
+          ms: 0,
         };
       }
 
@@ -190,9 +206,17 @@ export class SandboxedVM {
       if (instr.op === Op.PUSH || instr.op === Op.STORE) {
         if (!this.validateMemory(8)) {
           return {
+            ok: false,
             value: 0,
-            type: 'error',
-            error: 'Memory limit exceeded',
+            error: {
+              code: 3,
+              op: instr.op,
+              pc: 0,
+              stack_depth: stack.length,
+              detail: 'Memory limit exceeded',
+            },
+            cycles: this.executionCycles,
+            ms: 0,
           };
         }
       }
@@ -217,8 +241,10 @@ export class SandboxedVM {
         case Op.RET:
         case Op.HALT:
           return {
+            ok: true,
             value: stack[stack.length - 1] || 0,
-            type: 'success',
+            cycles: this.executionCycles,
+            ms: 0,
           };
 
         default:
@@ -227,8 +253,10 @@ export class SandboxedVM {
     }
 
     return {
+      ok: true,
       value: stack[stack.length - 1] || 0,
-      type: 'success',
+      cycles: this.executionCycles,
+      ms: 0,
     };
   }
 

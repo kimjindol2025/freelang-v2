@@ -115,7 +115,7 @@ export class DataFlowAnalyzer {
     const defUse = this.computeDefUse();
     const unused: string[] = [];
 
-    for (const [name, info] of defUse.entries()) {
+    for (const [name, info] of Array.from(defUse.entries())) {
       if (!info.isUsed && info.defs.length > 0) {
         unused.push(name);
         this.warnings.push({
@@ -137,7 +137,7 @@ export class DataFlowAnalyzer {
     const defUse = this.computeDefUse();
     const uninitialized: AnalysisWarning[] = [];
 
-    for (const [name, info] of defUse.entries()) {
+    for (const [name, info] of Array.from(defUse.entries())) {
       if (info.defs.length === 0 && info.uses.length > 0) {
         uninitialized.push({
           type: 'uninitialized',

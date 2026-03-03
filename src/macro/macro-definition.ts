@@ -267,12 +267,12 @@ export class MacroParser {
 
     const macroName = match[1];
     const argsStr = match[2];
-    const arguments = this.parseMacroArguments(argsStr);
+    const args = this.parseMacroArguments(argsStr);
 
     return {
       type: 'macro-call',
       macroName,
-      arguments
+      arguments: args
     };
   }
 

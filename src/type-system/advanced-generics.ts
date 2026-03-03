@@ -156,8 +156,8 @@ export class GenericTypeEvaluator {
       return type;
     }
 
-    if (type.type === 'conditional') {
-      const cond = type as ConditionalType;
+    if ((type as any).type === 'conditional') {
+      const cond = type as any as ConditionalType;
       const checkType = this.substitute(cond.check, context);
       const extendsType = cond.extends;
 
@@ -169,8 +169,8 @@ export class GenericTypeEvaluator {
       }
     }
 
-    if (type.type === 'mapped') {
-      const mapped = type as MappedType;
+    if ((type as any).type === 'mapped') {
+      const mapped = type as any as MappedType;
       const sourceType = this.substitute(mapped.source, context);
       const valueType = this.substitute(mapped.value, context);
 
@@ -181,7 +181,7 @@ export class GenericTypeEvaluator {
         value: valueType,
         optional: mapped.optional,
         readonly: mapped.readonly
-      };
+      } as unknown as TypeAnnotation;
     }
 
     return type;
@@ -227,7 +227,7 @@ export class GenericTypeEvaluator {
       value: this.substitute(mapped.value, context),
       optional: mapped.optional,
       readonly: mapped.readonly
-    };
+    } as any as TypeAnnotation;
   }
 
   /**

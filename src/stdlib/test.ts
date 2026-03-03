@@ -258,8 +258,3 @@ export const assertEqual = <T>(actual: T, expected: T, msg?: string) => globalRu
 export const assertThrows = (fn: () => void, msg?: string) => globalRunner.assertThrows(fn, msg);
 export const run = () => globalRunner.run();
 export const clear = () => globalRunner.clear();
-
-/**
- * Export the TestRunner class for advanced usage
- */
-export { TestRunner };

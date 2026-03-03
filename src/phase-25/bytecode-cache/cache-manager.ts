@@ -198,9 +198,9 @@ export class CacheManager<K, V> {
     if (Array.isArray(value)) {
       return value.reduce((sum, v) => sum + this.estimateSize(v), 8);
     }
-    if (typeof value === 'object') {
-      return Object.values(value).reduce(
-        (sum, v) => sum + this.estimateSize(v),
+    if (typeof value === 'object' && value !== null) {
+      return (Object.values(value) as any[]).reduce(
+        (sum: number, v: any) => sum + this.estimateSize(v),
         8
       );
     }
