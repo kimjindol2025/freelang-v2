@@ -13,6 +13,7 @@ import * as path from 'path';
 import { interactiveMode } from './interactive';
 import { batchMode } from './batch';
 import { ProgramRunner } from './runner';
+import { AOTCompiler } from './aot-compiler';
 
 /**
  * 도움말 표시
@@ -25,14 +26,18 @@ Usage:
   freelang                    # 대화형 모드 (기본값)
   freelang --interactive      # 명시적 대화형 모드
   freelang --batch <file>     # 배치 모드 (파일 입력)
+  freelang --aot <input> -o <output>  # AOT 컴파일 (Level 3)
+  freelang <file.free>        # 파일 직접 실행
   freelang --help             # 도움말
   freelang --version          # 버전 정보
 
 Options:
   -i, --interactive          # 대화형 모드 시작
   -b, --batch <file>         # 배치 파일 입력 (입력값 한 줄씩)
-  -o, --output <file>        # 출력 파일 (배치 모드)
+  -o, --output <file>        # 출력 파일 (배치/AOT 모드)
   -f, --format <json|csv>    # 출력 형식 (기본: json)
+  --aot <input.free>         # AOT 컴파일 (Ahead-of-Time, Level 3)
+  --serve <file> [port]      # HTTP 서버 모드 (기본 포트: 41001)
   -h, --help                 # 도움말
   -v, --version              # 버전
 
@@ -42,10 +47,15 @@ Examples:
 
   # 배치 처리
   $ freelang --batch inputs.txt --output results.json --format json
-  $ freelang --batch inputs.txt --output results.csv --format csv
 
-  # 파이프 입력
-  $ echo "배열 합산" | freelang --interactive
+  # 파일 직접 실행
+  $ freelang program.free
+
+  # AOT 컴파일 (Level 3)
+  $ freelang --aot program.free -o program_binary
+
+  # HTTP 서버 모드
+  $ freelang --serve server.free 8080
   `);
 }
 
@@ -429,9 +439,11 @@ async function main(): Promise<void> {
   }
 
   // 인자 파싱
-  let mode: 'interactive' | 'batch' = 'interactive';
+  let mode: 'interactive' | 'batch' | 'aot' = 'interactive';
   let batchInputFile: string | undefined;
   let batchOutputFile: string | undefined;
+  let aotInputFile: string | undefined;
+  let aotOutputFile: string | undefined;
   let outputFormat: 'json' | 'csv' = 'json';
 
   for (let i = 0; i < args.length; i++) {
@@ -493,6 +505,15 @@ async function main(): Promise<void> {
         await startServeMode(serveFile, servePort);
         process.exit(0);
 
+      case '--aot':
+        mode = 'aot';
+        aotInputFile = args[++i];
+        if (!aotInputFile) {
+          console.error('❌ --aot requires an input file');
+          process.exit(1);
+        }
+        break;
+
       default:
         // .free 파일 직접 실행 지원 (Phase 3)
         if (!arg.startsWith('-') && arg.endsWith('.free')) {
@@ -535,6 +556,29 @@ async function main(): Promise<void> {
       process.exit(1);
     }
     await startBatchMode(batchInputFile, batchOutputFile, outputFormat);
+  } else if (mode === 'aot') {
+    if (!aotInputFile) {
+      console.error('❌ AOT mode requires input file');
+      process.exit(1);
+    }
+    if (!aotOutputFile) {
+      console.error('❌ AOT mode requires -o output file');
+      process.exit(1);
+    }
+
+    console.log(`🔨 Compiling ${aotInputFile} to ${aotOutputFile} (AOT Level 3)...`);
+    const compiler = new AOTCompiler();
+    const result = compiler.compile(aotInputFile, aotOutputFile);
+
+    if (result.success) {
+      console.log(`✅ AOT Compilation successful!`);
+      console.log(`📦 Binary: ${result.binaryPath}`);
+      console.log(`⏱️  Time: ${result.duration}ms`);
+      process.exit(0);
+    } else {
+      console.error(`❌ AOT Compilation failed: ${result.error}`);
+      process.exit(1);
+    }
   }
 }
 

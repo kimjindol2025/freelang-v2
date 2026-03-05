@@ -94,11 +94,11 @@ export class ProgramRunner {
       const ir = this.gen.generateModuleIR(module);
 
       // 3.5. Optimize IR: Apply LLVM optimizations (ADCE, Constant Folding, Inlining)
-      // Temporarily disable optimization to check if it's the culprit
+      // Temporarily disabled for debugging
       // const { optimized } = optimizeIR(ir);
 
       // 4. Execute: Optimized IR → VM results
-      const result = this.vm.run(ir); // Use unoptimized IR for now
+      const result = this.vm.run(ir); // Use unoptimized for now
 
       const executionTime = Date.now() - startTime;
 
