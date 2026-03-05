@@ -7,9 +7,7 @@
  * - Smoke test: 각 모듈별 기본 함수 동작
  */
 
-import { VM } from './src/vm/vm-executor';
-import { Parser } from './src/parser/parser';
-import { Lexer } from './src/lexer/lexer';
+import { ProgramRunner } from './src/cli/runner';
 
 interface TestResult {
   name: string;
@@ -50,13 +48,14 @@ function runTest(
  */
 function executeFreeLang(code: string): any {
   try {
-    const vm = new VM();
-    const lexer = new Lexer(code);
-    const tokens = lexer.tokenize();
-    const parser = new Parser(tokens);
-    const ast = parser.parse();
+    const runner = new ProgramRunner();
+    const result = runner.runString(code);
 
-    return vm.execute(ast);
+    if (!result.success) {
+      throw new Error(`Execution failed: ${result.error}`);
+    }
+
+    return result.output;
   } catch (error) {
     throw new Error(`Execution failed: ${error}`);
   }
