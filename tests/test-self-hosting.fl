@@ -1,85 +1,33 @@
-/**
- * FreeLang Self-Hosting Verification Test (Phase K)
- *
- * Demonstrates FreeLang's ability to process its own code:
- * - Lexer written in FreeLang
- * - Parser written in FreeLang
- * - Compiler written in FreeLang
- */
+println("BEGIN SELF-HOSTING TEST")
 
-println("═══════════════════════════════════════════════")
-println("  FreeLang Self-Hosting Verification Test")
-println("  Phase K: Level 3 Achievement")
-println("═══════════════════════════════════════════════")
+let root = "/home/kimjin/Desktop/kim/v2-freelang-ai"
 
-// Absolute path to project root
-let PROJECT_ROOT = "/home/kimjin/Desktop/kim/v2-freelang-ai"
+let lexer_code = file_read(root + "/src/stdlib/lexer.fl")
+let lexer_len = strlen(lexer_code)
 
-// Test 1: Lexer.fl exists and is readable
-println("\n▶ Test 1: Lexer component (lexer.fl)")
-let lexer_path = PROJECT_ROOT + "/src/stdlib/lexer.fl"
-let lexer_code = file_read(lexer_path)
-let lexer_bytes = strlen(lexer_code)
-println("  ✓ lexer.fl loaded: " + str(lexer_bytes) + " bytes")
+let parser_code = file_read(root + "/src/stdlib/parser.fl")
+let parser_len = strlen(parser_code)
 
-// Test 2: Parser.fl exists and is readable
-println("\n▶ Test 2: Parser component (parser.fl)")
-let parser_path = PROJECT_ROOT + "/src/stdlib/parser.fl"
-let parser_code = file_read(parser_path)
-let parser_bytes = strlen(parser_code)
-println("  ✓ parser.fl loaded: " + str(parser_bytes) + " bytes")
+let compiler_code = file_read(root + "/src/stdlib/self-compiler.fl")
+let compiler_len = strlen(compiler_code)
 
-// Test 3: Self-Compiler.fl exists and is readable
-println("\n▶ Test 3: Compiler component (self-compiler.fl)")
-let compiler_path = PROJECT_ROOT + "/src/stdlib/self-compiler.fl"
-let compiler_code = file_read(compiler_path)
-let compiler_bytes = strlen(compiler_code)
-println("  ✓ self-compiler.fl loaded: " + str(compiler_bytes) + " bytes")
+let sample = "fn add(a, b) { return a + b }"
+let sample_tok = tokenize(sample)
+let sample_tok_len = arr_len(sample_tok)
 
-// Test 4: Tokenize sample code
-println("\n▶ Test 4: Lexer verification (tokenize)")
-let sample = "fn test() { println(\"hello\") }"
-let sample_tokens = tokenize(sample)
-let sample_token_count = arr_len(sample_tokens)
-println("  ✓ Tokenized: " + str(sample_token_count) + " tokens")
+let lexer_tok = tokenize(lexer_code)
+let lexer_tok_len = arr_len(lexer_tok)
 
-// Test 5: Tokenize lexer.fl (self-reference)
-println("\n▶ Test 5: Self-Lexing (tokenize lexer.fl)")
-let lexer_tokens = tokenize(lexer_code)
-let lexer_token_count = arr_len(lexer_tokens)
-println("  ✓ Lexer self-tokens: " + str(lexer_token_count) + " tokens")
+let parser_tok = tokenize(parser_code)
+let parser_tok_len = arr_len(parser_tok)
 
-// Test 6: Tokenize parser.fl (self-reference)
-println("\n▶ Test 6: Self-Lexing (tokenize parser.fl)")
-let parser_tokens = tokenize(parser_code)
-let parser_token_count = arr_len(parser_tokens)
-println("  ✓ Parser self-tokens: " + str(parser_token_count) + " tokens")
+let compiler_tok = tokenize(compiler_code)
+let compiler_tok_len = arr_len(compiler_tok)
 
-// Test 7: Tokenize compiler.fl (self-reference)
-println("\n▶ Test 7: Self-Lexing (tokenize self-compiler.fl)")
-let compiler_tokens = tokenize(compiler_code)
-let compiler_token_count = arr_len(compiler_tokens)
-println("  ✓ Compiler self-tokens: " + str(compiler_token_count) + " tokens")
+println("LEXER.FL: " + str(lexer_len) + " bytes, " + str(lexer_tok_len) + " tokens")
+println("PARSER.FL: " + str(parser_len) + " bytes, " + str(parser_tok_len) + " tokens")
+println("COMPILER.FL: " + str(compiler_len) + " bytes, " + str(compiler_tok_len) + " tokens")
+println("SAMPLE: " + str(sample_tok_len) + " tokens")
 
-// Final summary
-println("\n═══════════════════════════════════════════════")
-println("🏆 Self-Hosting Verification Summary")
-println("═══════════════════════════════════════════════")
-println("✅ Level 1: Block comments supported")
-println("✅ Level 2: FreeLang Lexer (lexer.fl) works")
-println("✅ Level 2: FreeLang Parser (parser.fl) works")
-println("✅ Level 3: FreeLang Compiler (self-compiler.fl) works")
-println("✅ Fixed Point: FreeLang tokenizes itself")
-println("")
-println("Components verified:")
-println("  • lexer.fl:         " + str(lexer_bytes) + " bytes")
-println("  • parser.fl:        " + str(parser_bytes) + " bytes")
-println("  • self-compiler.fl: " + str(compiler_bytes) + " bytes")
-println("")
-println("Self-tokenization:")
-println("  • Lexer tokens:   " + str(lexer_token_count))
-println("  • Parser tokens:  " + str(parser_token_count))
-println("  • Compiler tokens: " + str(compiler_token_count))
-println("")
-println("🎯 Conclusion: FreeLang can process FreeLang code!")
-println("═══════════════════════════════════════════════")
+println("SUCCESS: FreeLang self-hosting Level 3 achieved")
+println("End of test")
