@@ -18,6 +18,7 @@ import { Inst, VMResult } from '../types';
 import { optimizeIR } from '../phase-14-llvm';
 import { registerStdlibFunctions } from '../stdlib-builtins';
 import { registerSQLiteNativeFunctions } from '../stdlib/sqlite-native';
+import { registerTCPFunctions } from '../stdlib/net/tcp-native';
 
 export interface RunResult {
   success: boolean;
@@ -44,6 +45,8 @@ export class ProgramRunner {
     registerStdlibFunctions(this.vm.getNativeFunctionRegistry());
     // Phase H: Register SQLite native functions
     registerSQLiteNativeFunctions(this.vm.getNativeFunctionRegistry());
+    // Phase 3 Level 3: Register TCP native functions (net module)
+    registerTCPFunctions(this.vm.getNativeFunctionRegistry());
   }
 
   /**
