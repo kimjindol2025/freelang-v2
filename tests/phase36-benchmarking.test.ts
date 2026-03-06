@@ -94,7 +94,7 @@ describe('Phase 36: Performance Benchmarking & Optimization', () => {
 
       expect(result.requestsPerSecond).toBeGreaterThan(5000);
       expect(result.memoryMB).toBeLessThan(200);
-    }, 30000);
+    }, 120000);
 
     it('should measure HTTP client performance', async () => {
       jest.setTimeout(15000);

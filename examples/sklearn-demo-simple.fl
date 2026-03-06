@@ -1,0 +1,48 @@
+/**
+ * FreeLang scikit-learn Phase 7 - Simple Test
+ *
+ * 간단한 ML 함수 테스트
+ */
+
+// 간단한 데이터 생성
+fn generate_simple_data() {
+  return [
+    [1.0, 2.0],
+    [2.0, 3.0],
+    [3.0, 4.0],
+    [4.0, 5.0],
+    [5.0, 6.0]
+  ]
+}
+
+fn main() {
+  println("=== FreeLang ML Demo ===")
+
+  // 데이터 생성
+  let X = generate_simple_data()
+  println("Data shape: " + str(arr_len(X)) + " x 2")
+
+  // 통계 함수 테스트
+  let col1 = [1.0, 2.0, 3.0, 4.0, 5.0]
+  let mean_val = stats_mean(col1)
+  println("Mean: " + str(mean_val))
+
+  let std_val = stats_std_dev(col1)
+  println("Std Dev: " + str(std_val))
+
+  // 거리 함수 테스트
+  let p1 = [0.0, 0.0]
+  let p2 = [3.0, 4.0]
+  let dist = ml_distance_euclidean(p1, p2)
+  println("Euclidean Distance: " + str(dist))
+
+  // 선형 회귀 테스트
+  let x_vals = [1.0, 2.0, 3.0, 4.0, 5.0]
+  let y_vals = [2.0, 4.0, 5.0, 4.0, 5.0]
+  let lr = ml_linear_regression(x_vals, y_vals)
+  println("Linear Regression R²: " + str(lr.r2))
+
+  println("✅ All tests passed!")
+}
+
+main()

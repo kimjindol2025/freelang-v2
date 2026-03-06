@@ -260,8 +260,8 @@ describe('Phase 24.2-4: Advanced Platform Features', () => {
       });
 
       test('Rebuilds state from events', () => {
-        store.append('agg-1', { event_type: 'Set', data: { value: 10 } });
-        store.append('agg-1', { event_type: 'Set', data: { value: 20 } });
+        store.append('agg-1', { aggregate_id: 'agg-1', event_type: 'Set', data: { value: 10 } });
+        store.append('agg-1', { aggregate_id: 'agg-1', event_type: 'Set', data: { value: 20 } });
 
         const state = store.rebuildState('agg-1');
 
@@ -271,7 +271,7 @@ describe('Phase 24.2-4: Advanced Platform Features', () => {
 
       test('Creates snapshots', () => {
         for (let i = 0; i < 10; i++) {
-          store.append('agg-1', { event_type: 'Update', data: { count: i } });
+          store.append('agg-1', { aggregate_id: 'agg-1', event_type: 'Update', data: { count: i } });
         }
 
         const snapshot = store.getSnapshot('agg-1');

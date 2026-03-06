@@ -16,6 +16,7 @@ import { registerDataProcessingFunctions } from './stdlib-data-functions';
 import { registerAnalyticsFunctions } from './stdlib-analytics-functions';
 import { registerIntegrationFunctions } from './stdlib-integration-functions';
 import { registerUtilityFunctions } from './stdlib-utility-functions';
+import { registerSklearnFunctions } from './stdlib-sklearn';
 
 /**
  * stdlib 함수들을 NativeFunctionRegistry에 등록
@@ -2994,6 +2995,13 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
   // Date/time, currency, units, encoding, misc
   // ────────────────────────────────────────────────────────────
   registerUtilityFunctions(registry);
+
+  // ────────────────────────────────────────────────────────────
+  // Phase H: scikit-learn 스타일 ML Functions (8개)
+  // Phase 3: KMeans Clustering (4개)
+  // Phase 4: K-Nearest Neighbors (4개)
+  // ────────────────────────────────────────────────────────────
+  registerSklearnFunctions(registry);
 
   // Silent registration (no console output)
 }

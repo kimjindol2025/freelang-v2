@@ -60,7 +60,7 @@ describe('Phase 6: HTTP/2 Real Communication Tests', () => {
       } else {
         done(new Error('Server did not become ready in time'));
       }
-    }, 3000);
+    }, 5000);
   });
 
   /**

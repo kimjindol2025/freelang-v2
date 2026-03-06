@@ -55,7 +55,14 @@ describe('EnhancedHoverProvider', () => {
     const hover = hoverProvider.provideHover(testDocument, position);
 
     if (hover) {
-      const content = typeof hover.contents === 'string' ? hover.contents : hover.contents.value;
+      let content: string | undefined;
+      if (typeof hover.contents === 'string') {
+        content = hover.contents;
+      } else if (typeof hover.contents === 'object' && 'value' in (hover.contents as any)) {
+        content = (hover.contents as any).value;
+      } else if (Array.isArray(hover.contents)) {
+        content = (hover.contents as any)[0];
+      }
       expect(content).toBeDefined();
     }
   });
