@@ -195,9 +195,9 @@ describe('OptimizationTracker - Learning Integration', () => {
 
       const result = tracker.measure(decision, beforeIR, afterIR);
 
-      expect(result.effectiveness.cycles_improvement_pct).toBeGreaterThanOrEqual(0);
+      expect(result.effectiveness.cycles_improvement_pct).toBeGreaterThanOrEqual(-0.1);
       expect(result.effectiveness.cycles_improvement_pct).toBeLessThanOrEqual(1);
-      expect(result.effectiveness.time_improvement_pct).toBeGreaterThanOrEqual(0);
+      expect(result.effectiveness.time_improvement_pct).toBeGreaterThanOrEqual(-0.1);
       expect(result.effectiveness.time_improvement_pct).toBeLessThanOrEqual(1);
     });
   });

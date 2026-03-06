@@ -10,18 +10,23 @@ import * as https from 'https';
 
 describe('Phase 6: HTTP/2 Real Communication Tests', () => {
   let serverProcess: any = null;
+  let testPort = 8443;
 
   /**
-   * Start HTTP/2 echo server
+   * Start HTTP/2 echo server with dynamic port allocation
    */
   beforeAll((done) => {
     const serverScript = path.join(__dirname, 'http2-echo-server.js');
 
+    // Use dynamic port to avoid conflicts
+    testPort = 9443 + Math.floor(Math.random() * 1000);
+
     console.log('\n【Server Setup】');
     console.log(`  Starting HTTP/2 echo server...`);
     console.log(`  Script: ${serverScript}`);
+    console.log(`  Port: ${testPort}`);
 
-    serverProcess = spawn('node', [serverScript, '8443'], {
+    serverProcess = spawn('node', [serverScript, testPort.toString()], {
       stdio: ['pipe', 'pipe', 'pipe'],
       detached: false
     });
@@ -50,7 +55,7 @@ describe('Phase 6: HTTP/2 Real Communication Tests', () => {
     // Wait for server to be ready
     setTimeout(() => {
       if (serverReady) {
-        console.log(`\n✓ Server ready (port 8443)\n`);
+        console.log(`\n✓ Server ready (port ${testPort})\n`);
         done();
       } else {
         done(new Error('Server did not become ready in time'));
@@ -83,7 +88,7 @@ describe('Phase 6: HTTP/2 Real Communication Tests', () => {
   test('HTTP/2 echo server is running on port 8443', (done) => {
     const options = {
       hostname: 'localhost',
-      port: 8443,
+      port: testPort,
       path: '/',
       method: 'GET',
       rejectUnauthorized: false
@@ -91,7 +96,7 @@ describe('Phase 6: HTTP/2 Real Communication Tests', () => {
 
     const req = https.request(options, (res: any) => {
       expect(res.statusCode).toBe(200);
-      console.log(`  ✓ HTTPS endpoint responds (port 8443)`);
+      console.log(`  ✓ HTTPS endpoint responds (port ${testPort})`);
 
       let data = '';
       res.on('data', (chunk: any) => {
@@ -113,7 +118,7 @@ describe('Phase 6: HTTP/2 Real Communication Tests', () => {
   test('HTTP/2 server accepts connections', (done) => {
     const options = {
       hostname: 'localhost',
-      port: 8443,
+      port: testPort,
       path: '/status',
       method: 'GET',
       rejectUnauthorized: false
@@ -146,7 +151,7 @@ describe('Phase 6: HTTP/2 Real Communication Tests', () => {
   test('HTTP/2 server responds to GET requests', (done) => {
     const options = {
       hostname: 'localhost',
-      port: 8443,
+      port: testPort,
       path: '/status',
       method: 'GET',
       rejectUnauthorized: false
@@ -187,7 +192,7 @@ describe('Phase 6: HTTP/2 Real Communication Tests', () => {
 
     const options = {
       hostname: 'localhost',
-      port: 8443,
+      port: testPort,
       path: '/echo',
       method: 'POST',
       headers: {
@@ -230,7 +235,7 @@ describe('Phase 6: HTTP/2 Real Communication Tests', () => {
   test('HTTP/2 supports multiplexing (concurrent requests)', (done) => {
     const options = {
       hostname: 'localhost',
-      port: 8443,
+      port: testPort,
       path: '/status',
       method: 'GET',
       rejectUnauthorized: false
@@ -280,7 +285,7 @@ describe('Phase 6: HTTP/2 Real Communication Tests', () => {
 
     const options = {
       hostname: 'localhost',
-      port: 8443,
+      port: testPort,
       path: '/echo',
       method: 'POST',
       headers: {
