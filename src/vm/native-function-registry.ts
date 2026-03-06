@@ -31,7 +31,7 @@ export class NativeFunctionRegistry {
    */
   public register(config: NativeFunctionConfig): boolean {
     if (this.functions.has(config.name)) {
-      console.warn(`Native function already registered: ${config.name}`);
+      process.stderr.write(`Native function already registered: ${config.name}\n`);
       return false;
     }
 

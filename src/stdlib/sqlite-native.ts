@@ -271,5 +271,5 @@ export function registerSQLiteNativeFunctions(registry: NativeFunctionRegistry):
     },
   });
 
-  console.log('✅ SQLite native functions registered (Phase H)');
+  process.stderr.write('✅ SQLite native functions registered (Phase H)\n');
 }

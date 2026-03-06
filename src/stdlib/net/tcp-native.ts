@@ -380,5 +380,5 @@ export function registerTCPFunctions(registry: NativeFunctionRegistry): void {
     }
   });
 
-  console.log('✅ TCP native functions registered');
+  process.stderr.write('✅ TCP native functions registered\n');
 }

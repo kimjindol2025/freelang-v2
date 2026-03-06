@@ -1035,14 +1035,15 @@ export class VM {
    */
   private runProgram(program: Inst[]): VMResult {
     const savedPc = this.pc;
-    const savedStack = [...this.stack];
+    const savedStack = this.stack;  // Save reference, not copy
+    this.stack = [];  // Isolated stack for this sub-program
     this.pc = 0;
 
     try {
       while (this.pc < program.length) {
         if (this.cycles++ > 100_000) {
           this.pc = savedPc;
-          this.stack = savedStack;
+          this.stack = savedStack;  // Restore stack before returning
           return this.fail(Op.HALT, 1, 'cycle_limit');
         }
         const inst = program[this.pc];
@@ -1055,10 +1056,11 @@ export class VM {
       // Get return value from stack
       const value = this.stack.length > 0 ? this.stack[this.stack.length - 1] : undefined;
       this.pc = savedPc;
+      this.stack = savedStack;  // Restore stack before returning (was missing in success path!)
       return { ok: true, value, cycles: this.cycles, ms: 0 };
     } catch (e: unknown) {
       this.pc = savedPc;
-      this.stack = savedStack;
+      this.stack = savedStack;  // Restore stack on error
       const msg = e instanceof Error ? e.message : String(e);
       return this.fail(Op.HALT, 99, msg);
     }

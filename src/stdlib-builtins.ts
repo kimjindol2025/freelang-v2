@@ -57,6 +57,30 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
   });
 
   // ────────────────────────────────────────────────────────────
+  // Phase A-1a: I/O 함수 (I/O)
+  // ────────────────────────────────────────────────────────────
+
+  registry.register({
+    name: 'println',
+    module: 'builtins',
+    executor: (args) => {
+      const val = args[0] !== undefined ? args[0] : '';
+      process.stdout.write(String(val) + '\n');
+      return null;
+    }
+  });
+
+  registry.register({
+    name: 'print',
+    module: 'builtins',
+    executor: (args) => {
+      const val = args[0] !== undefined ? args[0] : '';
+      process.stdout.write(String(val));
+      return null;
+    }
+  });
+
+  // ────────────────────────────────────────────────────────────
   // Phase A-2: 수학 함수 (Math)
   // ────────────────────────────────────────────────────────────
 
