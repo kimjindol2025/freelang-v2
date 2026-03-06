@@ -92,7 +92,8 @@ function buildAnalysis() {
     ['stdlib-data-functions.ts', 1480],
     ['stdlib-analytics-functions.ts', 1680],
     ['stdlib-integration-functions.ts', 950],
-    ['stdlib-utility-functions.ts', 1240]
+    ['stdlib-utility-functions.ts', 1240],
+    ['stdlib-team-b-string-math.ts', 2515]
   ];
 
   let totalLines = 0;
@@ -121,7 +122,8 @@ function buildAnalysis() {
     ['stdlib-data-functions.ts', 60],
     ['stdlib-analytics-functions.ts', 60],
     ['stdlib-integration-functions.ts', 40],
-    ['stdlib-utility-functions.ts', 40]
+    ['stdlib-utility-functions.ts', 40],
+    ['stdlib-team-b-string-math.ts', 138]
   ];
 
   let totalFunctions = 0;
