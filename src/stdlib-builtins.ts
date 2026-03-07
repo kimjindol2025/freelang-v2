@@ -552,6 +552,19 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
 
   const http = require('http');
   const httpServers = new Map<number, any>();
+  // Hardware-CORS: @allow_origin 어노테이션으로 설정되는 도메인 화이트리스트
+  const corsWhitelist = new Set<string>();
+  const corsMatch = (origin: string): boolean => {
+    if (corsWhitelist.size === 0) return true;
+    if (corsWhitelist.has(origin)) return true;
+    for (const allowed of corsWhitelist) {
+      if (allowed.includes('*')) {
+        const pat = '^' + allowed.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace('\\*', '[^.]+') + '$';
+        if (new RegExp(pat).test(origin)) return true;
+      }
+    }
+    return false;
+  };
 
   /**
    * RFC 7578 Multipart 파서 - MOSS-Uploader 핵심 엔진
@@ -660,6 +673,31 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
 
       // Set up request listener
       server.on('request', (req: any, res: any) => {
+        // Hardware-CORS Gate: Origin 검증 (애플리케이션 레이어 진입 전 차단)
+        const origin: string = (req.headers['origin'] as string) || '';
+        if (corsWhitelist.size > 0) {
+          if (req.method === 'OPTIONS') {
+            if (origin && corsMatch(origin)) {
+              res.writeHead(204, {
+                'Access-Control-Allow-Origin': origin,
+                'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+                'Access-Control-Max-Age': '86400',
+                'Vary': 'Origin'
+              });
+            } else {
+              res.writeHead(403, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: false, error: 'CORS: origin not allowed' }));
+            }
+            res.end();
+            return;
+          }
+          if (origin && !corsMatch(origin)) {
+            res.writeHead(403, { 'Content-Type': 'application/json', 'Vary': 'Origin' });
+            res.end(JSON.stringify({ ok: false, error: 'CORS: origin not allowed' }));
+            return;
+          }
+        }
         if (serverObj.requestHandler) {
           try {
             // Create request object for FreeLang
