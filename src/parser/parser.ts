@@ -71,7 +71,9 @@ import {
   EnumDeclaration,    // Phase 16: Enum support
   BreakStatement,     // Phase 16: Break support
   ContinueStatement,  // Phase 16: Continue support
-  SecretDeclaration   // Secret-Link: 보안 변수
+  SecretDeclaration,  // Secret-Link: 보안 변수
+  StyleDeclaration,   // MOSS-Style: 스타일 선언
+  StyleProperty       // MOSS-Style: 스타일 속성
 } from './ast';
 
 /**
@@ -1464,6 +1466,11 @@ export class Parser {
       return this.parseSecretDeclaration();
     }
 
+    // MOSS-Style: style 선언
+    if (this.check(TokenType.STYLE)) {
+      return this.parseStyleDeclaration();
+    }
+
     // 블록 문
     if (this.check(TokenType.LBRACE)) {
       return this.parseBlockStatement();
@@ -2113,6 +2120,130 @@ export class Parser {
   // 문법:
   //   secret NAME = Config.load("KEY");   // .flconf에서 로드
   //   secret NAME = "literal_value";      // 리터럴 (빌드 타임 암호화)
+  /**
+   * MOSS-Style: 스타일 선언 파싱
+   *
+   * 형식:
+   *   style primary_button {
+   *       background: #007bff;
+   *       padding: 10px 20px;
+   *       border-radius: 5px;
+   *       font-size: 16px;
+   *   }
+   *
+   *   style danger_button extends primary_button {
+   *       background: #dc3545;
+   *   }
+   */
+  private parseStyleDeclaration(): StyleDeclaration {
+    this.advance(); // consume 'style'
+
+    const name = this.current().value;
+    this.expect(TokenType.IDENT, 'Expected style name');
+
+    // 선택적 extends
+    let extendsName: string | undefined;
+    if (this.check(TokenType.IDENT) && this.current().value === 'extends') {
+      this.advance(); // consume 'extends'
+      extendsName = this.current().value;
+      this.expect(TokenType.IDENT, 'Expected parent style name after "extends"');
+    }
+
+    this.expect(TokenType.LBRACE, 'Expected "{" after style name');
+
+    const properties: StyleProperty[] = [];
+
+    // 속성 파싱 (} 만날 때까지)
+    while (!this.check(TokenType.RBRACE) && !this.check(TokenType.EOF)) {
+      // 줄바꿈 건너뛰기
+      while (this.match(TokenType.NEWLINE)) {}
+      if (this.check(TokenType.RBRACE)) break;
+
+      // 속성명 파싱 (하이픈 포함 가능: font-size, border-radius 등)
+      let propName = this.current().value;
+      this.advance();
+
+      // 하이픈(-) 연결된 속성명 처리 (font-size → font-size)
+      while (this.check(TokenType.MINUS)) {
+        this.advance(); // consume '-'
+        propName += '-' + this.current().value;
+        this.advance();
+      }
+
+      // 콜론 (선택적)
+      this.match(TokenType.COLON);
+
+      // 값 파싱: 세미콜론/줄바꿈/} 전까지 토큰 수집
+      let propValue: string | number = '';
+      let unit: string | undefined;
+
+      // 첫 번째 값 토큰
+      if (this.check(TokenType.HASH)) {
+        // #hex 색상값
+        this.advance(); // consume '#'
+        propValue = '#' + this.current().value;
+        this.advance();
+      } else if (this.check(TokenType.NUMBER)) {
+        const numVal = parseFloat(this.current().value);
+        this.advance();
+        // 단위 확인 (px, em, rem, % 등)
+        if (this.check(TokenType.IDENT)) {
+          unit = this.current().value;
+          this.advance();
+          propValue = numVal;
+        } else if (this.check(TokenType.PERCENT)) {
+          unit = '%';
+          this.advance();
+          propValue = numVal;
+        } else {
+          propValue = numVal;
+        }
+      } else if (this.check(TokenType.STRING)) {
+        propValue = this.current().value;
+        this.advance();
+      } else if (this.check(TokenType.IDENT)) {
+        propValue = this.current().value;
+        this.advance();
+      } else {
+        // 기타 토큰 → 문자열로 수집
+        propValue = this.current().value;
+        this.advance();
+      }
+
+      // 추가 값 토큰 수집 (padding: 10px 20px 같은 복합 값)
+      while (!this.check(TokenType.SEMICOLON) && !this.check(TokenType.NEWLINE) &&
+             !this.check(TokenType.RBRACE) && !this.check(TokenType.EOF)) {
+        const extra = this.current().value;
+        this.advance();
+        // 숫자 뒤의 단위는 붙여서 처리
+        if (typeof propValue === 'string') {
+          propValue += ' ' + extra;
+        } else {
+          propValue = String(propValue) + (unit || '') + ' ' + extra;
+          unit = undefined;
+        }
+      }
+
+      // 세미콜론/줄바꿈 소비
+      this.match(TokenType.SEMICOLON);
+      while (this.match(TokenType.NEWLINE)) {}
+
+      properties.push({ name: propName, value: propValue, unit });
+    }
+
+    this.expect(TokenType.RBRACE, 'Expected "}" to close style block');
+
+    const result: StyleDeclaration = {
+      type: 'style',
+      name,
+      properties
+    };
+    if (extendsName) {
+      result.extends = extendsName;
+    }
+    return result;
+  }
+
   private parseSecretDeclaration(): SecretDeclaration {
     this.advance(); // consume 'secret'
 

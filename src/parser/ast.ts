@@ -251,6 +251,21 @@ export interface SecretDeclaration {
   configKey?: string;              // .flconf 키 (Config.load("KEY"))
 }
 
+// MOSS-Style: 제로-런타임 스타일 속성
+export interface StyleProperty {
+  name: string;           // background, padding, font-size 등
+  value: string | number; // #007bff, 10, "bold" 등
+  unit?: string;          // px, em, rem, % 등
+}
+
+// MOSS-Style: 제로-런타임 스타일 선언
+export interface StyleDeclaration {
+  type: 'style';
+  name: string;           // 스타일 이름 (primary_button 등)
+  properties: StyleProperty[];
+  extends?: string;       // 상속할 스타일 이름 (선택)
+}
+
 // 문장 (Statement)
 export type Statement =
   | ExpressionStatement
@@ -269,7 +284,8 @@ export type Statement =
   | EnumDeclaration    // Phase 16: Enum support
   | BreakStatement     // Phase 16: Break support
   | ContinueStatement  // Phase 16: Continue support
-  | SecretDeclaration; // Secret-Link: 보안 변수
+  | SecretDeclaration  // Secret-Link: 보안 변수
+  | StyleDeclaration;  // MOSS-Style: 스타일 선언
 
 export interface ExpressionStatement {
   type: 'expression';

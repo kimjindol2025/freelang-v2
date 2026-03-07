@@ -53,6 +53,9 @@ export enum TokenType {
   // Secret-Link: 보안 변수 선언 (빌드 타임 주입 / 암호화 메모리)
   SECRET = 'SECRET',     // secret 키워드
 
+  // MOSS-Style: 제로-런타임 스타일 선언
+  STYLE = 'STYLE',       // style 키워드
+
   // Identifiers & Literals
   IDENT = 'IDENT',
   NUMBER = 'NUMBER',
@@ -184,7 +187,10 @@ export const KEYWORDS: Record<string, TokenType> = {
   'intent': TokenType.INTENT,
 
   // Secret-Link: 보안 변수
-  'secret': TokenType.SECRET
+  'secret': TokenType.SECRET,
+
+  // MOSS-Style: 제로-런타임 스타일 선언
+  'style': TokenType.STYLE
 };
 
 /**
