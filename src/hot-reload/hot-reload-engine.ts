@@ -119,8 +119,8 @@ export class HotReloadEngine {
     const debouncer = new Debouncer(80);
     this.debouncers.set(abs, debouncer);
 
-    const watcher = fs.watch(abs, { persistent: false }, (eventType) => {
-      if (eventType === 'change') {
+    const watcher = fs.watch(abs, { persistent: true }, (eventType) => {
+      if (eventType === 'change' || eventType === 'rename') {
         debouncer.call(() => this.reloadFile(abs));
       }
     });

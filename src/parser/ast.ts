@@ -167,6 +167,7 @@ export interface Module {
   statements: Statement[];     // Other statements (functions, variables, etc.)
   lintConfig?: LintConfig;     // Native-Linter: @lint(...) 어노테이션
   allowOrigins?: string[];     // Hardware-CORS: @allow_origin("https://...") 도메인 화이트리스트
+  cspPolicy?: string;          // Native-CSP-Shield: @csp_policy(...) 직렬화 문자열
 }
 
 /**

@@ -422,6 +422,7 @@ export class Parser {
     const statements: Statement[] = [];
     let lintConfig: LintConfig | undefined;
     let allowOrigins: string[] | undefined;  // Hardware-CORS: @allow_origin(...)
+    let cspPolicy: string | undefined;       // Native-CSP-Shield: @csp_policy(...)
 
     // Native-Linter: 파일 최상단 @lint 어노테이션 파싱
     // Self-Monitoring Kernel: @monitor 등 기타 어노테이션도 여기서 수집
@@ -456,6 +457,69 @@ export class Parser {
         allowOrigins = domains;
         if (process.env.DEBUG_PARSER) {
           console.log('[PARSER] @allow_origin parsed:', JSON.stringify(allowOrigins));
+        }
+      } else if (this.check(TokenType.IDENT) && this.current().value === 'csp_policy') {
+        // Native-CSP-Shield: @csp_policy(default_src: [.self], script_src: [.self, "https://trusted.dclub.kr"], report_uri: "/api/security/report")
+        // 파싱 결과: "default_src=self,script_src=self|https://trusted.dclub.kr,report_uri=/api/security/report"
+        this.advance(); // 'csp_policy' 소비
+        const policyKv: string[] = [];
+        if (this.check(TokenType.LPAREN)) {
+          this.advance(); // '(' 소비
+          let depth = 1;
+          while (depth > 0 && !this.check(TokenType.EOF)) {
+            if (this.check(TokenType.LPAREN)) { depth++; this.advance(); continue; }
+            if (this.check(TokenType.RPAREN)) {
+              depth--;
+              if (depth === 0) break;
+              this.advance(); continue;
+            }
+            // key: [value1, value2] 또는 key: "value" 파싱
+            if (this.check(TokenType.IDENT)) {
+              const key = this.advance().value;
+              if (this.check(TokenType.COLON)) this.advance(); // ':' 소비
+              const values: string[] = [];
+              if (this.check(TokenType.LBRACKET)) {
+                // [ .self, "https://..." ] 형태
+                this.advance(); // '[' 소비
+                while (!this.check(TokenType.RBRACKET) && !this.check(TokenType.EOF)) {
+                  if (this.check(TokenType.DOT)) {
+                    this.advance();
+                    if (this.check(TokenType.IDENT)) values.push(this.advance().value);
+                  } else if (this.check(TokenType.STRING)) {
+                    values.push(this.advance().value.replace(/^["']|["']$/g, ''));
+                  } else if (this.check(TokenType.IDENT)) {
+                    values.push(this.advance().value);
+                  } else if (this.check(TokenType.COMMA)) {
+                    this.advance();
+                  } else {
+                    this.advance();
+                  }
+                }
+                if (this.check(TokenType.RBRACKET)) this.advance(); // ']' 소비
+              } else if (this.check(TokenType.STRING)) {
+                // key: "/api/security/report" 형태 (report_uri 등)
+                values.push(this.advance().value.replace(/^["']|["']$/g, ''));
+              } else if (this.check(TokenType.DOT)) {
+                // key: .self 형태 (단일 DOT 값)
+                this.advance();
+                if (this.check(TokenType.IDENT)) values.push(this.advance().value);
+              } else if (this.check(TokenType.IDENT)) {
+                values.push(this.advance().value);
+              }
+              if (key && values.length > 0) {
+                policyKv.push(`${key}=${values.join('|')}`);
+              }
+            } else if (this.check(TokenType.COMMA)) {
+              this.advance();
+            } else {
+              this.advance();
+            }
+          }
+          if (this.check(TokenType.RPAREN)) this.advance(); // ')' 소비
+        }
+        cspPolicy = policyKv.join(',');
+        if (process.env.DEBUG_PARSER) {
+          console.log('[PARSER] @csp_policy parsed:', cspPolicy);
         }
       } else if (this.check(TokenType.IDENT)) {
         // @monitor, @api 등 → 이름 수집 후 다음 fn에 적용
@@ -783,6 +847,7 @@ export class Parser {
       statements,
       lintConfig,     // Native-Linter: @lint(...) 어노테이션 설정
       allowOrigins,   // Hardware-CORS: @allow_origin(...) 도메인 화이트리스트
+      cspPolicy,      // Native-CSP-Shield: @csp_policy(...) 정책 문자열
     };
   }
 
