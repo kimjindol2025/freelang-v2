@@ -1,0 +1,9 @@
+// main.fl - KPM-Linker 테스트 진입점
+import { add, multiply } from "./math";
+
+fn main() {
+  let result = add(10, 20);
+  let product = multiply(3, 7);
+  print(result);
+  print(product);
+}

@@ -1,0 +1,13 @@
+// math.fl - 수학 모듈
+export fn add(a: number, b: number) -> number {
+  return a + b;
+}
+
+export fn multiply(a: number, b: number) -> number {
+  return a * b;
+}
+
+// Dead code (DCE에 의해 제거 대상)
+export fn unused_sqrt(x: number) -> number {
+  return x;
+}

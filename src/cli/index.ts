@@ -15,6 +15,7 @@ import { batchMode } from './batch';
 import { ProgramRunner } from './runner';
 import { AOTCompiler } from './aot-compiler';
 import { ProofTester } from './test-runner';
+import { ModuleLinker } from '../linker/module-linker';
 
 /**
  * 도움말 표시
@@ -30,6 +31,7 @@ Usage:
   freelang --aot <input> -o <output>  # AOT 컴파일 (Level 3)
   freelang <file.free>        # 파일 직접 실행
   freelang test [path]        # Proof-Tester: @test 함수 실행
+  freelang build <file.fl>    # KPM-Linker: 단일 바이너리 빌드
   freelang --help             # 도움말
   freelang --version          # 버전 정보
 
@@ -41,6 +43,14 @@ Options:
   --aot <input.free>         # AOT 컴파일 (Ahead-of-Time, Level 3)
   --serve <file> [port]      # HTTP 서버 모드 (기본 포트: 41001)
   test [path] [--filter str] # Proof-Tester: @test 어노테이션 테스트 실행
+  build <file> [options]     # KPM-Linker: 다중 모듈 → 단일 바이너리
+    -o, --output <file>      #   출력 경로
+    --optimize               #   -O2 최적화 (기본: on)
+    --no-dce                 #   DCE 비활성화
+    --no-lto                 #   LTO 비활성화
+    --target <target>        #   타겟 (default, termux-aarch64, small)
+    --emit-c                 #   C 코드만 출력
+    --verbose                #   상세 로그
   -h, --help                 # 도움말
   -v, --version              # 버전
 
@@ -439,6 +449,74 @@ async function main(): Promise<void> {
   if (args.length === 0) {
     await startInteractiveMode();
     return;
+  }
+
+  // "build" 서브커맨드: KPM-Linker
+  if (args[0] === 'build') {
+    const buildFile = args[1];
+    if (!buildFile) {
+      console.error('Usage: freelang build <file.fl> [-o output] [--target target] [--verbose]');
+      process.exit(1);
+    }
+
+    const resolvedEntry = path.resolve(buildFile);
+    if (!fs.existsSync(resolvedEntry)) {
+      console.error(`File not found: ${resolvedEntry}`);
+      process.exit(1);
+    }
+
+    // build 옵션 파싱
+    let output: string | undefined;
+    let target: string | undefined;
+    let emitC = false;
+    let verbose = false;
+    let dce = true;
+    let lto = true;
+
+    for (let i = 2; i < args.length; i++) {
+      switch (args[i]) {
+        case '-o': case '--output': output = args[++i]; break;
+        case '--target': target = args[++i]; break;
+        case '--emit-c': emitC = true; break;
+        case '--verbose': verbose = true; break;
+        case '--no-dce': dce = false; break;
+        case '--no-lto': lto = false; break;
+      }
+    }
+
+    const projectRoot = path.dirname(resolvedEntry);
+    const linker = new ModuleLinker(projectRoot);
+
+    console.log(`[build] ${path.basename(resolvedEntry)}`);
+    const result = linker.link({
+      entryPoint: resolvedEntry,
+      output,
+      optimize: true,
+      dce,
+      lto,
+      target,
+      emitC,
+      verbose,
+    });
+
+    if (result.ok) {
+      console.log(`[build] Modules: ${result.modules}, Symbols: ${result.totalSymbols}`);
+      if (result.dce.eliminatedSymbols > 0) {
+        console.log(`[build] DCE: ${result.dce.eliminatedSymbols} symbols eliminated (${result.dce.reductionPercent}%)`);
+      }
+      if (result.binaryPath) {
+        const sizeKB = result.binarySize ? `${(result.binarySize / 1024).toFixed(1)}KB` : 'unknown';
+        console.log(`[build] Binary: ${result.binaryPath} (${sizeKB})`);
+      }
+      if (emitC && result.cCode) {
+        console.log(`[build] C code emitted`);
+      }
+      console.log(`[build] Time: ${result.buildTimeMs}ms`);
+      process.exit(0);
+    } else {
+      console.error(`[build] Failed: ${result.error}`);
+      process.exit(1);
+    }
   }
 
   // "test" 서브커맨드: Proof-Tester
