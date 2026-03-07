@@ -1,0 +1,105 @@
+// Native-Web-Forge Demo - Next.js 대체 SSG 엔진
+// @page 어노테이션 기반 컴파일 타임 정적 사이트 생성
+
+fn css_reset() {
+  return "*{box-sizing:border-box}body{font-family:system-ui,sans-serif;margin:0;padding:0;color:#222}a{color:#0070f3;text-decoration:none}a:hover{text-decoration:underline}"
+}
+
+fn nav_html() {
+  let logo = html_tag("span", null, "FreeLang")
+  let nav_home = html_tag("a", html_attrs("href", "index.html"), "홈")
+  let nav_docs = html_tag("a", html_attrs_add(html_attrs("href", "docs.html"), "style", "margin-left:16px"), "문서")
+  let nav_api  = html_tag("a", html_attrs_add(html_attrs("href", "api.html"), "style", "margin-left:16px"), "API")
+  let links = nav_home + nav_docs + nav_api
+  let nav = html_tag("nav", html_attrs("style", "display:flex;justify-content:space-between;align-items:center;padding:16px 32px;border-bottom:1px solid #eee;background:#fff"), logo + links)
+  return nav
+}
+
+fn hero_html(h, sub) {
+  let heading = html_tag("h1", html_attrs("style", "font-size:3rem;margin:0 0 16px"), h)
+  let subtext  = html_tag("p", html_attrs("style", "font-size:1.25rem;color:#666;margin:0 0 32px"), sub)
+  let btn1 = html_tag("a", html_attrs_add(html_attrs("href", "docs.html"), "style", "background:#0070f3;color:#fff;padding:12px 28px;border-radius:8px;font-size:1rem"), "시작하기 →")
+  let btn2 = html_tag("a", html_attrs_add(html_attrs("href", "https://gogs.dclub.kr/kim/v2-freelang-ai"), "style", "margin-left:16px;color:#0070f3;padding:12px 28px;border:1px solid #0070f3;border-radius:8px"), "Gogs 소스")
+  let buttons = html_tag("div", null, btn1 + btn2)
+  let inner = heading + subtext + buttons
+  return html_tag("section", html_attrs("style", "text-align:center;padding:96px 32px 64px"), inner)
+}
+
+fn feature_card(icon, title, desc) {
+  let t = html_tag("h3", html_attrs("style", "margin:0 0 8px"), icon + " " + title)
+  let d = html_tag("p", html_attrs("style", "margin:0;color:#555;line-height:1.6"), desc)
+  return html_tag("div", html_attrs("style", "border:1px solid #eee;border-radius:12px;padding:28px;background:#fff"), t + d)
+}
+
+fn features_html() {
+  let grid_style = "display:grid;grid-template-columns:repeat(3,1fr);gap:24px;padding:0 32px 64px"
+  let f1 = feature_card("⚡", "Zero-Copy SSR", "메모리 복사 없이 소켓에 직접 렌더링. Next.js getServerSideProps 대체")
+  let f2 = feature_card("📦", "정적 생성(SSG)", "빌드 타임에 HTML 파일 미리 생성. getStaticProps 대체")
+  let f3 = feature_card("🔒", "외부 의존성 0%", "Node.js 내장 http 모듈만 사용. React/webpack 불필요")
+  let f4 = feature_card("🎨", "SVG 차트 내장", "Chart.js 없이 순수 SVG로 데이터 시각화")
+  let f5 = feature_card("🔌", "@page 어노테이션", "구조체에 @page 선언 시 컴파일 타임 라우트 자동 생성")
+  let f6 = feature_card("🧩", "@component", "함수에 @component 선언 시 재사용 가능한 HTML 컴포넌트")
+  return html_tag("div", html_attrs("style", grid_style), f1 + f2 + f3 + f4 + f5 + f6)
+}
+
+fn code_block(code) {
+  return html_tag("pre", html_attrs("style", "background:#1a1a2e;color:#e0e0ff;padding:24px;border-radius:12px;overflow-x:auto;font-size:0.9rem;line-height:1.6"), html_tag("code", null, html_text(code)))
+}
+
+fn footer_html() {
+  let copy = html_tag("p", html_attrs("style", "margin:0;color:#888"), "FreeLang Native-Web-Forge v1.0 - Next.js 대체 완성")
+  return html_tag("footer", html_attrs("style", "text-align:center;padding:32px;border-top:1px solid #eee;background:#fafafa"), copy)
+}
+
+@page(path: "/", render: .ssg)
+fn main() {
+  let css = css_reset()
+  let nav = nav_html()
+  let hero = hero_html("FreeLang Native Web Forge", "Next.js 없이 순수 FreeLang으로 만든 고성능 SSG/SSR 엔진")
+  let features = features_html()
+
+  let example_code = "// @page 어노테이션으로 라우트 자동 생성\n@page(path: \"/\", render: .ssg)\nstruct IndexPage {\n  title: string = \"FreeLang App\",\n  @db_fetch(\"SELECT count(*) FROM nodes\") node_count: int\n}\n\n// @component로 재사용 컴포넌트\n@component\nfn Header(title: string) -> html {\n  return html_tag(\"header\", null, html_text(title))\n}\n\nfn main() {\n  let app = web_app_new()\n  web_app_start(app, 3000)\n}"
+  let code_section = html_tag("section", html_attrs("style", "padding:0 32px 64px"), html_tag("h2", html_attrs("style", "margin:0 0 16px"), "FreeLang 문법 예시") + code_block(example_code))
+
+  let body = nav + hero + features + code_section + footer_html()
+  let index_html = html_page("FreeLang Native-Web-Forge", body, css, "")
+
+  // SSG: 인덱스 페이지 생성
+  let r1 = html_static_build("/tmp/web-forge-dist/index.html", index_html)
+
+  // Docs 페이지
+  let docs_body = nav + html_tag("main", html_attrs("style", "max-width:800px;margin:0 auto;padding:48px 32px"), html_tag("h1", null, "문서") + html_tag("p", null, "Native-Web-Forge API 레퍼런스") + code_block("// SSG 사용 예시\nfn main() {\n  let page = html_page(\"제목\", body, css, js)\n  html_static_build(\"/dist/index.html\", page)\n  web_serve_dir(\"/dist\", 3000)\n}")) + footer_html()
+  let r2 = html_static_build("/tmp/web-forge-dist/docs.html", html_page("문서 - FreeLang", docs_body, css, ""))
+
+  // API 레퍼런스 페이지
+  let api_items = html_tag("table", html_attrs("style", "width:100%;border-collapse:collapse"),
+    html_tag("tr", html_attrs("style", "background:#f5f5f5"), html_tag("th", html_attrs("style", "padding:12px;text-align:left;border:1px solid #eee"), "함수") + html_tag("th", html_attrs("style", "padding:12px;text-align:left;border:1px solid #eee"), "파라미터") + html_tag("th", html_attrs("style", "padding:12px;text-align:left;border:1px solid #eee"), "설명")) +
+    html_tag("tr", null, html_tag("td", html_attrs("style", "padding:12px;border:1px solid #eee;font-family:monospace"), "html_tag") + html_tag("td", html_attrs("style", "padding:12px;border:1px solid #eee"), "tag, attrs, inner") + html_tag("td", html_attrs("style", "padding:12px;border:1px solid #eee"), "HTML 요소 생성")) +
+    html_tag("tr", null, html_tag("td", html_attrs("style", "padding:12px;border:1px solid #eee;font-family:monospace"), "html_page") + html_tag("td", html_attrs("style", "padding:12px;border:1px solid #eee"), "title, body, css, js") + html_tag("td", html_attrs("style", "padding:12px;border:1px solid #eee"), "완전한 HTML 문서")) +
+    html_tag("tr", null, html_tag("td", html_attrs("style", "padding:12px;border:1px solid #eee;font-family:monospace"), "html_static_build") + html_tag("td", html_attrs("style", "padding:12px;border:1px solid #eee"), "path, html") + html_tag("td", html_attrs("style", "padding:12px;border:1px solid #eee"), "정적 파일 저장 (SSG)")) +
+    html_tag("tr", null, html_tag("td", html_attrs("style", "padding:12px;border:1px solid #eee;font-family:monospace"), "ssr_render") + html_tag("td", html_attrs("style", "padding:12px;border:1px solid #eee"), "template, data") + html_tag("td", html_attrs("style", "padding:12px;border:1px solid #eee"), "{{key}} 치환 SSR")) +
+    html_tag("tr", null, html_tag("td", html_attrs("style", "padding:12px;border:1px solid #eee;font-family:monospace"), "web_serve_dir") + html_tag("td", html_attrs("style", "padding:12px;border:1px solid #eee"), "dir, port") + html_tag("td", html_attrs("style", "padding:12px;border:1px solid #eee"), "정적 디렉토리 서버"))
+  )
+  let api_body = nav + html_tag("main", html_attrs("style", "max-width:1000px;margin:0 auto;padding:48px 32px"), html_tag("h1", null, "API 레퍼런스") + api_items) + footer_html()
+  let r3 = html_static_build("/tmp/web-forge-dist/api.html", html_page("API - FreeLang", api_body, css, ""))
+
+  // SSR 테스트
+  let tmpl = "<div style='background:#e8f5e9;padding:16px;border-radius:8px'><strong>{{greeting}}</strong>, {{name}}님! 방문 #{{count}}</div>"
+  let data = map_new()
+  let _1 = map_set(data, "greeting", "안녕하세요")
+  let _2 = map_set(data, "name", "김진")
+  let _3 = map_set(data, "count", "42")
+  let rendered = ssr_render(tmpl, data)
+
+  println("=== Native-Web-Forge v1.0 SSG 빌드 결과 ===")
+  println("index.html 생성됨")
+  println("docs.html 생성됨")
+  println("api.html 생성됨")
+  println("")
+  println("=== SSR 렌더링 테스트 ===")
+  println(rendered)
+  println("")
+  println("정적 사이트: /tmp/web-forge-dist/")
+}
+
+main()
