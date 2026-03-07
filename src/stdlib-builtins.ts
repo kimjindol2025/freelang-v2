@@ -26,6 +26,10 @@ import { registerTeamFFunctions } from './stdlib-team-f-security';
 import { registerNativeChartFunctions } from './stdlib-chart';
 import { registerWebForgeFunctions } from './stdlib-web-forge';
 import { registerAuthFunctions } from './stdlib-auth';
+import { registerLogStreamerFunctions } from './stdlib-log-streamer';
+import { registerCspShieldFunctions } from './stdlib/csp-shield';
+import { registerNativeRequestStreamer } from './stdlib-native-request-streamer';
+import { registerAsyncOrchestratorFunctions } from './stdlib/async-orchestrator';
 import * as fs from 'fs';
 
 /**
@@ -778,6 +782,11 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
                 // Send response - 글로벌 상태코드/헤더 지원 (http_set_status/http_set_header)
                 let statusCode = 200;
                 let responseHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+                // Hardware-CORS: 허용된 요청에 ACAO 헤더 자동 주입
+                if (corsWhitelist.size > 0 && origin && corsMatch(origin)) {
+                  responseHeaders['Access-Control-Allow-Origin'] = origin;
+                  responseHeaders['Vary'] = 'Origin';
+                }
                 if (vm) {
                   const customStatus = (vm as any).vars.get('__http_response_status__');
                   if (customStatus != null) {
@@ -864,6 +873,24 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
     }
   });
 
+  // Hardware-CORS: @allow_origin 어노테이션 런타임 초기화 함수
+  registry.register({
+    name: 'http_cors_set_origins',
+    module: 'http',
+    signature: {
+      name: 'http_cors_set_origins',
+      returnType: 'string',
+      parameters: [{ name: 'origins', type: 'string' }],
+      category: 'http'
+    },
+    executor: (args: any[]) => {
+      const originsStr = String(args[0] || '');
+      corsWhitelist.clear();
+      originsStr.split(',').forEach((d: string) => { const t = d.trim(); if (t) corsWhitelist.add(t); });
+      return `cors_whitelist_set:${corsWhitelist.size}`;
+    }
+  });
+
   registry.register({
     name: 'http_request',
     module: 'http',
@@ -873,7 +900,8 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
       parameters: [],
       category: 'event'
     },
-    executor: (args) => {
+    executor: (args: any[]) => {
+      void args;
       const vm = registry.getVM();
       if (vm) {
         // Direct access to vars since VM doesn't have getGlobal method
@@ -3973,6 +4001,22 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
 
   // Native-Auth-Token: JWT 대체 HMAC-SHA256 토큰 발급/검증
   registerAuthFunctions(registry);
+
+  // Native-Log-Streamer: pm2-logrotate 대체 순환 로그 엔진
+  registerLogStreamerFunctions(registry);
+
+  // Native-CSP-Shield: helmet-csp 대체 CSP 헤더 자동 주입
+  registerCspShieldFunctions(registry);
+
+  // Native-Request-Streamer: superagent/axios 대체 raw TCP HTTP 클라이언트
+  // net/tls 모듈 직접 사용, 외부 라이브러리 0개
+  registerNativeRequestStreamer(registry);
+
+  // Phase 27: Native-Async-Orchestrator (Bluebird 완전 대체)
+  // parallel_map, await_all, await_race, async_pipeline, async_retry,
+  // async_timeout, parallel_filter, parallel_reduce, async_map_batch,
+  // work_stealing_stats - Work-Stealing 스케줄러 내장
+  registerAsyncOrchestratorFunctions(registry);
 
   // Silent registration (no console output)
 }
