@@ -138,6 +138,13 @@ export class IRGenerator {
       instructions.push({ op: Op.POP });
     }
 
+    // Step 4b: Native-CSP-Shield - @csp_policy 있으면 글로벌 정책 초기화 IR 주입
+    if (module.cspPolicy && module.cspPolicy.trim()) {
+      instructions.push({ op: Op.PUSH, arg: module.cspPolicy });
+      instructions.push({ op: Op.CALL, arg: 'csp_policy_set' });
+      instructions.push({ op: Op.POP });
+    }
+
     // Step 5: 모듈 본체 IR 생성
     for (const stmt of module.statements) {
       this.traverse(stmt, instructions);

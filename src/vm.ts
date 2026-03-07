@@ -21,6 +21,12 @@ import { SimplePromise } from './runtime/simple-promise';
 import { registerInsightFunctions } from './stdlib/insight-builtins';
 import { registerProfilerFunctions } from './stdlib/profiler-builtins';
 import { registerORMNativeFunctions } from './stdlib/orm-native';
+import {
+  registerNativeQueryFunctions,
+  cacheQueryBefore,
+  cacheQueryAfter,
+  CachedQueryConfig,
+} from './stdlib-native-query';
 
 const MAX_CYCLES = 100_000;
 const MAX_STACK  = 10_000;
@@ -74,6 +80,8 @@ export class VM {
     registerProfilerFunctions(this.nativeFunctionRegistry);
     // Compile-Time-ORM: orm_table_init/insert/find_all/find_one/update/delete/count
     registerORMNativeFunctions(this.nativeFunctionRegistry);
+    // Native-State-Hydration: query_cache_get/set/del/fresh/stale/stats/clear
+    registerNativeQueryFunctions(this.nativeFunctionRegistry);
   }
 
   /**
@@ -729,6 +737,32 @@ export class VM {
             // CRITICAL FIX: Pass function parameters to IR generator for proper scoping
             const bodyIR = gen.generateIR(bodyNode, fn.params);
 
+            // Native-State-Hydration: @cached_query(ttl: Xs, stale_time: Ys) 처리
+            // annotation 형태: "cached_query:ttl=300000,stale=30000"
+            // 함수 실행 전 LRU 캐시 조회 → 히트 시 바디 스킵 + 캐시 값 즉시 반환
+            const cachedQueryAnnot = fn.annotations?.find(
+              (a: string) => a === 'cached_query' || a.startsWith('cached_query:')
+            );
+            let _cqKey: string | null = null;
+            let _cqCfg: CachedQueryConfig | null = null;
+            if (cachedQueryAnnot) {
+              const cqResult = cacheQueryBefore(funcName, args, cachedQueryAnnot);
+              if (cqResult.hit === true) {
+                // 캐시 히트: 함수 바디 실행 스킵
+                returnValue = cqResult.value;
+                this.vars = savedVars;
+                if (returnValue !== undefined) this.stack.push(returnValue);
+                this.functionRegistry!.trackCall(funcName);
+                if (funcName) trackFunctionCall(funcName);
+                this.pc++;
+                break;
+              } else {
+                // 캐시 미스: 실행 후 저장 예약
+                _cqKey = cqResult.key;
+                _cqCfg = cqResult.cfg;
+              }
+            }
+
             // Native-Rate-Shield: @rate_limit(window: Xms, max: N, burst: M) 처리
             // annotation 형태: "rate_limit:window=1000,max=10,burst=10"
             // 함수 실행 전에 Token Bucket 체크 → 차단 시 바디 스킵 + 429 반환
@@ -776,6 +810,41 @@ export class VM {
                 if (funcName) trackFunctionCall(funcName);
                 this.pc++;
                 break; // inner switch case 탈출
+              }
+            }
+
+            // Native-Log-Streamer: @log_policy 어노테이션 처리
+            // annotation 형태: "log_policy:max_size=104857600,backups=5,compress=gzip,target=/var/log/app.log"
+            // 함수명 기반 채널 자동 설정 (최초 1회만)
+            const logPolicyAnnot = fn.annotations?.find(
+              (a: string) => a === 'log_policy' || a.startsWith('log_policy:')
+            );
+            if (logPolicyAnnot && this.nativeFunctionRegistry.exists('log_configure')) {
+              const lpKey = `__lp_init_${funcName}`;
+              if (!(this as any)[lpKey]) {
+                (this as any)[lpKey] = true;
+                const paramStr = logPolicyAnnot.includes(':')
+                  ? logPolicyAnnot.slice(logPolicyAnnot.indexOf(':') + 1)
+                  : '';
+                const lpParams: Record<string, string> = {};
+                paramStr.split(',').forEach(kv => {
+                  const eq = kv.indexOf('=');
+                  if (eq > 0) lpParams[kv.slice(0, eq).trim()] = kv.slice(eq + 1).trim();
+                });
+                const lpTarget  = lpParams['target'] || `/tmp/freelang-${funcName}.log`;
+                const lpMax     = parseInt(lpParams['max_size'] || '104857600', 10);
+                const lpBackups = parseInt(lpParams['backups']  || '3', 10);
+                const lpCompress = lpParams['compress'] || 'none';
+                this.nativeFunctionRegistry.call('log_configure', [
+                  funcName, lpTarget, lpMax, lpBackups, lpCompress
+                ]);
+              }
+              // 함수 진입 시 info 로그 자동 기록
+              if (this.nativeFunctionRegistry.exists('log_info')) {
+                this.nativeFunctionRegistry.call('log_info', [
+                  funcName,
+                  `fn ${funcName} called (args=${args.length})`
+                ]);
               }
             }
 
@@ -830,6 +899,11 @@ export class VM {
             const bodyResult = this.runProgram(bodyIR);
             returnValue = bodyResult.value;
 
+            // Native-State-Hydration: @cached_query → 결과를 LRU 캐시에 저장
+            if (_cqKey && _cqCfg && returnValue !== undefined) {
+              cacheQueryAfter(_cqKey, returnValue, _cqCfg);
+            }
+
             // Self-Monitoring Kernel: @monitor → 함수 종료 기록
             if (isMonitored) {
               const insightReg = this.nativeFunctionRegistry;
@@ -847,6 +921,28 @@ export class VM {
 
             // Restore caller's variables
             this.vars = savedVars;
+
+            // Native-CSP-Shield: 응답 객체에 CSP 헤더 자동 주입
+            // 함수가 map/object를 반환하면 headers.Content-Security-Policy 삽입
+            if (
+              returnValue !== null &&
+              returnValue !== undefined &&
+              typeof returnValue === 'object' &&
+              !Array.isArray(returnValue) &&
+              this.nativeFunctionRegistry.exists('csp_policy_active')
+            ) {
+              const cspHeader = this.nativeFunctionRegistry.call('csp_policy_active', []) as string;
+              if (cspHeader && cspHeader !== "default-src 'self'" || (cspHeader && (returnValue as any)['__csp_inject'] !== false)) {
+                // headers 필드가 없으면 생성
+                if (!(returnValue as any).headers) {
+                  (returnValue as any).headers = {};
+                }
+                // 이미 수동으로 설정된 경우 덮어쓰지 않음
+                if (!(returnValue as any).headers['Content-Security-Policy']) {
+                  (returnValue as any).headers['Content-Security-Policy'] = cspHeader;
+                }
+              }
+            }
 
             // Push return value (skip if undefined)
             if (returnValue !== undefined) {
@@ -887,10 +983,9 @@ export class VM {
           // Call native function and push result
           try {
             const result = this.nativeFunctionRegistry.call(funcName, args);
-            if (result !== null && result !== undefined) {
-              this.guardStack();
-              this.stack.push(result);
-            }
+            // undefined → push null so STORE/consumers don't see stale stack values
+            this.guardStack();
+            this.stack.push(result !== undefined ? result : null);
           } catch (e: unknown) {
             const err = e instanceof Error ? e.message : String(e);
             throw new Error('native_call_error:' + err);

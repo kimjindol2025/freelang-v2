@@ -483,8 +483,14 @@ export class Parser {
                 this.advance(); // '[' 소비
                 while (!this.check(TokenType.RBRACKET) && !this.check(TokenType.EOF)) {
                   if (this.check(TokenType.DOT)) {
+                    // .self, .none, .unsafe_inline 등 DOT+IDENT 또는 DOT+SELF(키워드)
                     this.advance();
                     if (this.check(TokenType.IDENT)) values.push(this.advance().value);
+                    else if (this.check(TokenType.SELF)) { values.push('self'); this.advance(); }
+                  } else if (this.check(TokenType.SELF)) {
+                    // self 키워드 (DOT 없이)
+                    values.push('self');
+                    this.advance();
                   } else if (this.check(TokenType.STRING)) {
                     values.push(this.advance().value.replace(/^["']|["']$/g, ''));
                   } else if (this.check(TokenType.IDENT)) {
@@ -503,6 +509,7 @@ export class Parser {
                 // key: .self 형태 (단일 DOT 값)
                 this.advance();
                 if (this.check(TokenType.IDENT)) values.push(this.advance().value);
+                else if (this.check(TokenType.SELF)) { values.push('self'); this.advance(); }
               } else if (this.check(TokenType.IDENT)) {
                 values.push(this.advance().value);
               }
@@ -572,6 +579,49 @@ export class Parser {
           if (this.check(TokenType.RPAREN)) this.advance();
           const rlEffBurst = rlBurst > 0 ? rlBurst : rlMax;
           topLevelAnnotations.push(`rate_limit:window=${rlWindowMs},max=${rlMax},burst=${rlEffBurst}`);
+        } else if (annotName === 'log_policy' && this.check(TokenType.LPAREN)) {
+          // Native-Log-Streamer: @log_policy(max_size: 100mb, backups: 5, compress: .zstd, target: "/var/log/app.log")
+          // → "log_policy:max_size=104857600,backups=5,compress=gzip,target=/var/log/app.log"
+          this.advance(); // '(' 소비
+          let tlMaxSize  = '104857600';
+          let tlBackups  = '3';
+          let tlCompress = 'none';
+          let tlTarget   = '';
+          let depth = 1;
+          while (depth > 0 && !this.check(TokenType.EOF)) {
+            if (this.check(TokenType.LPAREN)) { depth++; this.advance(); continue; }
+            if (this.check(TokenType.RPAREN)) { depth--; if (depth === 0) break; this.advance(); continue; }
+            if (this.check(TokenType.IDENT)) {
+              const kw = this.advance().value;
+              if (this.check(TokenType.COLON)) this.advance();
+              if (kw === 'max_size') {
+                if (this.check(TokenType.NUMBER)) {
+                  const num = Number(this.advance().value);
+                  if (this.check(TokenType.IDENT)) {
+                    const unit = this.current().value.toLowerCase(); this.advance();
+                    if (unit.startsWith('gb')) tlMaxSize = String(num * 1024 * 1024 * 1024);
+                    else if (unit.startsWith('mb')) tlMaxSize = String(num * 1024 * 1024);
+                    else if (unit.startsWith('kb')) tlMaxSize = String(num * 1024);
+                    else tlMaxSize = String(num);
+                  } else { tlMaxSize = String(num); }
+                }
+              } else if (kw === 'backups') {
+                if (this.check(TokenType.NUMBER)) tlBackups = String(this.advance().value);
+              } else if (kw === 'compress') {
+                if (this.check(TokenType.DOT)) this.advance();
+                if (this.check(TokenType.IDENT)) {
+                  const cv = this.advance().value.toLowerCase();
+                  tlCompress = (cv === 'gzip' || cv === 'zstd' || cv === 'gz') ? 'gzip' : 'none';
+                }
+              } else if (kw === 'target') {
+                if (this.check(TokenType.STRING)) tlTarget = String(this.advance().value);
+              }
+            } else if (this.check(TokenType.COMMA)) { this.advance(); } else { this.advance(); }
+          }
+          if (this.check(TokenType.RPAREN)) this.advance();
+          topLevelAnnotations.push(
+            `log_policy:max_size=${tlMaxSize},backups=${tlBackups},compress=${tlCompress},target=${tlTarget}`
+          );
         } else {
           topLevelAnnotations.push(annotName);
           // @monitor(level: .detailed) 형태 파라미터 스킵
@@ -681,6 +731,41 @@ export class Parser {
                 }
                 if (this.check(TokenType.RPAREN)) this.advance();
                 pendingAnnotations.push(`secure_token:algo=${algoValue},expires=${expiresValue}`);
+              } else if (annotName === 'cached_query') {
+                // Native-State-Hydration: @cached_query(ttl: 300s, stale_time: 30s)
+                // → "cached_query:ttl=300000,stale=30000" (ms 단위로 직렬화)
+                let cqTtlMs   = 300_000; // 기본 5분
+                let cqStaleMs = 30_000;  // 기본 30초
+                let depth = 1;
+                while (depth > 0 && !this.check(TokenType.EOF)) {
+                  if (this.check(TokenType.LPAREN)) { depth++; this.advance(); continue; }
+                  if (this.check(TokenType.RPAREN)) { depth--; if (depth === 0) break; this.advance(); continue; }
+                  if (this.check(TokenType.IDENT)) {
+                    const kw = this.advance().value;
+                    if (this.check(TokenType.COLON)) this.advance();
+                    if (kw === 'ttl' || kw === 'stale_time') {
+                      if (this.check(TokenType.NUMBER)) {
+                        const num = Number(this.advance().value);
+                        let ms = num;
+                        if (this.check(TokenType.IDENT)) {
+                          const unit = this.current().value;
+                          this.advance();
+                          ms = unit === 's' ? num * 1000 : (unit === 'm' ? num * 60_000 : num);
+                        } else {
+                          ms = num < 1000 ? num * 1000 : num;
+                        }
+                        if (kw === 'ttl') cqTtlMs = ms;
+                        else cqStaleMs = ms;
+                      }
+                    }
+                  } else if (this.check(TokenType.COMMA)) {
+                    this.advance();
+                  } else {
+                    this.advance();
+                  }
+                }
+                if (this.check(TokenType.RPAREN)) this.advance();
+                pendingAnnotations.push(`cached_query:ttl=${cqTtlMs},stale=${cqStaleMs}`);
               } else if (annotName === 'rate_limit') {
                 // Native-Rate-Shield: @rate_limit(window: 1s, max: 10, burst: 5)
                 // → "rate_limit:window=1000,max=10,burst=5"
@@ -720,6 +805,56 @@ export class Parser {
                 if (this.check(TokenType.RPAREN)) this.advance();
                 const effectiveBurst = burst > 0 ? burst : maxReq;
                 pendingAnnotations.push(`rate_limit:window=${windowMs},max=${maxReq},burst=${effectiveBurst}`);
+              } else if (annotName === 'log_policy') {
+                // Native-Log-Streamer: @log_policy(max_size: 100mb, backups: 5, compress: .zstd, target: "/var/log/app.log")
+                // → "log_policy:max_size=104857600,backups=5,compress=gzip,target=/var/log/app.log"
+                let lpMaxSize  = '104857600'; // 100MB 기본
+                let lpBackups  = '3';
+                let lpCompress = 'none';
+                let lpTarget   = '';
+                let depth = 1;
+                while (depth > 0 && !this.check(TokenType.EOF)) {
+                  if (this.check(TokenType.LPAREN)) { depth++; this.advance(); continue; }
+                  if (this.check(TokenType.RPAREN)) { depth--; if (depth === 0) break; this.advance(); continue; }
+                  if (this.check(TokenType.IDENT)) {
+                    const kw = this.advance().value;
+                    if (this.check(TokenType.COLON)) this.advance();
+                    if (kw === 'max_size') {
+                      // 숫자 + 단위 (100mb, 50kb, 1gb, 순수 숫자)
+                      if (this.check(TokenType.NUMBER)) {
+                        const num = Number(this.advance().value);
+                        if (this.check(TokenType.IDENT)) {
+                          const unit = this.current().value.toLowerCase();
+                          this.advance();
+                          if (unit.startsWith('gb')) lpMaxSize = String(num * 1024 * 1024 * 1024);
+                          else if (unit.startsWith('mb')) lpMaxSize = String(num * 1024 * 1024);
+                          else if (unit.startsWith('kb')) lpMaxSize = String(num * 1024);
+                          else lpMaxSize = String(num);
+                        } else {
+                          lpMaxSize = String(num);
+                        }
+                      }
+                    } else if (kw === 'backups') {
+                      if (this.check(TokenType.NUMBER)) { lpBackups = String(this.advance().value); }
+                    } else if (kw === 'compress') {
+                      if (this.check(TokenType.DOT)) this.advance(); // .gzip / .zstd / .none
+                      if (this.check(TokenType.IDENT)) {
+                        const cv = this.advance().value.toLowerCase();
+                        lpCompress = (cv === 'gzip' || cv === 'zstd' || cv === 'gz') ? 'gzip' : 'none';
+                      }
+                    } else if (kw === 'target') {
+                      if (this.check(TokenType.STRING)) { lpTarget = String(this.advance().value); }
+                    }
+                  } else if (this.check(TokenType.COMMA)) {
+                    this.advance();
+                  } else {
+                    this.advance();
+                  }
+                }
+                if (this.check(TokenType.RPAREN)) this.advance();
+                pendingAnnotations.push(
+                  `log_policy:max_size=${lpMaxSize},backups=${lpBackups},compress=${lpCompress},target=${lpTarget}`
+                );
               } else if (annotName.startsWith('db_')) {
                 // Compile-Time-ORM: @db_table(name: "wash_logs") → "db_table:name=wash_logs"
                 // @db_column(type: varchar) → "db_column:type=varchar"
@@ -1126,7 +1261,7 @@ export class Parser {
    * x = y = z → x = (y = z)
    */
   private parseAssignment(): Expression {
-    let left = this.parseComparison();
+    let left = this.parseLogical();
 
     if (this.check(TokenType.ASSIGN)) {
       this.advance(); // consume =
@@ -1136,6 +1271,27 @@ export class Parser {
         target: left,
         value: right
       } as any;
+    }
+
+    return left;
+  }
+
+  /**
+   * 논리 연산 파싱 (&&, ||)
+   */
+  private parseLogical(): Expression {
+    let left = this.parseComparison();
+
+    while (this.check(TokenType.AND) || this.check(TokenType.OR)) {
+      const operator = this.check(TokenType.AND) ? '&&' : '||';
+      this.advance();
+      const right = this.parseComparison();
+      left = {
+        type: 'binary',
+        operator,
+        left,
+        right
+      } as unknown as BinaryOpExpression;
     }
 
     return left;
@@ -1176,7 +1332,7 @@ export class Parser {
         operator,
         left,
         right
-      } as BinaryOpExpression;
+      } as unknown as BinaryOpExpression;
     }
 
     return left;
@@ -1202,7 +1358,7 @@ export class Parser {
         operator,
         left,
         right
-      } as BinaryOpExpression;
+      } as unknown as BinaryOpExpression;
     }
 
     return left;
@@ -1233,7 +1389,7 @@ export class Parser {
         operator,
         left,
         right
-      } as BinaryOpExpression;
+      } as unknown as BinaryOpExpression;
     }
 
     return left;
