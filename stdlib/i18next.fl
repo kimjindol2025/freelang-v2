@@ -1,0 +1,325 @@
+/**
+ * FreeLang i18next 다국어 지원 라이브러리
+ *
+ * npm i18next 패키지의 FreeLang stdlib 완전 구현
+ * 다국어 번역, 네임스페이스, 변수 치환 지원
+ *
+ * 사용법:
+ *   import i18next from "stdlib/i18next"
+ *
+ *   // 초기화
+ *   i18next.init({
+ *     defaultLanguage: "ko",
+ *     fallbackLanguage: "en"
+ *   })
+ *
+ *   // 리소스 추가
+ *   i18next.addResources("ko", "common", {
+ *     "hello": "안녕하세요",
+ *     "welcome": "{{name}}님 환영합니다"
+ *   })
+ *
+ *   // 번역
+ *   var msg = i18next.t("common:hello")
+ *   var welcome = i18next.t("common:welcome", { name: "김철수" })
+ *
+ *   // 언어 전환
+ *   i18next.changeLanguage("en")
+ *   var msg_en = i18next.t("common:hello")
+ *
+ *   // 존재 확인
+ *   if i18next.exists("common:hello") {
+ *     println("번역 존재")
+ *   }
+ */
+
+// ============================================
+// 구조체 정의
+// ============================================
+
+struct I18nConfig {
+  defaultLanguage: string,
+  fallbackLanguage: string,
+  ns: string,
+  debug: bool
+}
+
+struct I18nResource {
+  lang: string,
+  namespace: string,
+  translations: map
+}
+
+struct I18nInstance {
+  config: I18nConfig,
+  resources: array,
+  currentLanguage: string
+}
+
+// ============================================
+// 전역 인스턴스
+// ============================================
+
+let _instance: I18nInstance = null
+
+// ============================================
+// 내부 함수: 리소스 찾기
+// ============================================
+
+fn _findResource(lang: string, namespace: string) -> map {
+  if _instance == null {
+    return {}
+  }
+
+  let i = 0
+  while i < arr.length(_instance.resources) {
+    let res = _instance.resources[i]
+    if res.lang == lang && res.namespace == namespace {
+      return res.translations
+    }
+    i = i + 1
+  }
+
+  return {}
+}
+
+// ============================================
+// 내부 함수: 변수 치환
+// ============================================
+
+fn _interpolate(text: string, variables: map) -> string {
+  if variables == null || map.length(variables) == 0 {
+    return text
+  }
+
+  let result = text
+  let keys = map.keys(variables)
+  let i = 0
+
+  while i < arr.length(keys) {
+    let key = keys[i]
+    let value = str(variables[key])
+    let placeholder = "{{" + key + "}}"
+
+    // 간단한 문자열 치환 (정규식 없이)
+    let idx = 0
+    while true {
+      idx = str.find(result, placeholder)
+      if idx == -1 {
+        break
+      }
+      let before = str.substring(result, 0, idx)
+      let after = str.substring(result, idx + str.length(placeholder))
+      result = before + value + after
+    }
+
+    i = i + 1
+  }
+
+  return result
+}
+
+// ============================================
+// 초기화
+// ============================================
+
+fn init(config: I18nConfig) -> void {
+  if _instance == null {
+    _instance = {
+      config: config,
+      resources: [],
+      currentLanguage: config.defaultLanguage
+    }
+  } else {
+    _instance.config = config
+    _instance.currentLanguage = config.defaultLanguage
+  }
+}
+
+// ============================================
+// 언어 전환
+// ============================================
+
+fn changeLanguage(lang: string) -> string {
+  if _instance == null {
+    return ""
+  }
+  _instance.currentLanguage = lang
+  return lang
+}
+
+// ============================================
+// 리소스 추가
+// ============================================
+
+fn addResources(lang: string, namespace: string, translations: map) -> void {
+  if _instance == null {
+    return
+  }
+
+  // 기존 리소스 업데이트 또는 추가
+  let found = false
+  let i = 0
+  while i < arr.length(_instance.resources) {
+    let res = _instance.resources[i]
+    if res.lang == lang && res.namespace == namespace {
+      // 기존 네임스페이스: 병합
+      let keys = map.keys(translations)
+      let j = 0
+      while j < arr.length(keys) {
+        let k = keys[j]
+        res.translations[k] = translations[k]
+        j = j + 1
+      }
+      found = true
+      break
+    }
+    i = i + 1
+  }
+
+  if !found {
+    // 새 리소스 추가
+    let resource = {
+      lang: lang,
+      namespace: namespace,
+      translations: translations
+    }
+    arr.push(_instance.resources, resource)
+  }
+}
+
+// ============================================
+// 번역 조회 (핵심 함수)
+// ============================================
+
+fn t(key: string) -> string {
+  let variables = {}
+  return t_withVars(key, variables)
+}
+
+fn t_withVars(key: string, variables: map) -> string {
+  if _instance == null {
+    return key
+  }
+
+  // 네임스페이스 파싱: "common:hello" → namespace="common", key="hello"
+  let namespace = _instance.config.ns
+  let actualKey = key
+
+  let colonIdx = str.find(key, ":")
+  if colonIdx != -1 {
+    namespace = str.substring(key, 0, colonIdx)
+    actualKey = str.substring(key, colonIdx + 1)
+  }
+
+  // 현재 언어에서 번역 조회
+  let translations = _findResource(_instance.currentLanguage, namespace)
+  if map.has(translations, actualKey) {
+    let text = translations[actualKey]
+    return _interpolate(text, variables)
+  }
+
+  // 폴백 언어로 조회
+  if _instance.currentLanguage != _instance.config.fallbackLanguage {
+    translations = _findResource(_instance.config.fallbackLanguage, namespace)
+    if map.has(translations, actualKey) {
+      let text = translations[actualKey]
+      return _interpolate(text, variables)
+    }
+  }
+
+  // 번역 없으면 key 반환
+  return key
+}
+
+// ============================================
+// 번역 존재 확인
+// ============================================
+
+fn exists(key: string) -> bool {
+  if _instance == null {
+    return false
+  }
+
+  let namespace = _instance.config.ns
+  let actualKey = key
+
+  let colonIdx = str.find(key, ":")
+  if colonIdx != -1 {
+    namespace = str.substring(key, 0, colonIdx)
+    actualKey = str.substring(key, colonIdx + 1)
+  }
+
+  // 현재 언어에서 확인
+  let translations = _findResource(_instance.currentLanguage, namespace)
+  if map.has(translations, actualKey) {
+    return true
+  }
+
+  // 폴백 언어에서 확인
+  if _instance.currentLanguage != _instance.config.fallbackLanguage {
+    translations = _findResource(_instance.config.fallbackLanguage, namespace)
+    if map.has(translations, actualKey) {
+      return true
+    }
+  }
+
+  return false
+}
+
+// ============================================
+// 현재 언어 조회
+// ============================================
+
+fn getLanguage() -> string {
+  if _instance == null {
+    return ""
+  }
+  return _instance.currentLanguage
+}
+
+// ============================================
+// 설정 조회
+// ============================================
+
+fn getConfig() -> I18nConfig {
+  if _instance == null {
+    return {
+      defaultLanguage: "en",
+      fallbackLanguage: "en",
+      ns: "translation",
+      debug: false
+    }
+  }
+  return _instance.config
+}
+
+// ============================================
+// 인스턴스 초기화 (테스트용)
+// ============================================
+
+fn reset() -> void {
+  _instance = null
+}
+
+// ============================================
+// Export
+// ============================================
+
+export {
+  // 구조체
+  I18nConfig,
+  I18nResource,
+  I18nInstance,
+
+  // 핵심 함수
+  init,
+  changeLanguage,
+  addResources,
+  t,
+  t_withVars,
+  exists,
+  getLanguage,
+  getConfig,
+  reset
+}
