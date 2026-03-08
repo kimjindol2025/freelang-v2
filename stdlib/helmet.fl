@@ -1,0 +1,487 @@
+/**
+ * FreeLang stdlib — helmet
+ *
+ * npm helmet 완전 대체 구현
+ * 보안 HTTP 헤더 자동 주입 미들웨어
+ *
+ * 사용 예시:
+ *   import "stdlib/helmet"
+ *
+ *   // 기본값 (권장) — 11개 보안 헤더 일괄 주입
+ *   app.use(helmet())
+ *
+ *   // 커스텀 설정
+ *   app.use(helmetConfig({
+ *     frameguard: "DENY",
+ *     hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+ *     contentSecurityPolicy: {
+ *       defaultSrc: ["'self'"],
+ *       scriptSrc: ["'self'", "cdn.example.com"]
+ *     }
+ *   }))
+ *
+ *   // 개별 미들웨어 선택 적용
+ *   app.use(frameguard("DENY"))
+ *   app.use(hsts({ maxAge: 31536000, includeSubDomains: true, preload: false }))
+ *
+ * helmet() 기본 주입 헤더 (11개):
+ *   Content-Security-Policy: default-src 'self'
+ *   Cross-Origin-Embedder-Policy: require-corp
+ *   Cross-Origin-Opener-Policy: same-origin
+ *   Cross-Origin-Resource-Policy: same-origin
+ *   X-DNS-Prefetch-Control: off
+ *   X-Frame-Options: SAMEORIGIN
+ *   X-Powered-By: (제거)
+ *   Strict-Transport-Security: max-age=15552000; includeSubDomains
+ *   X-Content-Type-Options: nosniff
+ *   Referrer-Policy: no-referrer
+ *   X-XSS-Protection: 0
+ */
+
+import { Request, Response, Middleware, setHeader, getHeader } from "./express-compat"
+
+// ============================================
+// HSTS 설정 struct
+// ============================================
+
+struct HSTSConfig {
+  maxAge: int,              // 캐시 시간 (초), 기본 15552000 (180일)
+  includeSubDomains: bool,  // 서브도메인 포함 여부
+  preload: bool             // Preload List 등록 여부
+}
+
+// ============================================
+// 전체 Helmet 설정 struct
+// ============================================
+
+struct HelmetConfig {
+  contentSecurityPolicy: any,         // false | map (directives)
+  crossOriginEmbedderPolicy: bool,    // true → require-corp
+  crossOriginOpenerPolicy: string,    // "same-origin" | "unsafe-none"
+  crossOriginResourcePolicy: string,  // "same-origin" | "cross-origin" | "same-site"
+  dnsPrefetchControl: bool,           // true → X-DNS-Prefetch-Control: off (금지)
+  frameguard: string,                 // "DENY" | "SAMEORIGIN"
+  hidePoweredBy: bool,                // true → X-Powered-By 제거
+  hsts: any,                          // false | HSTSConfig
+  ieNoOpen: bool,                     // true → X-Download-Options: noopen
+  noSniff: bool,                      // true → X-Content-Type-Options: nosniff
+  permittedCrossDomainPolicies: string, // "none" | "master-only" | "by-content-type" | "all"
+  referrerPolicy: string,             // "no-referrer" | "same-origin" | "strict-origin" 등
+  xssFilter: bool                     // true → X-XSS-Protection: 0
+}
+
+// ============================================
+// 기본 설정 반환
+// ============================================
+
+fn defaultHelmetConfig() -> HelmetConfig {
+  return {
+    contentSecurityPolicy: { defaultSrc: ["'self'"] },
+    crossOriginEmbedderPolicy: true,
+    crossOriginOpenerPolicy: "same-origin",
+    crossOriginResourcePolicy: "same-origin",
+    dnsPrefetchControl: true,
+    frameguard: "SAMEORIGIN",
+    hidePoweredBy: true,
+    hsts: {
+      maxAge: 15552000,
+      includeSubDomains: true,
+      preload: false
+    },
+    ieNoOpen: true,
+    noSniff: true,
+    permittedCrossDomainPolicies: "none",
+    referrerPolicy: "no-referrer",
+    xssFilter: true
+  }
+}
+
+// ============================================
+// 내부 헬퍼: CSP 정책 map → 헤더 문자열 빌드
+// map 키 → CSS directive 이름으로 변환
+//   defaultSrc  → default-src
+//   scriptSrc   → script-src
+//   styleSrc    → style-src  (등)
+// ============================================
+
+fn _buildCspHeader(policy: map) -> string {
+  let parts = []
+  let keys = map.keys(policy)
+  let i = 0
+
+  while i < arr.length(keys) {
+    let key = keys[i]
+    let val = policy[key]
+
+    // camelCase → kebab-case 변환 (단순 규칙)
+    let directive = key
+    directive = str.replace(directive, "Src",   "-src")
+    directive = str.replace(directive, "Report", "-report")
+    directive = str.replace(directive, "Uri",    "-uri")
+    directive = str.replace(directive, "Base",   "base")
+
+    // 첫 문자 소문자화 (대문자 → 소문자)
+    let first = str.lower(str.substr(directive, 0, 1))
+    directive = first + str.substr(directive, 1, str.len(directive) - 1)
+
+    // 값 배열 → 공백 구분 문자열
+    let valueStr = ""
+    if type(val) == "array" {
+      valueStr = arr.join(val, " ")
+    } else {
+      valueStr = str(val)
+    }
+
+    arr.push(parts, directive + " " + valueStr)
+    i = i + 1
+  }
+
+  return arr.join(parts, "; ")
+}
+
+// ============================================
+// 내부 헬퍼: HSTS 헤더 문자열 빌드
+// ============================================
+
+fn _buildHstsHeader(config: HSTSConfig) -> string {
+  let val = "max-age=" + str(config.maxAge)
+  if config.includeSubDomains {
+    val = val + "; includeSubDomains"
+  }
+  if config.preload {
+    val = val + "; preload"
+  }
+  return val
+}
+
+// ============================================
+// 내부 헬퍼: 헤더 삭제 (X-Powered-By 제거용)
+// res.headers 맵에서 키 제거
+// ============================================
+
+fn _removeHeader(res: Response, key: string) -> void {
+  let lk = str.lower(key)
+  if map.has(res.headers, lk) {
+    delete(res.headers, lk)
+  }
+  // 원본 케이스도 시도
+  if map.has(res.headers, key) {
+    delete(res.headers, key)
+  }
+}
+
+// ============================================
+// 내부 헬퍼: 설정 기반 헤더 일괄 주입
+// ============================================
+
+fn _applyHelmetHeaders(res: Response, config: HelmetConfig) -> void {
+
+  // 1. Content-Security-Policy
+  if config.contentSecurityPolicy != false && config.contentSecurityPolicy != null {
+    if type(config.contentSecurityPolicy) == "map" {
+      let cspVal = _buildCspHeader(config.contentSecurityPolicy)
+      setHeader(res, "Content-Security-Policy", cspVal)
+    } else if type(config.contentSecurityPolicy) == "string" {
+      setHeader(res, "Content-Security-Policy", config.contentSecurityPolicy)
+    }
+  }
+
+  // 2. Cross-Origin-Embedder-Policy
+  if config.crossOriginEmbedderPolicy {
+    setHeader(res, "Cross-Origin-Embedder-Policy", "require-corp")
+  }
+
+  // 3. Cross-Origin-Opener-Policy
+  if config.crossOriginOpenerPolicy != "" && config.crossOriginOpenerPolicy != null {
+    setHeader(res, "Cross-Origin-Opener-Policy", config.crossOriginOpenerPolicy)
+  }
+
+  // 4. Cross-Origin-Resource-Policy
+  if config.crossOriginResourcePolicy != "" && config.crossOriginResourcePolicy != null {
+    setHeader(res, "Cross-Origin-Resource-Policy", config.crossOriginResourcePolicy)
+  }
+
+  // 5. X-DNS-Prefetch-Control
+  // dnsPrefetchControl: true → DNS 프리페치 금지
+  if config.dnsPrefetchControl {
+    setHeader(res, "X-DNS-Prefetch-Control", "off")
+  } else {
+    setHeader(res, "X-DNS-Prefetch-Control", "on")
+  }
+
+  // 6. X-Frame-Options
+  if config.frameguard != "" && config.frameguard != null {
+    setHeader(res, "X-Frame-Options", config.frameguard)
+  }
+
+  // 7. X-Powered-By 제거
+  if config.hidePoweredBy {
+    _removeHeader(res, "X-Powered-By")
+    _removeHeader(res, "x-powered-by")
+  }
+
+  // 8. Strict-Transport-Security
+  if config.hsts != false && config.hsts != null {
+    let hstsVal = _buildHstsHeader(config.hsts)
+    setHeader(res, "Strict-Transport-Security", hstsVal)
+  }
+
+  // 9. X-Download-Options (IE noopen)
+  if config.ieNoOpen {
+    setHeader(res, "X-Download-Options", "noopen")
+  }
+
+  // 10. X-Content-Type-Options
+  if config.noSniff {
+    setHeader(res, "X-Content-Type-Options", "nosniff")
+  }
+
+  // 11. X-Permitted-Cross-Domain-Policies
+  if config.permittedCrossDomainPolicies != "" && config.permittedCrossDomainPolicies != null {
+    setHeader(res, "X-Permitted-Cross-Domain-Policies", config.permittedCrossDomainPolicies)
+  }
+
+  // 12. Referrer-Policy
+  if config.referrerPolicy != "" && config.referrerPolicy != null {
+    setHeader(res, "Referrer-Policy", config.referrerPolicy)
+  }
+
+  // 13. X-XSS-Protection
+  // 최신 권장: 0 (브라우저 내장 XSS 필터 비활성화 — 오히려 취약점 유발)
+  if config.xssFilter {
+    setHeader(res, "X-XSS-Protection", "0")
+  }
+}
+
+// ============================================
+// helmetConfig: 설정 기반 미들웨어
+// ============================================
+
+fn helmetConfig(config: HelmetConfig) -> Middleware {
+  // 미설정 필드에 기본값 채우기
+  let defaults = defaultHelmetConfig()
+
+  if config.crossOriginOpenerPolicy == null || config.crossOriginOpenerPolicy == "" {
+    config.crossOriginOpenerPolicy = defaults.crossOriginOpenerPolicy
+  }
+  if config.crossOriginResourcePolicy == null || config.crossOriginResourcePolicy == "" {
+    config.crossOriginResourcePolicy = defaults.crossOriginResourcePolicy
+  }
+  if config.frameguard == null || config.frameguard == "" {
+    config.frameguard = defaults.frameguard
+  }
+  if config.permittedCrossDomainPolicies == null || config.permittedCrossDomainPolicies == "" {
+    config.permittedCrossDomainPolicies = defaults.permittedCrossDomainPolicies
+  }
+  if config.referrerPolicy == null || config.referrerPolicy == "" {
+    config.referrerPolicy = defaults.referrerPolicy
+  }
+
+  return fn(req: Request, res: Response) -> bool {
+    _applyHelmetHeaders(res, config)
+    return true
+  }
+}
+
+// ============================================
+// helmet(): 기본값으로 전체 보안 헤더 주입
+// ============================================
+
+fn helmet() -> Middleware {
+  let config = defaultHelmetConfig()
+  return helmetConfig(config)
+}
+
+// ============================================
+// 개별 미들웨어 — 선택 적용
+// ============================================
+
+// Content-Security-Policy
+fn contentSecurityPolicy(policy: map) -> Middleware {
+  return fn(req: Request, res: Response) -> bool {
+    let cspVal = _buildCspHeader(policy)
+    setHeader(res, "Content-Security-Policy", cspVal)
+    return true
+  }
+}
+
+// Cross-Origin-Embedder-Policy: require-corp
+fn crossOriginEmbedderPolicy() -> Middleware {
+  return fn(req: Request, res: Response) -> bool {
+    setHeader(res, "Cross-Origin-Embedder-Policy", "require-corp")
+    return true
+  }
+}
+
+// Cross-Origin-Opener-Policy
+fn crossOriginOpenerPolicy(policy: string) -> Middleware {
+  return fn(req: Request, res: Response) -> bool {
+    setHeader(res, "Cross-Origin-Opener-Policy", policy)
+    return true
+  }
+}
+
+// Cross-Origin-Resource-Policy
+fn crossOriginResourcePolicy(policy: string) -> Middleware {
+  return fn(req: Request, res: Response) -> bool {
+    setHeader(res, "Cross-Origin-Resource-Policy", policy)
+    return true
+  }
+}
+
+// X-DNS-Prefetch-Control
+// allow: true → on, false → off (기본 off)
+fn dnsPrefetchControl(allow: bool) -> Middleware {
+  return fn(req: Request, res: Response) -> bool {
+    if allow {
+      setHeader(res, "X-DNS-Prefetch-Control", "on")
+    } else {
+      setHeader(res, "X-DNS-Prefetch-Control", "off")
+    }
+    return true
+  }
+}
+
+// X-Frame-Options: "DENY" | "SAMEORIGIN"
+fn frameguard(action: string) -> Middleware {
+  return fn(req: Request, res: Response) -> bool {
+    setHeader(res, "X-Frame-Options", action)
+    return true
+  }
+}
+
+// X-Powered-By 헤더 제거
+fn hidePoweredBy() -> Middleware {
+  return fn(req: Request, res: Response) -> bool {
+    _removeHeader(res, "X-Powered-By")
+    _removeHeader(res, "x-powered-by")
+    return true
+  }
+}
+
+// Strict-Transport-Security
+fn hsts(config: HSTSConfig) -> Middleware {
+  return fn(req: Request, res: Response) -> bool {
+    let val = _buildHstsHeader(config)
+    setHeader(res, "Strict-Transport-Security", val)
+    return true
+  }
+}
+
+// X-Download-Options: noopen (IE 전용)
+fn ieNoOpen() -> Middleware {
+  return fn(req: Request, res: Response) -> bool {
+    setHeader(res, "X-Download-Options", "noopen")
+    return true
+  }
+}
+
+// X-Content-Type-Options: nosniff
+fn noSniff() -> Middleware {
+  return fn(req: Request, res: Response) -> bool {
+    setHeader(res, "X-Content-Type-Options", "nosniff")
+    return true
+  }
+}
+
+// X-Permitted-Cross-Domain-Policies
+fn permittedCrossDomainPolicies(policy: string) -> Middleware {
+  return fn(req: Request, res: Response) -> bool {
+    setHeader(res, "X-Permitted-Cross-Domain-Policies", policy)
+    return true
+  }
+}
+
+// Referrer-Policy
+fn referrerPolicy(policy: string) -> Middleware {
+  return fn(req: Request, res: Response) -> bool {
+    setHeader(res, "Referrer-Policy", policy)
+    return true
+  }
+}
+
+// X-XSS-Protection: 0 (최신 권장값)
+fn xssFilter() -> Middleware {
+  return fn(req: Request, res: Response) -> bool {
+    setHeader(res, "X-XSS-Protection", "0")
+    return true
+  }
+}
+
+// ============================================
+// 프리셋 — 환경별 빠른 설정
+// ============================================
+
+// 엄격 모드: 가장 강력한 보안 헤더
+fn helmetStrict() -> Middleware {
+  let config = defaultHelmetConfig()
+  config.frameguard = "DENY"
+  config.crossOriginEmbedderPolicy = true
+  config.hsts = {
+    maxAge: 63072000,        // 2년
+    includeSubDomains: true,
+    preload: true
+  }
+  config.contentSecurityPolicy = {
+    defaultSrc: ["'none'"],
+    scriptSrc: ["'self'"],
+    styleSrc: ["'self'"],
+    imgSrc: ["'self'", "data:"],
+    connectSrc: ["'self'"],
+    fontSrc: ["'self'"],
+    objectSrc: ["'none'"],
+    mediaSrc: ["'none'"],
+    frameSrc: ["'none'"]
+  }
+  return helmetConfig(config)
+}
+
+// API 전용: SPA/모바일 앱 대상 (CSP 완화)
+fn helmetApi() -> Middleware {
+  let config = defaultHelmetConfig()
+  config.contentSecurityPolicy = false   // API 서버는 CSP 불필요
+  config.crossOriginEmbedderPolicy = false
+  config.frameguard = "DENY"
+  config.hsts = {
+    maxAge: 31536000,        // 1년
+    includeSubDomains: true,
+    preload: false
+  }
+  return helmetConfig(config)
+}
+
+// ============================================
+// Export
+// ============================================
+
+export {
+  // 구조체
+  HSTSConfig,
+  HelmetConfig,
+
+  // 설정
+  defaultHelmetConfig,
+
+  // 메인 미들웨어
+  helmet,
+  helmetConfig,
+
+  // 개별 미들웨어 (12개)
+  contentSecurityPolicy,
+  crossOriginEmbedderPolicy,
+  crossOriginOpenerPolicy,
+  crossOriginResourcePolicy,
+  dnsPrefetchControl,
+  frameguard,
+  hidePoweredBy,
+  hsts,
+  ieNoOpen,
+  noSniff,
+  permittedCrossDomainPolicies,
+  referrerPolicy,
+  xssFilter,
+
+  // 프리셋
+  helmetStrict,
+  helmetApi
+}
