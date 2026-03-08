@@ -37,6 +37,8 @@ import { registerEnvShieldFunctions } from './stdlib/native-env-shield';
 import { registerSecureHasherFunctions } from './stdlib/native-secure-hasher';
 import { registerProxyTunnelFunctions, handleProxyResponse, proxyRouteTable } from './stdlib/proxy-tunnel';
 import { registerDotenvFunctions } from './stdlib/dotenv';
+import { registerNodemailerFunctions } from './stdlib-nodemailer';
+import { registerAxiosFunctions } from './stdlib-axios';
 import * as fs from 'fs';
 
 /**
@@ -4141,6 +4143,11 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
   // rt_cow_init/alloc/copy/get/set/free/stats - immer 완전 대체
   registerCowEngineFunctions(registry);
 
+  // nodemailer.fl: npm nodemailer 완전 대체 (외부 npm 0개)
+  // nodemailer_connect/nodemailer_send/nodemailer_send_attachment/
+  // nodemailer_verify/nodemailer_close/nodemailer_basename/nodemailer_extname/nodemailer_mime_type
+  registerNodemailerFunctions(registry);
+
   // Silent registration (no console output)
 }
 
@@ -5394,4 +5401,9 @@ function registerCowEngineFunctions(registry: NativeFunctionRegistry): void {
       return stats;
     }
   });
+
+  // ────────────────────────────────────────────────────────────
+  // Axios HTTP Client Functions
+  // ────────────────────────────────────────────────────────────
+  registerAxiosFunctions(registry);
 }

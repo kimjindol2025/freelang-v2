@@ -1,0 +1,620 @@
+/**
+ * FreeLang axios 미들웨어
+ *
+ * npm axios 패키지의 FreeLang stdlib 완전 구현
+ * HTTP 클라이언트 - GET/POST/PUT/DELETE/PATCH/HEAD
+ *
+ * 사용법:
+ *   import axios from "stdlib/axios"
+ *
+ *   // 기본 GET
+ *   var res = axios.get("https://api.example.com/users")
+ *   println(res.data)
+ *
+ *   // POST with data
+ *   var res2 = axios.post("https://api.example.com/users", {
+ *     name: "김철수",
+ *     email: "kim@example.com"
+ *   })
+ *
+ *   // 인스턴스 생성 (baseURL, 기본 헤더)
+ *   var client = axios.create({
+ *     baseURL: "https://api.myapp.com",
+ *     timeout: 10000,
+ *     headers: { "Authorization": "Bearer " + token }
+ *   })
+ *
+ *   var users = axios.instanceGet(client, "/users")
+ *
+ *   // 인터셉터
+ *   axios.addRequestInterceptor(client, fn(req) -> {
+ *     req.headers["X-Request-ID"] = "12345"
+ *     return req
+ *   })
+ *
+ *   // 동시 요청
+ *   var results = axios.all([
+ *     axios.get("https://api.example.com/users"),
+ *     axios.get("https://api.example.com/posts")
+ *   ])
+ */
+
+import { Request, Response, Middleware, setStatus, setHeader, respondJson, getHeader } from "./express-compat"
+
+// ============================================
+// 구조체 정의
+// ============================================
+
+struct AxiosConfig {
+  baseURL: string,
+  timeout: int,
+  headers: map,
+  params: map,
+  auth: any,
+  responseType: string,
+  maxRetries: int,
+  withCredentials: bool
+}
+
+struct AxiosAuth {
+  username: string,
+  password: string
+}
+
+struct AxiosRequest {
+  method: string,
+  url: string,
+  headers: map,
+  params: map,
+  data: any,
+  timeout: int
+}
+
+struct AxiosResponse {
+  status: int,
+  statusText: string,
+  headers: map,
+  data: any,
+  config: AxiosRequest
+}
+
+struct AxiosError {
+  message: string,
+  status: int,
+  response: any,
+  isTimeout: bool,
+  isNetworkError: bool
+}
+
+struct AxiosInterceptors {
+  request: array,
+  response: array
+}
+
+struct AxiosInstance {
+  config: AxiosConfig,
+  interceptors: AxiosInterceptors
+}
+
+// ============================================
+// 기본 설정
+// ============================================
+
+fn _defaultConfig() -> AxiosConfig {
+  return {
+    baseURL: "",
+    timeout: 5000,
+    headers: { "Content-Type": "application/json" },
+    params: {},
+    auth: null,
+    responseType: "json",
+    maxRetries: 0,
+    withCredentials: false
+  }
+}
+
+// ============================================
+// URL 구성 (baseURL + path)
+// ============================================
+
+fn _buildUrl(baseURL: string, url: string) -> string {
+  if baseURL == "" || baseURL == null {
+    return url
+  }
+  // 정규화: baseURL이 / 로 끝나고 url이 / 로 시작하면 하나 제거
+  if str.ends_with(baseURL, "/") && str.starts_with(url, "/") {
+    return baseURL + str.substring(url, 1)
+  }
+  if !str.ends_with(baseURL, "/") && !str.starts_with(url, "/") {
+    return baseURL + "/" + url
+  }
+  return baseURL + url
+}
+
+// ============================================
+// 쿼리 스트링 구성
+// ============================================
+
+fn _buildQueryString(params: map) -> string {
+  if params == null || map.length(params) == 0 {
+    return ""
+  }
+  let keys = map.keys(params)
+  let parts = []
+  let i = 0
+  while i < arr.length(keys) {
+    let k = keys[i]
+    let v = params[k]
+    let encoded = str(k) + "=" + str(v)
+    arr.push(parts, encoded)
+    i = i + 1
+  }
+  return "?" + arr.join(parts, "&")
+}
+
+// ============================================
+// 네이티브 HTTP 함수 호출
+// ============================================
+
+// axios_get(url, headersJson, timeout) -> responseJson
+fn _callAxiosGet(url: string, headers: map, timeout: int) -> map {
+  let headersJson = json.stringify(headers)
+  return $ffi.axios_get(url, headersJson, timeout)
+}
+
+// axios_post(url, bodyJson, headersJson, timeout) -> responseJson
+fn _callAxiosPost(url: string, body: any, headers: map, timeout: int) -> map {
+  let bodyJson = json.stringify(body)
+  let headersJson = json.stringify(headers)
+  return $ffi.axios_post(url, bodyJson, headersJson, timeout)
+}
+
+// axios_put(url, bodyJson, headersJson, timeout) -> responseJson
+fn _callAxiosPut(url: string, body: any, headers: map, timeout: int) -> map {
+  let bodyJson = json.stringify(body)
+  let headersJson = json.stringify(headers)
+  return $ffi.axios_put(url, bodyJson, headersJson, timeout)
+}
+
+// axios_delete(url, headersJson, timeout) -> responseJson
+fn _callAxiosDelete(url: string, headers: map, timeout: int) -> map {
+  let headersJson = json.stringify(headers)
+  return $ffi.axios_delete(url, headersJson, timeout)
+}
+
+// axios_patch(url, bodyJson, headersJson, timeout) -> responseJson
+fn _callAxiosPatch(url: string, body: any, headers: map, timeout: int) -> map {
+  let bodyJson = json.stringify(body)
+  let headersJson = json.stringify(headers)
+  return $ffi.axios_patch(url, bodyJson, headersJson, timeout)
+}
+
+// axios_head(url, headersJson, timeout) -> responseJson
+fn _callAxiosHead(url: string, headers: map, timeout: int) -> map {
+  let headersJson = json.stringify(headers)
+  return $ffi.axios_head(url, headersJson, timeout)
+}
+
+// axios_request(configJson) -> responseJson
+fn _callAxiosRequest(config: AxiosRequest) -> map {
+  let configJson = json.stringify(config)
+  return $ffi.axios_request(configJson)
+}
+
+// ============================================
+// 인터셉터 처리
+// ============================================
+
+fn _applyRequestInterceptors(req: AxiosRequest, interceptors: AxiosInterceptors) -> AxiosRequest {
+  let i = 0
+  while i < arr.length(interceptors.request) {
+    let fn_interceptor = interceptors.request[i]
+    req = fn_interceptor(req)
+    i = i + 1
+  }
+  return req
+}
+
+fn _applyResponseInterceptors(res: AxiosResponse, interceptors: AxiosInterceptors) -> AxiosResponse {
+  let i = 0
+  while i < arr.length(interceptors.response) {
+    let fn_interceptor = interceptors.response[i]
+    res = fn_interceptor(res)
+    i = i + 1
+  }
+  return res
+}
+
+// ============================================
+// 전역 GET
+// ============================================
+
+fn get(url: string) -> AxiosResponse {
+  let config = _defaultConfig()
+  return get_withConfig(url, config)
+}
+
+fn get_withConfig(url: string, config: AxiosConfig) -> AxiosResponse {
+  let fullUrl = _buildUrl(config.baseURL, url)
+  let queryStr = _buildQueryString(config.params)
+  if queryStr != "" {
+    fullUrl = fullUrl + queryStr
+  }
+
+  let resp = _callAxiosGet(fullUrl, config.headers, config.timeout)
+
+  return {
+    status: resp.status,
+    statusText: resp.statusText,
+    headers: resp.headers,
+    data: resp.data,
+    config: {
+      method: "GET",
+      url: fullUrl,
+      headers: config.headers,
+      params: config.params,
+      data: null,
+      timeout: config.timeout
+    }
+  }
+}
+
+// ============================================
+// 전역 POST
+// ============================================
+
+fn post(url: string, data: any) -> AxiosResponse {
+  let config = _defaultConfig()
+  return post_withConfig(url, data, config)
+}
+
+fn post_withConfig(url: string, data: any, config: AxiosConfig) -> AxiosResponse {
+  let fullUrl = _buildUrl(config.baseURL, url)
+  let queryStr = _buildQueryString(config.params)
+  if queryStr != "" {
+    fullUrl = fullUrl + queryStr
+  }
+
+  let resp = _callAxiosPost(fullUrl, data, config.headers, config.timeout)
+
+  return {
+    status: resp.status,
+    statusText: resp.statusText,
+    headers: resp.headers,
+    data: resp.data,
+    config: {
+      method: "POST",
+      url: fullUrl,
+      headers: config.headers,
+      params: config.params,
+      data: data,
+      timeout: config.timeout
+    }
+  }
+}
+
+// ============================================
+// 전역 PUT
+// ============================================
+
+fn put(url: string, data: any) -> AxiosResponse {
+  let config = _defaultConfig()
+  return put_withConfig(url, data, config)
+}
+
+fn put_withConfig(url: string, data: any, config: AxiosConfig) -> AxiosResponse {
+  let fullUrl = _buildUrl(config.baseURL, url)
+  let queryStr = _buildQueryString(config.params)
+  if queryStr != "" {
+    fullUrl = fullUrl + queryStr
+  }
+
+  let resp = _callAxiosPut(fullUrl, data, config.headers, config.timeout)
+
+  return {
+    status: resp.status,
+    statusText: resp.statusText,
+    headers: resp.headers,
+    data: resp.data,
+    config: {
+      method: "PUT",
+      url: fullUrl,
+      headers: config.headers,
+      params: config.params,
+      data: data,
+      timeout: config.timeout
+    }
+  }
+}
+
+// ============================================
+// 전역 DELETE (httpDelete로 우회 가능)
+// ============================================
+
+fn del(url: string) -> AxiosResponse {
+  let config = _defaultConfig()
+  return del_withConfig(url, config)
+}
+
+fn del_withConfig(url: string, config: AxiosConfig) -> AxiosResponse {
+  let fullUrl = _buildUrl(config.baseURL, url)
+  let queryStr = _buildQueryString(config.params)
+  if queryStr != "" {
+    fullUrl = fullUrl + queryStr
+  }
+
+  let resp = _callAxiosDelete(fullUrl, config.headers, config.timeout)
+
+  return {
+    status: resp.status,
+    statusText: resp.statusText,
+    headers: resp.headers,
+    data: resp.data,
+    config: {
+      method: "DELETE",
+      url: fullUrl,
+      headers: config.headers,
+      params: config.params,
+      data: null,
+      timeout: config.timeout
+    }
+  }
+}
+
+// ============================================
+// 전역 PATCH
+// ============================================
+
+fn patch(url: string, data: any) -> AxiosResponse {
+  let config = _defaultConfig()
+  return patch_withConfig(url, data, config)
+}
+
+fn patch_withConfig(url: string, data: any, config: AxiosConfig) -> AxiosResponse {
+  let fullUrl = _buildUrl(config.baseURL, url)
+  let queryStr = _buildQueryString(config.params)
+  if queryStr != "" {
+    fullUrl = fullUrl + queryStr
+  }
+
+  let resp = _callAxiosPatch(fullUrl, data, config.headers, config.timeout)
+
+  return {
+    status: resp.status,
+    statusText: resp.statusText,
+    headers: resp.headers,
+    data: resp.data,
+    config: {
+      method: "PATCH",
+      url: fullUrl,
+      headers: config.headers,
+      params: config.params,
+      data: data,
+      timeout: config.timeout
+    }
+  }
+}
+
+// ============================================
+// 전역 HEAD
+// ============================================
+
+fn head(url: string) -> AxiosResponse {
+  let config = _defaultConfig()
+  return head_withConfig(url, config)
+}
+
+fn head_withConfig(url: string, config: AxiosConfig) -> AxiosResponse {
+  let fullUrl = _buildUrl(config.baseURL, url)
+  let queryStr = _buildQueryString(config.params)
+  if queryStr != "" {
+    fullUrl = fullUrl + queryStr
+  }
+
+  let resp = _callAxiosHead(fullUrl, config.headers, config.timeout)
+
+  return {
+    status: resp.status,
+    statusText: resp.statusText,
+    headers: resp.headers,
+    data: resp.data,
+    config: {
+      method: "HEAD",
+      url: fullUrl,
+      headers: config.headers,
+      params: config.params,
+      data: null,
+      timeout: config.timeout
+    }
+  }
+}
+
+// ============================================
+// 일반 request
+// ============================================
+
+fn request(config: AxiosRequest) -> AxiosResponse {
+  let resp = _callAxiosRequest(config)
+
+  return {
+    status: resp.status,
+    statusText: resp.statusText,
+    headers: resp.headers,
+    data: resp.data,
+    config: config
+  }
+}
+
+// ============================================
+// 인스턴스 생성
+// ============================================
+
+fn create(config: AxiosConfig) -> AxiosInstance {
+  return {
+    config: config,
+    interceptors: {
+      request: [],
+      response: []
+    }
+  }
+}
+
+// ============================================
+// 인스턴스 메서드
+// ============================================
+
+fn instanceGet(instance: AxiosInstance, url: string) -> AxiosResponse {
+  let req = {
+    method: "GET",
+    url: _buildUrl(instance.config.baseURL, url),
+    headers: instance.config.headers,
+    params: instance.config.params,
+    data: null,
+    timeout: instance.config.timeout
+  }
+  req = _applyRequestInterceptors(req, instance.interceptors)
+  let resp = request(req)
+  resp = _applyResponseInterceptors(resp, instance.interceptors)
+  return resp
+}
+
+fn instancePost(instance: AxiosInstance, url: string, data: any) -> AxiosResponse {
+  let req = {
+    method: "POST",
+    url: _buildUrl(instance.config.baseURL, url),
+    headers: instance.config.headers,
+    params: instance.config.params,
+    data: data,
+    timeout: instance.config.timeout
+  }
+  req = _applyRequestInterceptors(req, instance.interceptors)
+  let resp = request(req)
+  resp = _applyResponseInterceptors(resp, instance.interceptors)
+  return resp
+}
+
+fn instancePut(instance: AxiosInstance, url: string, data: any) -> AxiosResponse {
+  let req = {
+    method: "PUT",
+    url: _buildUrl(instance.config.baseURL, url),
+    headers: instance.config.headers,
+    params: instance.config.params,
+    data: data,
+    timeout: instance.config.timeout
+  }
+  req = _applyRequestInterceptors(req, instance.interceptors)
+  let resp = request(req)
+  resp = _applyResponseInterceptors(resp, instance.interceptors)
+  return resp
+}
+
+fn instanceDelete(instance: AxiosInstance, url: string) -> AxiosResponse {
+  let req = {
+    method: "DELETE",
+    url: _buildUrl(instance.config.baseURL, url),
+    headers: instance.config.headers,
+    params: instance.config.params,
+    data: null,
+    timeout: instance.config.timeout
+  }
+  req = _applyRequestInterceptors(req, instance.interceptors)
+  let resp = request(req)
+  resp = _applyResponseInterceptors(resp, instance.interceptors)
+  return resp
+}
+
+fn instancePatch(instance: AxiosInstance, url: string, data: any) -> AxiosResponse {
+  let req = {
+    method: "PATCH",
+    url: _buildUrl(instance.config.baseURL, url),
+    headers: instance.config.headers,
+    params: instance.config.params,
+    data: data,
+    timeout: instance.config.timeout
+  }
+  req = _applyRequestInterceptors(req, instance.interceptors)
+  let resp = request(req)
+  resp = _applyResponseInterceptors(resp, instance.interceptors)
+  return resp
+}
+
+// ============================================
+// 인터셉터
+// ============================================
+
+fn addRequestInterceptor(instance: AxiosInstance, interceptor: any) -> void {
+  arr.push(instance.interceptors.request, interceptor)
+}
+
+fn addResponseInterceptor(instance: AxiosInstance, interceptor: any) -> void {
+  arr.push(instance.interceptors.response, interceptor)
+}
+
+// ============================================
+// 유틸리티
+// ============================================
+
+fn isAxiosError(err: any) -> bool {
+  return err != null && err.isAxiosError == true
+}
+
+fn all(requests: array) -> array {
+  let results = []
+  let i = 0
+  while i < arr.length(requests) {
+    arr.push(results, requests[i])
+    i = i + 1
+  }
+  return results
+}
+
+fn spread(fn_spread: any) -> any {
+  return fn_spread
+}
+
+// ============================================
+// Export
+// ============================================
+
+export {
+  // 구조체
+  AxiosConfig,
+  AxiosAuth,
+  AxiosRequest,
+  AxiosResponse,
+  AxiosError,
+  AxiosInterceptors,
+  AxiosInstance,
+
+  // 전역 함수
+  get,
+  get_withConfig,
+  post,
+  post_withConfig,
+  put,
+  put_withConfig,
+  del,
+  del_withConfig,
+  patch,
+  patch_withConfig,
+  head,
+  head_withConfig,
+  request,
+
+  // 인스턴스
+  create,
+  instanceGet,
+  instancePost,
+  instancePut,
+  instanceDelete,
+  instancePatch,
+
+  // 인터셉터
+  addRequestInterceptor,
+  addResponseInterceptor,
+
+  // 유틸리티
+  isAxiosError,
+  all,
+  spread
+}
