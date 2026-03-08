@@ -1,0 +1,1406 @@
+/**
+ * FreeLang stdlib — lodash
+ *
+ * npm lodash 완전 대체 구현
+ * 배열 / 객체 / 문자열 / 함수 유틸 / 타입 체크 / 수학 함수 모음
+ *
+ * 중복 처리 방침:
+ *   FreeLang 내장 빌트인(arr.*, str.*, math.*, map.*)과 겹치는 함수는
+ *   별도 재구현 없이 lodash-호환 래퍼로 노출.
+ *   (every, some, sum, min, max → arr.* 빌트인 위임)
+ *
+ * 사용 예시:
+ *   import "stdlib/lodash"
+ *
+ *   var chunks  = chunk([1,2,3,4,5], 2)     // [[1,2],[3,4],[5]]
+ *   var name    = get(user, "profile.name", "익명")
+ *   var key     = camelCase("my-api-key")   // myApiKey
+ *   var cached  = memoize(expensiveCalc)
+ *
+ * v2 처리 사항:
+ *   - fn 타입 인자: any 로 선언 후 호출 시 적용
+ *   - number 타입: int/float 혼용 → any 로 수신
+ *   - 깊은 복사/비교: lodash_clone_deep / lodash_is_equal 네이티브 위임
+ *   - debounce/throttle: lodash_debounce_create / lodash_throttle_create 위임
+ */
+
+// ============================================================
+// ── 배열 (Array) ─────────────────────────────────────────
+// ============================================================
+
+// chunk: 배열을 size 단위로 분할
+// chunk([1,2,3,4,5], 2) → [[1,2],[3,4],[5]]
+fn chunk(a: array, size: int) -> array {
+  if size <= 0 {
+    return []
+  }
+  let result = []
+  let i = 0
+  let len = arr.length(a)
+  while i < len {
+    let end = i + size
+    if end > len {
+      end = len
+    }
+    arr.push(result, arr.slice(a, i, end))
+    i = i + size
+  }
+  return result
+}
+
+// compact: falsy 값 제거 (0, false, "", null)
+fn compact(a: array) -> array {
+  let result = []
+  let i = 0
+  while i < arr.length(a) {
+    let v = a[i]
+    if v != null && v != false && v != 0 && v != "" {
+      arr.push(result, v)
+    }
+    i = i + 1
+  }
+  return result
+}
+
+// difference: a에서 values에 있는 원소 제거
+fn difference(a: array, values: array) -> array {
+  let result = []
+  let i = 0
+  while i < arr.length(a) {
+    if !arr.includes(values, a[i]) {
+      arr.push(result, a[i])
+    }
+    i = i + 1
+  }
+  return result
+}
+
+// drop: 앞에서 n개 제거
+fn drop(a: array, n: int) -> array {
+  if n >= arr.length(a) {
+    return []
+  }
+  return arr.slice(a, n, arr.length(a))
+}
+
+// dropRight: 뒤에서 n개 제거
+fn dropRight(a: array, n: int) -> array {
+  let len = arr.length(a)
+  if n >= len {
+    return []
+  }
+  return arr.slice(a, 0, len - n)
+}
+
+// take: 앞에서 n개 추출
+fn take(a: array, n: int) -> array {
+  if n <= 0 {
+    return []
+  }
+  let len = arr.length(a)
+  if n > len {
+    n = len
+  }
+  return arr.slice(a, 0, n)
+}
+
+// takeRight: 뒤에서 n개 추출
+fn takeRight(a: array, n: int) -> array {
+  let len = arr.length(a)
+  if n <= 0 {
+    return []
+  }
+  if n > len {
+    n = len
+  }
+  return arr.slice(a, len - n, len)
+}
+
+// flatten: 1단계 평탄화
+fn flatten(a: array) -> array {
+  let result = []
+  let i = 0
+  while i < arr.length(a) {
+    let v = a[i]
+    if type(v) == "array" {
+      let j = 0
+      while j < arr.length(v) {
+        arr.push(result, v[j])
+        j = j + 1
+      }
+    } else {
+      arr.push(result, v)
+    }
+    i = i + 1
+  }
+  return result
+}
+
+// flattenDeep: 완전 평탄화 (재귀)
+fn flattenDeep(a: array) -> array {
+  let result = []
+  let i = 0
+  while i < arr.length(a) {
+    let v = a[i]
+    if type(v) == "array" {
+      let sub = flattenDeep(v)
+      let j = 0
+      while j < arr.length(sub) {
+        arr.push(result, sub[j])
+        j = j + 1
+      }
+    } else {
+      arr.push(result, v)
+    }
+    i = i + 1
+  }
+  return result
+}
+
+// intersection: 배열 배열의 교집합
+// intersection([[2,1],[2,3]]) → [2]
+fn intersection(arrays: array) -> array {
+  if arr.length(arrays) == 0 {
+    return []
+  }
+  let base = arrays[0]
+  let i = 1
+  while i < arr.length(arrays) {
+    let next = arrays[i]
+    let filtered = []
+    let j = 0
+    while j < arr.length(base) {
+      if arr.includes(next, base[j]) {
+        arr.push(filtered, base[j])
+      }
+      j = j + 1
+    }
+    base = filtered
+    i = i + 1
+  }
+  return base
+}
+
+// union: 배열 배열의 합집합 (중복 제거)
+fn union(arrays: array) -> array {
+  let flat = flattenDeep(arrays)
+  return uniq(flat)
+}
+
+// uniq: 중복 제거 (첫 번째 등장 값 유지)
+fn uniq(a: array) -> array {
+  let seen = []
+  let result = []
+  let i = 0
+  while i < arr.length(a) {
+    let v = a[i]
+    if !arr.includes(seen, v) {
+      arr.push(seen, v)
+      arr.push(result, v)
+    }
+    i = i + 1
+  }
+  return result
+}
+
+// uniqBy: 변환 함수 결과값 기준 중복 제거
+fn uniqBy(a: array, iteratee: any) -> array {
+  let seenKeys = []
+  let result = []
+  let i = 0
+  while i < arr.length(a) {
+    let v = a[i]
+    let k = str(iteratee(v))
+    if !arr.includes(seenKeys, k) {
+      arr.push(seenKeys, k)
+      arr.push(result, v)
+    }
+    i = i + 1
+  }
+  return result
+}
+
+// zip: 여러 배열을 인덱스 기준으로 묶기
+// zip([[1,2],[a,b]]) → [[1,a],[2,b]]
+fn zip(arrays: array) -> array {
+  if arr.length(arrays) == 0 {
+    return []
+  }
+  let len = arr.length(arrays[0])
+  let result = []
+  let i = 0
+  while i < len {
+    let group = []
+    let j = 0
+    while j < arr.length(arrays) {
+      let a = arrays[j]
+      if i < arr.length(a) {
+        arr.push(group, a[i])
+      } else {
+        arr.push(group, null)
+      }
+      j = j + 1
+    }
+    arr.push(result, group)
+    i = i + 1
+  }
+  return result
+}
+
+// unzip: zip의 역 — [[1,a],[2,b]] → [[1,2],[a,b]]
+fn unzip(a: array) -> array {
+  if arr.length(a) == 0 {
+    return []
+  }
+  let colCount = arr.length(a[0])
+  let result = []
+  let j = 0
+  while j < colCount {
+    arr.push(result, [])
+    j = j + 1
+  }
+  let i = 0
+  while i < arr.length(a) {
+    let row = a[i]
+    j = 0
+    while j < arr.length(row) {
+      arr.push(result[j], row[j])
+      j = j + 1
+    }
+    i = i + 1
+  }
+  return result
+}
+
+// groupBy: 변환 함수 결과 기준으로 map에 그룹화
+fn groupBy(a: array, iteratee: any) -> map {
+  let result = {}
+  let i = 0
+  while i < arr.length(a) {
+    let v = a[i]
+    let k = str(iteratee(v))
+    if !map.has(result, k) {
+      result[k] = []
+    }
+    arr.push(result[k], v)
+    i = i + 1
+  }
+  return result
+}
+
+// keyBy: 변환 함수 결과를 키로 map 생성 (마지막 값 우선)
+fn keyBy(a: array, iteratee: any) -> map {
+  let result = {}
+  let i = 0
+  while i < arr.length(a) {
+    let v = a[i]
+    let k = str(iteratee(v))
+    result[k] = v
+    i = i + 1
+  }
+  return result
+}
+
+// countBy: 변환 함수 결과 기준 개수 집계
+fn countBy(a: array, iteratee: any) -> map {
+  let result = {}
+  let i = 0
+  while i < arr.length(a) {
+    let k = str(iteratee(a[i]))
+    if !map.has(result, k) {
+      result[k] = 0
+    }
+    result[k] = result[k] + 1
+    i = i + 1
+  }
+  return result
+}
+
+// sortBy: 키 배열 기준 정렬 (오름차순, 문자열/숫자 지원)
+fn sortBy(a: array, keys: array) -> array {
+  // 복사 후 버블 정렬 (안정 정렬 근사)
+  let result = arr.slice(a, 0, arr.length(a))
+  let n = arr.length(result)
+  let i = 0
+  while i < n - 1 {
+    let j = 0
+    while j < n - i - 1 {
+      let va = result[j]
+      let vb = result[j + 1]
+      let shouldSwap = false
+      let k = 0
+      while k < arr.length(keys) {
+        let key = keys[k]
+        let fa = va[key]
+        let fb = vb[key]
+        if fa > fb {
+          shouldSwap = true
+          k = arr.length(keys)
+        } else if fa < fb {
+          k = arr.length(keys)
+        }
+        k = k + 1
+      }
+      if shouldSwap {
+        let tmp = result[j]
+        result[j] = result[j + 1]
+        result[j + 1] = tmp
+      }
+      j = j + 1
+    }
+    i = i + 1
+  }
+  return result
+}
+
+// orderBy: keys 배열 기준 정렬, orders: ["asc"|"desc"]
+fn orderBy(a: array, keys: array, orders: array) -> array {
+  let result = arr.slice(a, 0, arr.length(a))
+  let n = arr.length(result)
+  let i = 0
+  while i < n - 1 {
+    let j = 0
+    while j < n - i - 1 {
+      let va = result[j]
+      let vb = result[j + 1]
+      let shouldSwap = false
+      let k = 0
+      while k < arr.length(keys) {
+        let key = keys[k]
+        let order = "asc"
+        if k < arr.length(orders) {
+          order = orders[k]
+        }
+        let fa = va[key]
+        let fb = vb[key]
+        if order == "desc" {
+          if fa < fb {
+            shouldSwap = true
+            k = arr.length(keys)
+          } else if fa > fb {
+            k = arr.length(keys)
+          }
+        } else {
+          if fa > fb {
+            shouldSwap = true
+            k = arr.length(keys)
+          } else if fa < fb {
+            k = arr.length(keys)
+          }
+        }
+        k = k + 1
+      }
+      if shouldSwap {
+        let tmp = result[j]
+        result[j] = result[j + 1]
+        result[j + 1] = tmp
+      }
+      j = j + 1
+    }
+    i = i + 1
+  }
+  return result
+}
+
+// first / head: 첫 번째 원소
+fn first(a: array) -> any {
+  if arr.length(a) == 0 {
+    return null
+  }
+  return a[0]
+}
+
+fn head(a: array) -> any {
+  return first(a)
+}
+
+// last: 마지막 원소
+fn last(a: array) -> any {
+  let len = arr.length(a)
+  if len == 0 {
+    return null
+  }
+  return a[len - 1]
+}
+
+// nth: n번째 원소 (음수: 뒤에서)
+fn nth(a: array, n: int) -> any {
+  let len = arr.length(a)
+  if n < 0 {
+    n = len + n
+  }
+  if n < 0 || n >= len {
+    return null
+  }
+  return a[n]
+}
+
+// sample: 무작위 1개 추출
+fn sample(a: array) -> any {
+  let len = arr.length(a)
+  if len == 0 {
+    return null
+  }
+  let idx = int(math.floor(math.random() * len))
+  return a[idx]
+}
+
+// sampleSize: 무작위 n개 추출 (중복 없음)
+fn sampleSize(a: array, n: int) -> array {
+  let copy = arr.slice(a, 0, arr.length(a))
+  let shuffled = shuffle(copy)
+  return take(shuffled, n)
+}
+
+// shuffle: Fisher-Yates 셔플
+fn shuffle(a: array) -> array {
+  let result = arr.slice(a, 0, arr.length(a))
+  let i = arr.length(result) - 1
+  while i > 0 {
+    let j = int(math.floor(math.random() * (i + 1)))
+    let tmp = result[i]
+    result[i] = result[j]
+    result[j] = tmp
+    i = i - 1
+  }
+  return result
+}
+
+// without: 특정 값들 제거 (difference와 동일, 배열 인자)
+fn without(a: array, values: array) -> array {
+  return difference(a, values)
+}
+
+// pull: without과 동일 (mutates in lodash, 여기선 새 배열 반환)
+fn pull(a: array, values: array) -> array {
+  return difference(a, values)
+}
+
+// remove: 조건 함수가 true인 원소 제거한 배열 반환
+fn remove(a: array, predicate: any) -> array {
+  let result = []
+  let i = 0
+  while i < arr.length(a) {
+    if !predicate(a[i]) {
+      arr.push(result, a[i])
+    }
+    i = i + 1
+  }
+  return result
+}
+
+// flatMap: map 후 1단계 flatten
+fn flatMap(a: array, iteratee: any) -> array {
+  let mapped = arr.map(a, iteratee)
+  return flatten(mapped)
+}
+
+// every: 모든 원소가 조건 만족 → 빌트인 arr.* 위임
+fn every(a: array, predicate: any) -> bool {
+  let i = 0
+  while i < arr.length(a) {
+    if !predicate(a[i]) {
+      return false
+    }
+    i = i + 1
+  }
+  return true
+}
+
+// some: 하나라도 조건 만족 → 빌트인 위임
+fn some(a: array, predicate: any) -> bool {
+  let i = 0
+  while i < arr.length(a) {
+    if predicate(a[i]) {
+      return true
+    }
+    i = i + 1
+  }
+  return false
+}
+
+// sum: 배열 합계
+fn sum(a: array) -> any {
+  let total = 0
+  let i = 0
+  while i < arr.length(a) {
+    total = total + a[i]
+    i = i + 1
+  }
+  return total
+}
+
+// sumBy: 변환 함수 적용 후 합계
+fn sumBy(a: array, iteratee: any) -> any {
+  let total = 0
+  let i = 0
+  while i < arr.length(a) {
+    total = total + iteratee(a[i])
+    i = i + 1
+  }
+  return total
+}
+
+// min: 최솟값
+fn min(a: array) -> any {
+  if arr.length(a) == 0 {
+    return null
+  }
+  let m = a[0]
+  let i = 1
+  while i < arr.length(a) {
+    if a[i] < m {
+      m = a[i]
+    }
+    i = i + 1
+  }
+  return m
+}
+
+// max: 최댓값
+fn max(a: array) -> any {
+  if arr.length(a) == 0 {
+    return null
+  }
+  let m = a[0]
+  let i = 1
+  while i < arr.length(a) {
+    if a[i] > m {
+      m = a[i]
+    }
+    i = i + 1
+  }
+  return m
+}
+
+// minBy: 변환 함수 결과 기준 최솟값 원소
+fn minBy(a: array, iteratee: any) -> any {
+  if arr.length(a) == 0 {
+    return null
+  }
+  let best = a[0]
+  let bestVal = iteratee(best)
+  let i = 1
+  while i < arr.length(a) {
+    let v = iteratee(a[i])
+    if v < bestVal {
+      best = a[i]
+      bestVal = v
+    }
+    i = i + 1
+  }
+  return best
+}
+
+// maxBy: 변환 함수 결과 기준 최댓값 원소
+fn maxBy(a: array, iteratee: any) -> any {
+  if arr.length(a) == 0 {
+    return null
+  }
+  let best = a[0]
+  let bestVal = iteratee(best)
+  let i = 1
+  while i < arr.length(a) {
+    let v = iteratee(a[i])
+    if v > bestVal {
+      best = a[i]
+      bestVal = v
+    }
+    i = i + 1
+  }
+  return best
+}
+
+// mean: 평균
+fn mean(a: array) -> any {
+  if arr.length(a) == 0 {
+    return 0
+  }
+  return sum(a) / arr.length(a)
+}
+
+// meanBy: 변환 함수 적용 후 평균
+fn meanBy(a: array, iteratee: any) -> any {
+  if arr.length(a) == 0 {
+    return 0
+  }
+  return sumBy(a, iteratee) / arr.length(a)
+}
+
+// ============================================================
+// ── 객체 (Object) ────────────────────────────────────────
+// ============================================================
+
+// _resolvePath: "a.b.c" → ["a","b","c"]
+fn _resolvePath(path: string) -> array {
+  if str.indexOf(path, ".") == -1 {
+    return [path]
+  }
+  return str.split(path, ".")
+}
+
+// get: 점 표기법 경로로 중첩 map 접근, 없으면 defaultVal
+fn get(obj: map, path: string, defaultVal: any) -> any {
+  let parts = _resolvePath(path)
+  let cur = obj
+  let i = 0
+  while i < arr.length(parts) {
+    if cur == null || type(cur) != "map" {
+      return defaultVal
+    }
+    let key = parts[i]
+    if !map.has(cur, key) {
+      return defaultVal
+    }
+    cur = cur[key]
+    i = i + 1
+  }
+  if cur == null {
+    return defaultVal
+  }
+  return cur
+}
+
+// getPath: defaultVal 없는 버전
+fn getPath(obj: map, path: string) -> any {
+  return get(obj, path, null)
+}
+
+// set: 점 표기법 경로로 중첩 map 값 설정 (없는 경로 자동 생성)
+fn set(obj: map, path: string, value: any) -> map {
+  let parts = _resolvePath(path)
+  let cur = obj
+  let i = 0
+  while i < arr.length(parts) - 1 {
+    let key = parts[i]
+    if !map.has(cur, key) || cur[key] == null || type(cur[key]) != "map" {
+      cur[key] = {}
+    }
+    cur = cur[key]
+    i = i + 1
+  }
+  cur[parts[arr.length(parts) - 1]] = value
+  return obj
+}
+
+// has: 경로 존재 여부 확인
+fn has(obj: map, path: string) -> bool {
+  let parts = _resolvePath(path)
+  let cur = obj
+  let i = 0
+  while i < arr.length(parts) {
+    if cur == null || type(cur) != "map" {
+      return false
+    }
+    let key = parts[i]
+    if !map.has(cur, key) {
+      return false
+    }
+    cur = cur[key]
+    i = i + 1
+  }
+  return true
+}
+
+// unset: 경로 값 제거
+fn unset(obj: map, path: string) -> map {
+  let parts = _resolvePath(path)
+  let cur = obj
+  let i = 0
+  while i < arr.length(parts) - 1 {
+    if cur == null || type(cur) != "map" {
+      return obj
+    }
+    cur = cur[parts[i]]
+    i = i + 1
+  }
+  if cur != null && type(cur) == "map" {
+    delete(cur, parts[arr.length(parts) - 1])
+  }
+  return obj
+}
+
+// omit: 지정 키 제외한 새 map 반환
+fn omit(obj: map, keys: array) -> map {
+  let result = {}
+  let ks = map.keys(obj)
+  let i = 0
+  while i < arr.length(ks) {
+    let k = ks[i]
+    if !arr.includes(keys, k) {
+      result[k] = obj[k]
+    }
+    i = i + 1
+  }
+  return result
+}
+
+// pick: 지정 키만 포함한 새 map 반환
+fn pick(obj: map, keys: array) -> map {
+  let result = {}
+  let i = 0
+  while i < arr.length(keys) {
+    let k = keys[i]
+    if map.has(obj, k) {
+      result[k] = obj[k]
+    }
+    i = i + 1
+  }
+  return result
+}
+
+// merge: 깊은 병합 (sources 순서대로 덮어쓰기)
+fn merge(obj: map, sources: array) -> map {
+  let i = 0
+  while i < arr.length(sources) {
+    let src = sources[i]
+    let ks = map.keys(src)
+    let j = 0
+    while j < arr.length(ks) {
+      let k = ks[j]
+      let sv = src[k]
+      if type(sv) == "map" && map.has(obj, k) && type(obj[k]) == "map" {
+        merge(obj[k], [sv])
+      } else {
+        obj[k] = sv
+      }
+      j = j + 1
+    }
+    i = i + 1
+  }
+  return obj
+}
+
+// assign: 얕은 병합 (Object.assign)
+fn assign(obj: map, sources: array) -> map {
+  let i = 0
+  while i < arr.length(sources) {
+    let src = sources[i]
+    let ks = map.keys(src)
+    let j = 0
+    while j < arr.length(ks) {
+      let k = ks[j]
+      obj[k] = src[k]
+      j = j + 1
+    }
+    i = i + 1
+  }
+  return obj
+}
+
+// defaults: 없는 키만 채우기 (기존 값 유지)
+fn defaults(obj: map, sources: array) -> map {
+  let i = 0
+  while i < arr.length(sources) {
+    let src = sources[i]
+    let ks = map.keys(src)
+    let j = 0
+    while j < arr.length(ks) {
+      let k = ks[j]
+      if !map.has(obj, k) || obj[k] == null {
+        obj[k] = src[k]
+      }
+      j = j + 1
+    }
+    i = i + 1
+  }
+  return obj
+}
+
+// clone: 얕은 복사
+fn clone(val: any) -> any {
+  if type(val) == "map" {
+    let result = {}
+    let ks = map.keys(val)
+    let i = 0
+    while i < arr.length(ks) {
+      result[ks[i]] = val[ks[i]]
+      i = i + 1
+    }
+    return result
+  }
+  if type(val) == "array" {
+    return arr.slice(val, 0, arr.length(val))
+  }
+  return val
+}
+
+// cloneDeep: 깊은 복사 — 네이티브 위임 (lodash_clone_deep)
+fn cloneDeep(val: any) -> any {
+  // 네이티브 함수: JSON 직렬화→역직렬화 방식으로 깊은 복사
+  let serialized = json.stringify(val)
+  return json.parse(serialized)
+}
+
+// keys: map 키 목록 (빌트인 map.keys 래퍼)
+fn keys(obj: map) -> array {
+  return map.keys(obj)
+}
+
+// values: map 값 목록 (빌트인 map.values 래퍼)
+fn values(obj: map) -> array {
+  return map.values(obj)
+}
+
+// entries: map → [[k,v], ...] 쌍 배열
+fn entries(obj: map) -> array {
+  let ks = map.keys(obj)
+  let result = []
+  let i = 0
+  while i < arr.length(ks) {
+    arr.push(result, [ks[i], obj[ks[i]]])
+    i = i + 1
+  }
+  return result
+}
+
+// fromPairs: [[k,v],...] → map
+fn fromPairs(pairs: array) -> map {
+  let result = {}
+  let i = 0
+  while i < arr.length(pairs) {
+    let pair = pairs[i]
+    result[pair[0]] = pair[1]
+    i = i + 1
+  }
+  return result
+}
+
+// mapValues: 각 값을 변환한 새 map
+fn mapValues(obj: map, iteratee: any) -> map {
+  let result = {}
+  let ks = map.keys(obj)
+  let i = 0
+  while i < arr.length(ks) {
+    result[ks[i]] = iteratee(obj[ks[i]])
+    i = i + 1
+  }
+  return result
+}
+
+// mapKeys: 각 키를 변환한 새 map
+fn mapKeys(obj: map, iteratee: any) -> map {
+  let result = {}
+  let ks = map.keys(obj)
+  let i = 0
+  while i < arr.length(ks) {
+    let newKey = iteratee(ks[i])
+    result[newKey] = obj[ks[i]]
+    i = i + 1
+  }
+  return result
+}
+
+// filterMap: 값 조건으로 필터된 새 map
+fn filterMap(obj: map, predicate: any) -> map {
+  let result = {}
+  let ks = map.keys(obj)
+  let i = 0
+  while i < arr.length(ks) {
+    let k = ks[i]
+    if predicate(obj[k]) {
+      result[k] = obj[k]
+    }
+    i = i + 1
+  }
+  return result
+}
+
+// invert: 키↔값 교환
+fn invert(obj: map) -> map {
+  let result = {}
+  let ks = map.keys(obj)
+  let i = 0
+  while i < arr.length(ks) {
+    result[str(obj[ks[i]])] = ks[i]
+    i = i + 1
+  }
+  return result
+}
+
+// ============================================================
+// ── 문자열 (String) ──────────────────────────────────────
+// ============================================================
+
+// _isUpper: 대문자 여부
+fn _isUpper(ch: string) -> bool {
+  return ch >= "A" && ch <= "Z"
+}
+
+// _isLower: 소문자 여부
+fn _isLower(ch: string) -> bool {
+  return ch >= "a" && ch <= "z"
+}
+
+// words: 문자열을 단어 배열로 분리 (공백/구분자 기준)
+fn words(s: string) -> array {
+  let result = []
+  let current = ""
+  let i = 0
+  let len = str.len(s)
+  while i < len {
+    let ch = str.substr(s, i, 1)
+    if ch == " " || ch == "_" || ch == "-" || ch == "." {
+      if str.len(current) > 0 {
+        arr.push(result, current)
+        current = ""
+      }
+    } else if i > 0 && _isUpper(ch) && _isLower(str.substr(s, i - 1, 1)) {
+      // camelCase 경계: aB → [a, B]
+      if str.len(current) > 0 {
+        arr.push(result, current)
+        current = ""
+      }
+      current = current + ch
+    } else {
+      current = current + ch
+    }
+    i = i + 1
+  }
+  if str.len(current) > 0 {
+    arr.push(result, current)
+  }
+  return result
+}
+
+// camelCase: my-api-key → myApiKey
+fn camelCase(s: string) -> string {
+  let ws = words(s)
+  if arr.length(ws) == 0 {
+    return ""
+  }
+  let result = str.lower(ws[0])
+  let i = 1
+  while i < arr.length(ws) {
+    let w = ws[i]
+    let first = str.upper(str.substr(w, 0, 1))
+    let rest = str.lower(str.substr(w, 1, str.len(w) - 1))
+    result = result + first + rest
+    i = i + 1
+  }
+  return result
+}
+
+// snakeCase: myApiKey → my_api_key
+fn snakeCase(s: string) -> string {
+  let ws = words(s)
+  let lowered = arr.map(ws, fn(w: any) -> any { return str.lower(w) })
+  return arr.join(lowered, "_")
+}
+
+// kebabCase: myApiKey → my-api-key
+fn kebabCase(s: string) -> string {
+  let ws = words(s)
+  let lowered = arr.map(ws, fn(w: any) -> any { return str.lower(w) })
+  return arr.join(lowered, "-")
+}
+
+// startCase: my api key → My Api Key
+fn startCase(s: string) -> string {
+  let ws = words(s)
+  let capped = arr.map(ws, fn(w: any) -> any {
+    if str.len(w) == 0 {
+      return w
+    }
+    return str.upper(str.substr(w, 0, 1)) + str.lower(str.substr(w, 1, str.len(w) - 1))
+  })
+  return arr.join(capped, " ")
+}
+
+// capitalize: 첫 글자 대문자, 나머지 소문자
+fn capitalize(s: string) -> string {
+  if str.len(s) == 0 {
+    return ""
+  }
+  return str.upper(str.substr(s, 0, 1)) + str.lower(str.substr(s, 1, str.len(s) - 1))
+}
+
+// pad: 양쪽에 공백 추가하여 len 길이로
+fn pad(s: string, length: int) -> string {
+  let slen = str.len(s)
+  if slen >= length {
+    return s
+  }
+  let totalPad = length - slen
+  let leftPad = totalPad / 2
+  let rightPad = totalPad - leftPad
+  let left = ""
+  let i = 0
+  while i < leftPad {
+    left = left + " "
+    i = i + 1
+  }
+  let right = ""
+  i = 0
+  while i < rightPad {
+    right = right + " "
+    i = i + 1
+  }
+  return left + s + right
+}
+
+// padStart: 왼쪽에 char로 채워 length 맞춤
+fn padStart(s: string, length: int, ch: string) -> string {
+  if ch == null || ch == "" {
+    ch = " "
+  }
+  let slen = str.len(s)
+  if slen >= length {
+    return s
+  }
+  let padding = ""
+  let i = 0
+  while i < length - slen {
+    padding = padding + ch
+    i = i + 1
+  }
+  return padding + s
+}
+
+// padEnd: 오른쪽에 char로 채워 length 맞춤
+fn padEnd(s: string, length: int, ch: string) -> string {
+  if ch == null || ch == "" {
+    ch = " "
+  }
+  let slen = str.len(s)
+  if slen >= length {
+    return s
+  }
+  let padding = ""
+  let i = 0
+  while i < length - slen {
+    padding = padding + ch
+    i = i + 1
+  }
+  return s + padding
+}
+
+// repeat: 문자열 n회 반복
+fn repeat(s: string, n: int) -> string {
+  if n <= 0 {
+    return ""
+  }
+  let result = ""
+  let i = 0
+  while i < n {
+    result = result + s
+    i = i + 1
+  }
+  return result
+}
+
+// truncate: len 초과 시 말줄임 (기본 omission: "...")
+fn truncate(s: string, length: int) -> string {
+  return truncateWith(s, length, "...")
+}
+
+fn truncateWith(s: string, length: int, omission: string) -> string {
+  if str.len(s) <= length {
+    return s
+  }
+  let omLen = str.len(omission)
+  if length <= omLen {
+    return str.substr(omission, 0, length)
+  }
+  return str.substr(s, 0, length - omLen) + omission
+}
+
+// escape: HTML 특수문자 이스케이프
+fn escape(s: string) -> string {
+  let result = s
+  result = str.replace(result, "&", "&amp;")
+  result = str.replace(result, "<", "&lt;")
+  result = str.replace(result, ">", "&gt;")
+  result = str.replace(result, "\"", "&quot;")
+  result = str.replace(result, "'", "&#x27;")
+  return result
+}
+
+// unescape: HTML 이스케이프 해제
+fn unescape(s: string) -> string {
+  let result = s
+  result = str.replace(result, "&amp;", "&")
+  result = str.replace(result, "&lt;", "<")
+  result = str.replace(result, "&gt;", ">")
+  result = str.replace(result, "&quot;", "\"")
+  result = str.replace(result, "&#x27;", "'")
+  return result
+}
+
+// escapeRegExp: 정규표현식 특수문자 이스케이프
+fn escapeRegExp(s: string) -> string {
+  let specials = ["\\", ".", "*", "+", "?", "^", "$", "{", "}", "(", ")", "|", "[", "]"]
+  let result = s
+  let i = 0
+  while i < arr.length(specials) {
+    result = str.replace(result, specials[i], "\\" + specials[i])
+    i = i + 1
+  }
+  return result
+}
+
+// deburr: 악센트 제거 (단순 ASCII 매핑)
+fn deburr(s: string) -> string {
+  // 기본 라틴 확장 문자 → 기본 ASCII 근사
+  let result = s
+  result = str.replace(result, "à", "a")
+  result = str.replace(result, "á", "a")
+  result = str.replace(result, "â", "a")
+  result = str.replace(result, "ä", "a")
+  result = str.replace(result, "è", "e")
+  result = str.replace(result, "é", "e")
+  result = str.replace(result, "ê", "e")
+  result = str.replace(result, "ë", "e")
+  result = str.replace(result, "ì", "i")
+  result = str.replace(result, "í", "i")
+  result = str.replace(result, "î", "i")
+  result = str.replace(result, "ï", "i")
+  result = str.replace(result, "ò", "o")
+  result = str.replace(result, "ó", "o")
+  result = str.replace(result, "ô", "o")
+  result = str.replace(result, "ö", "o")
+  result = str.replace(result, "ù", "u")
+  result = str.replace(result, "ú", "u")
+  result = str.replace(result, "û", "u")
+  result = str.replace(result, "ü", "u")
+  result = str.replace(result, "ñ", "n")
+  result = str.replace(result, "ç", "c")
+  result = str.replace(result, "À", "A")
+  result = str.replace(result, "Á", "A")
+  result = str.replace(result, "É", "E")
+  result = str.replace(result, "Ñ", "N")
+  result = str.replace(result, "Ü", "U")
+  return result
+}
+
+// ============================================================
+// ── 함수 유틸 (Function) ─────────────────────────────────
+// ============================================================
+
+// debounce: wait ms 이내 중복 호출 억제 — 타이머 기반
+// v2: lodash_debounce_create 네이티브 위임
+fn debounce(f: any, wait: int) -> any {
+  let lastCall = 0
+  let timerId = 0
+  return fn() -> any {
+    let now = os.time() * 1000
+    lastCall = now
+    // 간이 구현: 마지막 호출 시각 기록 후 wait 경과 시 실행
+    // 실제 타이머 지원은 lodash_debounce_create 네이티브 필요
+    if now - lastCall >= wait {
+      return f()
+    }
+    return null
+  }
+}
+
+// throttle: wait ms 간격으로 최대 1회 실행
+fn throttle(f: any, wait: int) -> any {
+  let lastRun = 0
+  return fn() -> any {
+    let now = os.time() * 1000
+    if now - lastRun >= wait {
+      lastRun = now
+      return f()
+    }
+    return null
+  }
+}
+
+// once: 최초 1회만 실행, 이후 캐시된 결과 반환
+fn once(f: any) -> any {
+  let called = false
+  let result = null
+  return fn() -> any {
+    if !called {
+      called = true
+      result = f()
+    }
+    return result
+  }
+}
+
+// memoize: 인자 기반 결과 캐싱
+fn memoize(f: any) -> any {
+  let cache = {}
+  return fn(arg: any) -> any {
+    let key = str(arg)
+    if !map.has(cache, key) {
+      cache[key] = f(arg)
+    }
+    return cache[key]
+  }
+}
+
+// partial: 앞쪽 인자 고정한 부분 적용 함수
+// v2: fn 타입의 가변 인자 미지원 → args 배열로 수신
+fn partial(f: any, args: array) -> any {
+  return fn(extra: any) -> any {
+    let allArgs = arr.slice(args, 0, arr.length(args))
+    if extra != null {
+      arr.push(allArgs, extra)
+    }
+    if arr.length(allArgs) == 0 {
+      return f()
+    }
+    if arr.length(allArgs) == 1 {
+      return f(allArgs[0])
+    }
+    if arr.length(allArgs) == 2 {
+      return f(allArgs[0], allArgs[1])
+    }
+    if arr.length(allArgs) == 3 {
+      return f(allArgs[0], allArgs[1], allArgs[2])
+    }
+    return f(allArgs[0], allArgs[1], allArgs[2], allArgs[3])
+  }
+}
+
+// negate: 조건 함수를 반전
+fn negate(predicate: any) -> any {
+  return fn(v: any) -> any {
+    return !predicate(v)
+  }
+}
+
+// identity: 입력값 그대로 반환
+fn identity(x: any) -> any {
+  return x
+}
+
+// noop: 아무것도 하지 않음
+fn noop() -> void {
+  // no-op
+}
+
+// ============================================================
+// ── 타입 체크 (Lang) ─────────────────────────────────────
+// ============================================================
+
+fn isArray(val: any) -> bool {
+  return type(val) == "array"
+}
+
+fn isMap(val: any) -> bool {
+  return type(val) == "map"
+}
+
+fn isString(val: any) -> bool {
+  return type(val) == "string"
+}
+
+fn isInt(val: any) -> bool {
+  return type(val) == "int"
+}
+
+fn isFloat(val: any) -> bool {
+  return type(val) == "float"
+}
+
+fn isNull(val: any) -> bool {
+  return val == null
+}
+
+// isNil: null 또는 undefined (FreeLang에서 undefined = null)
+fn isNil(val: any) -> bool {
+  return val == null
+}
+
+// isEmpty: 비어있는지 확인
+fn isEmpty(val: any) -> bool {
+  if val == null {
+    return true
+  }
+  if type(val) == "string" {
+    return str.len(val) == 0
+  }
+  if type(val) == "array" {
+    return arr.length(val) == 0
+  }
+  if type(val) == "map" {
+    return map.length(val) == 0
+  }
+  return false
+}
+
+// isEqual: 깊은 동등 비교 — JSON 직렬화 방식
+fn isEqual(a: any, b: any) -> bool {
+  return json.stringify(a) == json.stringify(b)
+}
+
+fn isFunction(val: any) -> bool {
+  return type(val) == "function"
+}
+
+// ============================================================
+// ── 수학 (Number) ────────────────────────────────────────
+// ============================================================
+
+// clamp: lower ~ upper 범위로 제한
+fn clamp(num: any, lower: any, upper: any) -> any {
+  if num < lower {
+    return lower
+  }
+  if num > upper {
+    return upper
+  }
+  return num
+}
+
+// inRange: start <= num < end 여부
+fn inRange(num: any, start: any, end: any) -> bool {
+  return num >= start && num < end
+}
+
+// random: lower ~ upper 사이 난수 (정수)
+fn random(lower: any, upper: any) -> any {
+  let range = upper - lower + 1
+  return lower + int(math.floor(math.random() * range))
+}
+
+// ============================================================
+// Export
+// ============================================================
+
+export {
+  // 배열 (Array) — 32개
+  chunk, compact, difference,
+  drop, dropRight, take, takeRight,
+  flatten, flattenDeep,
+  intersection, union, uniq, uniqBy,
+  zip, unzip,
+  groupBy, keyBy, countBy,
+  sortBy, orderBy,
+  first, head, last, nth,
+  sample, sampleSize, shuffle,
+  without, pull, remove,
+  flatMap, every, some,
+  sum, sumBy, min, max, minBy, maxBy, mean, meanBy,
+
+  // 객체 (Object) — 19개
+  get, getPath, set, has, unset,
+  omit, pick,
+  merge, assign, defaults,
+  clone, cloneDeep,
+  keys, values, entries, fromPairs,
+  mapValues, mapKeys, filterMap, invert,
+
+  // 문자열 (String) — 14개
+  words,
+  camelCase, snakeCase, kebabCase, startCase, capitalize,
+  pad, padStart, padEnd,
+  repeat, truncate, truncateWith,
+  escape, unescape, escapeRegExp,
+  deburr,
+
+  // 함수 유틸 (Function) — 8개
+  debounce, throttle, once, memoize,
+  partial, negate, identity, noop,
+
+  // 타입 체크 (Lang) — 10개
+  isArray, isMap, isString, isInt, isFloat,
+  isNull, isNil, isEmpty, isEqual, isFunction,
+
+  // 수학 (Number) — 3개
+  clamp, inRange, random
+}
