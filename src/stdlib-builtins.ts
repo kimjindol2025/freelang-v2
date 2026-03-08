@@ -37,9 +37,11 @@ import { registerEnvShieldFunctions } from './stdlib/native-env-shield';
 import { registerSecureHasherFunctions } from './stdlib/native-secure-hasher';
 import { registerProxyTunnelFunctions, handleProxyResponse, proxyRouteTable } from './stdlib/proxy-tunnel';
 import { registerDotenvFunctions } from './stdlib/dotenv';
+import { registerNodemonFunctions } from './stdlib-nodemon';
 import { registerNodemailerFunctions } from './stdlib-nodemailer';
 import { registerAxiosFunctions } from './stdlib-axios';
 import { registerMulterFunctions } from './stdlib-multer';
+import { registerI18nextFunctions } from './stdlib-i18next';
 import * as fs from 'fs';
 
 /**
@@ -4149,6 +4151,10 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
   // nodemailer_verify/nodemailer_close/nodemailer_basename/nodemailer_extname/nodemailer_mime_type
   registerNodemailerFunctions(registry);
 
+  // multer.fl: npm multer 완전 대체 (#8)
+  // multer_ensure_dir/get_boundary/parse_multipart/save_file/generate_filename/get_mimetype
+  registerMulterFunctions(registry);
+
   // Silent registration (no console output)
 }
 
@@ -5407,4 +5413,9 @@ function registerCowEngineFunctions(registry: NativeFunctionRegistry): void {
   // Axios HTTP Client Functions
   // ────────────────────────────────────────────────────────────
   registerAxiosFunctions(registry);
+
+  // ────────────────────────────────────────────────────────────
+  // i18next Internationalization Functions
+  // ────────────────────────────────────────────────────────────
+  registerI18nextFunctions(registry);
 }

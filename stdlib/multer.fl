@@ -1,0 +1,920 @@
+/**
+ * FreeLang stdlib — multer
+ *
+ * npm multer 완전 대체 구현
+ * multipart/form-data 파싱 및 파일 업로드 처리
+ *
+ * 사용 예시:
+ *   import "stdlib/multer"
+ *
+ *   // 단일 파일 업로드 (기본 dest 디렉터리)
+ *   let upload = multer("./uploads")
+ *   app.post("/upload", upload.single("file"), fn(req, res) { ... })
+ *
+ *   // 여러 파일 업로드
+ *   app.post("/photos", upload.array("photos", 5), fn(req, res) {
+ *     let files = req.files
+ *     // files → UploadedFile 배열
+ *   })
+ *
+ *   // 필드별 파일 업로드
+ *   app.post("/profile", upload.fields([
+ *     { name: "avatar", maxCount: 1 },
+ *     { name: "gallery", maxCount: 5 }
+ *   ]), fn(req, res) { ... })
+ *
+ *   // 상세 설정
+ *   let upload2 = multerConfig(MulterConfig {
+ *     dest: "./uploads",
+ *     storage: "disk",
+ *     limits: MulterLimits {
+ *       fileSize: 5242880,   // 5MB
+ *       files: 3,
+ *       fields: 10,
+ *       fieldSize: 1048576,
+ *       fieldNameSize: 100
+ *     },
+ *     fileFilter: null
+ *   })
+ *
+ *   // 메모리 스토리지 (버퍼로 보관)
+ *   let memUpload = multerConfig(MulterConfig {
+ *     dest: "",
+ *     storage: "memory",
+ *     limits: _defaultLimits(),
+ *     fileFilter: null
+ *   })
+ *
+ *   // 파일 타입 필터 예시
+ *   let imgUpload = multerConfig(MulterConfig {
+ *     dest: "./images",
+ *     storage: "disk",
+ *     limits: _defaultLimits(),
+ *     fileFilter: fn(file: UploadedFile) -> bool {
+ *       return isImage(file)
+ *     }
+ *   })
+ *
+ * 네이티브 함수 (src/stdlib-multer.ts):
+ *   multer_ensure_dir(path)                       → void
+ *   multer_get_boundary(contentType)              → string
+ *   multer_parse_multipart(body, boundary)        → array
+ *   multer_save_file(data, dest, filename)        → string
+ *   multer_generate_filename(originalname)        → string
+ *   multer_get_mimetype(filename)                 → string
+ */
+
+import { Request, Response, Middleware, setStatus, setHeader, respondJson, getHeader } from "./express-compat"
+
+// ============================================
+// 기본 상수
+// ============================================
+
+// 기본 파일 크기 제한: 8MB
+let MULTER_DEFAULT_FILE_SIZE  = 8388608
+// 기본 최대 파일 수
+let MULTER_DEFAULT_MAX_FILES  = 10
+// 기본 최대 필드 수
+let MULTER_DEFAULT_MAX_FIELDS = 20
+// 기본 필드값 크기 제한: 1MB
+let MULTER_DEFAULT_FIELD_SIZE = 1048576
+// 기본 필드명 크기 제한: 100 bytes
+let MULTER_DEFAULT_FIELD_NAME_SIZE = 100
+
+// ============================================
+// 구조체 정의
+// ============================================
+
+/*
+ * MulterLimits: 파일/필드 업로드 크기 및 수량 제한 설정
+ *
+ * fileSize     - 단일 파일 최대 바이트 수 (기본 8MB)
+ * files        - 한 번에 업로드 가능한 최대 파일 수 (기본 10)
+ * fields       - 한 번에 처리 가능한 최대 비파일 필드 수 (기본 20)
+ * fieldSize    - 필드값 최대 바이트 수 (기본 1MB)
+ * fieldNameSize - 필드명 최대 바이트 수 (기본 100)
+ */
+struct MulterLimits {
+  fileSize: int,
+  files: int,
+  fields: int,
+  fieldSize: int,
+  fieldNameSize: int
+}
+
+/*
+ * MulterConfig: multer 인스턴스 생성에 사용되는 전체 설정
+ *
+ * dest       - 파일이 저장될 디렉터리 경로
+ * storage    - 저장 방식: "disk" | "memory"
+ * limits     - 크기/수량 제한 설정 (MulterLimits)
+ * fileFilter - 파일 허용 여부 결정 함수 fn(UploadedFile)->bool | null
+ */
+struct MulterConfig {
+  dest: string,
+  storage: string,
+  limits: MulterLimits,
+  fileFilter: any
+}
+
+/*
+ * UploadedFile: 업로드된 파일 한 개에 대한 메타데이터
+ *
+ * fieldname    - HTML 폼의 필드명
+ * originalname - 클라이언트가 전송한 원본 파일명
+ * encoding     - 파일 인코딩 (보통 "7bit")
+ * mimetype     - 파일의 MIME 타입 (예: "image/jpeg")
+ * size         - 파일 바이트 크기
+ * destination  - 저장 디렉터리 경로 (disk 스토리지)
+ * filename     - 서버에 저장된 UUID 기반 파일명
+ * path         - 저장된 파일의 전체 경로
+ * buffer       - 파일 데이터 (memory 스토리지)
+ */
+struct UploadedFile {
+  fieldname: string,
+  originalname: string,
+  encoding: string,
+  mimetype: string,
+  size: int,
+  destination: string,
+  filename: string,
+  path: string,
+  buffer: any
+}
+
+/*
+ * MulterResult: 미들웨어 처리 결과 컨테이너
+ *
+ * file   - 단일 파일 (single() 사용 시), 없으면 null
+ * files  - 다수 파일 배열 (array()/fields() 사용 시)
+ * fields - 필드 맵 (fields() 사용 시)
+ */
+struct MulterResult {
+  file: any,
+  files: array,
+  fields: any
+}
+
+/*
+ * MulterInstance: multer() 팩토리가 반환하는 인스턴스
+ * .single(), .array(), .fields(), .none() 메서드를 노출함
+ */
+struct MulterInstance {
+  config: MulterConfig,
+  single: any,
+  array: any,
+  fields: any,
+  none: any
+}
+
+// ============================================
+// 기본 설정 헬퍼
+// ============================================
+
+/*
+ * _defaultLimits: 기본 제한 설정 반환
+ * 모든 제한값을 표준값으로 초기화함
+ */
+fn _defaultLimits() -> MulterLimits {
+  return MulterLimits {
+    fileSize: MULTER_DEFAULT_FILE_SIZE,
+    files: MULTER_DEFAULT_MAX_FILES,
+    fields: MULTER_DEFAULT_MAX_FIELDS,
+    fieldSize: MULTER_DEFAULT_FIELD_SIZE,
+    fieldNameSize: MULTER_DEFAULT_FIELD_NAME_SIZE
+  }
+}
+
+/*
+ * _defaultConfig: 지정된 dest 경로로 기본 MulterConfig 반환
+ * storage는 "disk", limits는 기본값, fileFilter는 null
+ */
+fn _defaultConfig(dest: string) -> MulterConfig {
+  return MulterConfig {
+    dest: dest,
+    storage: "disk",
+    limits: _defaultLimits(),
+    fileFilter: null
+  }
+}
+
+// ============================================
+// 유틸리티 함수
+// ============================================
+
+/*
+ * generateFilename: 업로드 파일에 UUID 기반 고유 파일명 생성
+ * 원본 확장자를 보존하며 충돌을 방지함
+ * 예: "photo.jpg" → "550e8400-e29b-41d4-a716-446655440000.jpg"
+ */
+fn generateFilename(originalname: string) -> string {
+  return native_call("multer_generate_filename", [originalname])
+}
+
+/*
+ * getExtension: 파일명에서 확장자 추출
+ * "." 기준으로 분리 후 마지막 요소 반환
+ * 확장자 없으면 빈 문자열 반환
+ * 예: "image.tar.gz" → "gz"
+ */
+fn getExtension(filename: string) -> string {
+  if !str.contains(filename, ".") {
+    return ""
+  }
+  let parts = str.split(filename, ".")
+  let len = arr.length(parts)
+  if len == 0 {
+    return ""
+  }
+  return parts[len - 1]
+}
+
+/*
+ * getMimeType: 파일명 기반으로 MIME 타입 반환
+ * 확장자를 이용해 적절한 MIME 타입을 결정함
+ * 알 수 없는 확장자는 "application/octet-stream" 반환
+ */
+fn getMimeType(filename: string) -> string {
+  return native_call("multer_get_mimetype", [filename])
+}
+
+/*
+ * isImage: 파일이 이미지인지 확인
+ * mimetype이 "image/"로 시작하는지 검사
+ * 예: "image/jpeg", "image/png", "image/gif" → true
+ */
+fn isImage(file: UploadedFile) -> bool {
+  return str.contains(file.mimetype, "image/")
+}
+
+/*
+ * isAllowedType: 파일의 MIME 타입이 허용 목록에 있는지 확인
+ * types 배열에 file.mimetype이 포함되어 있으면 true 반환
+ * 예: isAllowedType(file, ["image/jpeg", "image/png"])
+ */
+fn isAllowedType(file: UploadedFile, types: array) -> bool {
+  let i = 0
+  while i < arr.length(types) {
+    if types[i] == file.mimetype {
+      return true
+    }
+    i = i + 1
+  }
+  return false
+}
+
+// ============================================
+// 내부 헬퍼: 파트에서 UploadedFile 생성
+// ============================================
+
+/*
+ * _buildUploadedFile: multipart 파트 데이터를 UploadedFile 구조체로 변환
+ * disk 스토리지는 파일을 저장하고 path를 채움
+ * memory 스토리지는 buffer에 데이터를 보관함
+ */
+fn _buildUploadedFile(part: any, config: MulterConfig, savedFilename: string, savedPath: string) -> UploadedFile {
+  return UploadedFile {
+    fieldname: part.fieldname,
+    originalname: part.filename,
+    encoding: part.encoding,
+    mimetype: part.mimetype,
+    size: str.length(part.data),
+    destination: config.dest,
+    filename: savedFilename,
+    path: savedPath,
+    buffer: part.data
+  }
+}
+
+/*
+ * _checkFileSizeLimit: 파일 크기가 제한을 초과하는지 확인
+ * 초과 시 true 반환 (에러 상태)
+ */
+fn _checkFileSizeLimit(dataSize: int, limit: int) -> bool {
+  if dataSize > limit {
+    return true
+  }
+  return false
+}
+
+/*
+ * _applyFileFilter: fileFilter 함수가 설정된 경우 파일 허용 여부 판단
+ * fileFilter가 null이면 항상 true (모든 파일 허용)
+ */
+fn _applyFileFilter(file: UploadedFile, fileFilter: any) -> bool {
+  if fileFilter == null {
+    return true
+  }
+  return fileFilter(file)
+}
+
+/*
+ * _processFilePart: 단일 파트를 UploadedFile로 처리
+ * 1. 크기 제한 확인
+ * 2. 임시 UploadedFile 생성 (fileFilter용)
+ * 3. fileFilter 적용
+ * 4. 스토리지 유형에 따라 저장
+ * 반환값: UploadedFile | null (필터 거절 시 null)
+ */
+fn _processFilePart(part: any, config: MulterConfig) -> any {
+  // 파일 크기 제한 확인
+  let dataSize = str.length(part.data)
+  if _checkFileSizeLimit(dataSize, config.limits.fileSize) {
+    return null
+  }
+
+  // 파일명 생성 및 임시 파일 객체 구성
+  let newFilename = generateFilename(part.filename)
+  let mime = part.mimetype
+  if mime == "" || mime == "text/plain" {
+    mime = getMimeType(part.filename)
+  }
+
+  let tempFile = UploadedFile {
+    fieldname: part.fieldname,
+    originalname: part.filename,
+    encoding: part.encoding,
+    mimetype: mime,
+    size: dataSize,
+    destination: config.dest,
+    filename: newFilename,
+    path: config.dest + "/" + newFilename,
+    buffer: null
+  }
+
+  // fileFilter 적용 (거절 시 null 반환)
+  if !_applyFileFilter(tempFile, config.fileFilter) {
+    return null
+  }
+
+  // 저장 방식에 따라 처리
+  if config.storage == "memory" {
+    // 메모리 스토리지: 버퍼에 데이터 보관
+    tempFile.buffer = part.data
+    tempFile.path = ""
+    tempFile.destination = ""
+    tempFile.filename = newFilename
+    return tempFile
+  }
+
+  // 디스크 스토리지: 디렉터리 확인 후 파일 저장
+  native_call("multer_ensure_dir", [config.dest])
+  let savedPath = native_call("multer_save_file", [part.data, config.dest, newFilename])
+  tempFile.path = savedPath
+  return tempFile
+}
+
+// ============================================
+// 핵심 미들웨어 생성 함수
+// ============================================
+
+/*
+ * _makeSingleMiddleware: 단일 파일 업로드 미들웨어 생성
+ * fieldname에 해당하는 파트만 처리
+ * 성공 시 req.file에 UploadedFile 주입
+ * Content-Type이 multipart가 아니면 그냥 통과
+ */
+fn _makeSingleMiddleware(fieldname: string, config: MulterConfig) -> Middleware {
+  return fn(req: Request, res: Response) -> bool {
+    let contentType = getHeader(req, "Content-Type")
+
+    // multipart/form-data가 아니면 통과
+    if !str.contains(contentType, "multipart/form-data") {
+      return true
+    }
+
+    // boundary 추출
+    let boundary = native_call("multer_get_boundary", [contentType])
+    if boundary == null || boundary == "" {
+      setStatus(res, 400)
+      respondJson(res, { error: "multer: boundary를 찾을 수 없습니다" })
+      return false
+    }
+
+    // multipart 파싱
+    let parts = native_call("multer_parse_multipart", [req.body, boundary])
+    if parts == null {
+      setStatus(res, 400)
+      respondJson(res, { error: "multer: multipart 파싱 실패" })
+      return false
+    }
+
+    // 지정된 fieldname의 파일 파트 탐색
+    let i = 0
+    let found = false
+    while i < arr.length(parts) {
+      let part = parts[i]
+      // 대상 필드이고 실제 파일인 경우
+      if part.fieldname == fieldname && part.isFile {
+        // 파일 크기 제한 초과 확인
+        if _checkFileSizeLimit(str.length(part.data), config.limits.fileSize) {
+          setStatus(res, 413)
+          respondJson(res, { error: "multer: 파일 크기 제한 초과 (최대 " + str(config.limits.fileSize) + " bytes)" })
+          return false
+        }
+
+        let uploadedFile = _processFilePart(part, config)
+        if uploadedFile != null {
+          req.file = uploadedFile
+          found = true
+        }
+      }
+      i = i + 1
+    }
+
+    // 파일이 없어도 오류 아님 (필드가 없을 수 있음)
+    if !found {
+      req.file = null
+    }
+
+    return true
+  }
+}
+
+/*
+ * _makeArrayMiddleware: 복수 파일 업로드 미들웨어 생성
+ * fieldname에 해당하는 모든 파트를 처리 (최대 maxCount개)
+ * 성공 시 req.files에 UploadedFile 배열 주입
+ * maxCount 초과 시 413 응답
+ */
+fn _makeArrayMiddleware(fieldname: string, maxCount: int, config: MulterConfig) -> Middleware {
+  return fn(req: Request, res: Response) -> bool {
+    let contentType = getHeader(req, "Content-Type")
+
+    // multipart/form-data가 아니면 통과
+    if !str.contains(contentType, "multipart/form-data") {
+      req.files = []
+      return true
+    }
+
+    // boundary 추출
+    let boundary = native_call("multer_get_boundary", [contentType])
+    if boundary == null || boundary == "" {
+      setStatus(res, 400)
+      respondJson(res, { error: "multer: boundary를 찾을 수 없습니다" })
+      return false
+    }
+
+    // multipart 파싱
+    let parts = native_call("multer_parse_multipart", [req.body, boundary])
+    if parts == null {
+      setStatus(res, 400)
+      respondJson(res, { error: "multer: multipart 파싱 실패" })
+      return false
+    }
+
+    // 전체 파일 수 사전 확인 (limits.files)
+    let totalFileCount = 0
+    let i = 0
+    while i < arr.length(parts) {
+      if parts[i].isFile {
+        totalFileCount = totalFileCount + 1
+      }
+      i = i + 1
+    }
+
+    if totalFileCount > config.limits.files {
+      setStatus(res, 413)
+      respondJson(res, { error: "multer: 파일 수 제한 초과 (최대 " + str(config.limits.files) + "개)" })
+      return false
+    }
+
+    // 대상 필드 파일만 처리
+    let uploadedFiles = []
+    let fileCount = 0
+    let j = 0
+    while j < arr.length(parts) {
+      let part = parts[j]
+      if part.fieldname == fieldname && part.isFile {
+        // maxCount 초과 확인
+        if fileCount >= maxCount {
+          setStatus(res, 413)
+          respondJson(res, { error: "multer: 필드 '" + fieldname + "' 파일 수 초과 (최대 " + str(maxCount) + "개)" })
+          return false
+        }
+
+        // 파일 크기 제한 확인
+        if _checkFileSizeLimit(str.length(part.data), config.limits.fileSize) {
+          setStatus(res, 413)
+          respondJson(res, { error: "multer: 파일 크기 제한 초과 (최대 " + str(config.limits.fileSize) + " bytes)" })
+          return false
+        }
+
+        let uploadedFile = _processFilePart(part, config)
+        if uploadedFile != null {
+          uploadedFiles = arr.push(uploadedFiles, uploadedFile)
+          fileCount = fileCount + 1
+        }
+      }
+      j = j + 1
+    }
+
+    req.files = uploadedFiles
+    return true
+  }
+}
+
+/*
+ * _makeFieldsMiddleware: 필드별 파일 업로드 미들웨어 생성
+ * fields 배열에 정의된 각 필드명과 maxCount에 따라 처리
+ * 성공 시 req.files에 { fieldname: UploadedFile[] } 맵 주입
+ *
+ * fields 배열 형식:
+ *   [{ name: "avatar", maxCount: 1 }, { name: "gallery", maxCount: 5 }]
+ */
+fn _makeFieldsMiddleware(fields: array, config: MulterConfig) -> Middleware {
+  return fn(req: Request, res: Response) -> bool {
+    let contentType = getHeader(req, "Content-Type")
+
+    // multipart/form-data가 아니면 통과
+    if !str.contains(contentType, "multipart/form-data") {
+      req.files = {}
+      return true
+    }
+
+    // boundary 추출
+    let boundary = native_call("multer_get_boundary", [contentType])
+    if boundary == null || boundary == "" {
+      setStatus(res, 400)
+      respondJson(res, { error: "multer: boundary를 찾을 수 없습니다" })
+      return false
+    }
+
+    // multipart 파싱
+    let parts = native_call("multer_parse_multipart", [req.body, boundary])
+    if parts == null {
+      setStatus(res, 400)
+      respondJson(res, { error: "multer: multipart 파싱 실패" })
+      return false
+    }
+
+    // 전체 파일 수 확인
+    let totalFileCount = 0
+    let ci = 0
+    while ci < arr.length(parts) {
+      if parts[ci].isFile {
+        totalFileCount = totalFileCount + 1
+      }
+      ci = ci + 1
+    }
+
+    if totalFileCount > config.limits.files {
+      setStatus(res, 413)
+      respondJson(res, { error: "multer: 총 파일 수 제한 초과 (최대 " + str(config.limits.files) + "개)" })
+      return false
+    }
+
+    // 필드별 카운터 맵 및 결과 맵 초기화
+    let resultMap = {}
+    let countMap = {}
+
+    // 각 허용 필드를 빈 배열로 초기화
+    let fi = 0
+    while fi < arr.length(fields) {
+      let fieldDef = fields[fi]
+      resultMap[fieldDef.name] = []
+      countMap[fieldDef.name] = 0
+      fi = fi + 1
+    }
+
+    // 파트 순회하며 처리
+    let pi = 0
+    while pi < arr.length(parts) {
+      let part = parts[pi]
+      if part.isFile {
+        // 해당 파트가 허용된 필드인지 확인
+        let allowedField = null
+        let ai = 0
+        while ai < arr.length(fields) {
+          if fields[ai].name == part.fieldname {
+            allowedField = fields[ai]
+          }
+          ai = ai + 1
+        }
+
+        if allowedField != null {
+          let currentCount = countMap[allowedField.name]
+          // maxCount 초과 시 413
+          if currentCount >= allowedField.maxCount {
+            setStatus(res, 413)
+            respondJson(res, { error: "multer: 필드 '" + allowedField.name + "' 파일 수 초과 (최대 " + str(allowedField.maxCount) + "개)" })
+            return false
+          }
+
+          // 파일 크기 제한 확인
+          if _checkFileSizeLimit(str.length(part.data), config.limits.fileSize) {
+            setStatus(res, 413)
+            respondJson(res, { error: "multer: 파일 크기 제한 초과 (최대 " + str(config.limits.fileSize) + " bytes)" })
+            return false
+          }
+
+          let uploadedFile = _processFilePart(part, config)
+          if uploadedFile != null {
+            let fieldFiles = resultMap[allowedField.name]
+            fieldFiles = arr.push(fieldFiles, uploadedFile)
+            resultMap[allowedField.name] = fieldFiles
+            countMap[allowedField.name] = currentCount + 1
+          }
+        }
+      }
+      pi = pi + 1
+    }
+
+    req.files = resultMap
+    return true
+  }
+}
+
+/*
+ * _makeNoneMiddleware: 파일 업로드 없이 텍스트 필드만 처리하는 미들웨어
+ * 파일이 포함된 요청에는 400 응답
+ * 텍스트 필드만 있는 multipart 요청을 처리함
+ */
+fn _makeNoneMiddleware(config: MulterConfig) -> Middleware {
+  return fn(req: Request, res: Response) -> bool {
+    let contentType = getHeader(req, "Content-Type")
+
+    if !str.contains(contentType, "multipart/form-data") {
+      return true
+    }
+
+    // boundary 추출
+    let boundary = native_call("multer_get_boundary", [contentType])
+    if boundary == null || boundary == "" {
+      setStatus(res, 400)
+      respondJson(res, { error: "multer: boundary를 찾을 수 없습니다" })
+      return false
+    }
+
+    // 파싱 후 파일 파트가 있으면 에러
+    let parts = native_call("multer_parse_multipart", [req.body, boundary])
+    if parts == null {
+      setStatus(res, 400)
+      respondJson(res, { error: "multer: multipart 파싱 실패" })
+      return false
+    }
+
+    let i = 0
+    while i < arr.length(parts) {
+      if parts[i].isFile {
+        setStatus(res, 400)
+        respondJson(res, { error: "multer: 파일 업로드가 허용되지 않습니다 (none 모드)" })
+        return false
+      }
+      i = i + 1
+    }
+
+    return true
+  }
+}
+
+// ============================================
+// 팩토리 함수: multer 인스턴스 생성
+// ============================================
+
+/*
+ * multerConfig: 완전한 MulterConfig를 받아 MulterInstance 반환
+ * 설정에서 누락된 값이 있으면 기본값으로 채움
+ * single/array/fields/none 메서드를 클로저로 구성함
+ */
+fn multerConfig(config: MulterConfig) -> MulterInstance {
+  // limits 필드 누락 시 기본값 채우기
+  if config.limits == null {
+    config.limits = _defaultLimits()
+  }
+  if config.limits.fileSize == 0 {
+    config.limits.fileSize = MULTER_DEFAULT_FILE_SIZE
+  }
+  if config.limits.files == 0 {
+    config.limits.files = MULTER_DEFAULT_MAX_FILES
+  }
+  if config.limits.fields == 0 {
+    config.limits.fields = MULTER_DEFAULT_MAX_FIELDS
+  }
+  if config.limits.fieldSize == 0 {
+    config.limits.fieldSize = MULTER_DEFAULT_FIELD_SIZE
+  }
+  if config.limits.fieldNameSize == 0 {
+    config.limits.fieldNameSize = MULTER_DEFAULT_FIELD_NAME_SIZE
+  }
+
+  // storage 기본값
+  if config.storage == null || config.storage == "" {
+    config.storage = "disk"
+  }
+
+  return MulterInstance {
+    config: config,
+
+    // single(fieldname): 단일 파일 업로드 미들웨어
+    single: fn(fieldname: string) -> Middleware {
+      return _makeSingleMiddleware(fieldname, config)
+    },
+
+    // array(fieldname, maxCount): 복수 파일 업로드 미들웨어
+    array: fn(fieldname: string, maxCount: int) -> Middleware {
+      return _makeArrayMiddleware(fieldname, maxCount, config)
+    },
+
+    // fields(fieldDefs): 필드별 파일 업로드 미들웨어
+    fields: fn(fieldDefs: array) -> Middleware {
+      return _makeFieldsMiddleware(fieldDefs, config)
+    },
+
+    // none(): 파일 없이 텍스트 필드만 처리하는 미들웨어
+    none: fn() -> Middleware {
+      return _makeNoneMiddleware(config)
+    }
+  }
+}
+
+/*
+ * multer: 간편 팩토리 — 저장 경로만 지정
+ * 나머지 설정은 모두 기본값 사용
+ * 예: let upload = multer("./uploads")
+ */
+fn multer(dest: string) -> MulterInstance {
+  let config = _defaultConfig(dest)
+  return multerConfig(config)
+}
+
+// ============================================
+// 편의 팩토리 프리셋
+// ============================================
+
+/*
+ * multerMemory: 메모리 스토리지 전용 인스턴스 생성
+ * 파일을 디스크에 저장하지 않고 메모리 버퍼에 보관
+ * 소규모 파일 처리나 즉시 가공이 필요할 때 유용
+ */
+fn multerMemory() -> MulterInstance {
+  let config = MulterConfig {
+    dest: "",
+    storage: "memory",
+    limits: _defaultLimits(),
+    fileFilter: null
+  }
+  return multerConfig(config)
+}
+
+/*
+ * multerImage: 이미지 전용 업로드 인스턴스 생성
+ * isImage 필터를 자동으로 적용해 이미지가 아닌 파일은 거절
+ * 기본 저장 경로: ./uploads/images
+ */
+fn multerImage(dest: string) -> MulterInstance {
+  let config = MulterConfig {
+    dest: dest,
+    storage: "disk",
+    limits: MulterLimits {
+      fileSize: 5242880,   // 5MB (이미지에 적합)
+      files: MULTER_DEFAULT_MAX_FILES,
+      fields: MULTER_DEFAULT_MAX_FIELDS,
+      fieldSize: MULTER_DEFAULT_FIELD_SIZE,
+      fieldNameSize: MULTER_DEFAULT_FIELD_NAME_SIZE
+    },
+    fileFilter: fn(file: UploadedFile) -> bool {
+      return isImage(file)
+    }
+  }
+  return multerConfig(config)
+}
+
+/*
+ * multerWithFilter: 허용 MIME 타입 목록을 지정해 인스턴스 생성
+ * allowedTypes 배열에 없는 타입의 파일은 업로드 거절
+ * 예: multerWithFilter("./uploads", ["application/pdf", "image/jpeg"])
+ */
+fn multerWithFilter(dest: string, allowedTypes: array) -> MulterInstance {
+  let config = MulterConfig {
+    dest: dest,
+    storage: "disk",
+    limits: _defaultLimits(),
+    fileFilter: fn(file: UploadedFile) -> bool {
+      return isAllowedType(file, allowedTypes)
+    }
+  }
+  return multerConfig(config)
+}
+
+/*
+ * multerStrict: 엄격한 제한이 적용된 인스턴스 생성
+ * 소규모 공개 서비스에 적합한 보수적인 제한값
+ * maxFileSizeMB: MB 단위 최대 파일 크기
+ * maxFiles: 최대 파일 수
+ */
+fn multerStrict(dest: string, maxFileSizeMB: int, maxFiles: int) -> MulterInstance {
+  let config = MulterConfig {
+    dest: dest,
+    storage: "disk",
+    limits: MulterLimits {
+      fileSize: maxFileSizeMB * 1048576,
+      files: maxFiles,
+      fields: 10,
+      fieldSize: 524288,    // 512KB
+      fieldNameSize: 50
+    },
+    fileFilter: null
+  }
+  return multerConfig(config)
+}
+
+// ============================================
+// 응답 헬퍼 (업로드 성공/실패 표준 응답)
+// ============================================
+
+/*
+ * respondUploadSuccess: 업로드 성공 표준 JSON 응답
+ * 파일 메타데이터를 클라이언트에게 반환
+ */
+fn respondUploadSuccess(res: Response, file: UploadedFile) -> void {
+  respondJson(res, {
+    success: true,
+    file: {
+      fieldname: file.fieldname,
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
+      filename: file.filename,
+      path: file.path
+    }
+  })
+}
+
+/*
+ * respondUploadError: 업로드 실패 표준 JSON 응답
+ * HTTP 상태코드와 에러 메시지를 반환
+ */
+fn respondUploadError(res: Response, statusCode: int, message: string) -> void {
+  setStatus(res, statusCode)
+  respondJson(res, {
+    success: false,
+    error: message
+  })
+}
+
+/*
+ * respondMultiUploadSuccess: 복수 파일 업로드 성공 응답
+ * 업로드된 파일 목록과 총 수를 반환
+ */
+fn respondMultiUploadSuccess(res: Response, files: array) -> void {
+  let fileInfos = []
+  let i = 0
+  while i < arr.length(files) {
+    let f = files[i]
+    fileInfos = arr.push(fileInfos, {
+      fieldname: f.fieldname,
+      originalname: f.originalname,
+      mimetype: f.mimetype,
+      size: f.size,
+      filename: f.filename,
+      path: f.path
+    })
+    i = i + 1
+  }
+
+  respondJson(res, {
+    success: true,
+    count: arr.length(files),
+    files: fileInfos
+  })
+}
+
+// ============================================
+// Export
+// ============================================
+
+export {
+  // 구조체
+  MulterLimits,
+  MulterConfig,
+  UploadedFile,
+  MulterResult,
+  MulterInstance,
+
+  // 기본 설정 헬퍼
+  _defaultLimits,
+  _defaultConfig,
+
+  // 핵심 팩토리
+  multer,
+  multerConfig,
+
+  // 편의 프리셋
+  multerMemory,
+  multerImage,
+  multerWithFilter,
+  multerStrict,
+
+  // 유틸리티
+  generateFilename,
+  getExtension,
+  getMimeType,
+  isImage,
+  isAllowedType,
+
+  // 응답 헬퍼
+  respondUploadSuccess,
+  respondUploadError,
+  respondMultiUploadSuccess
+}
