@@ -1,0 +1,31 @@
+{
+  "name": "@freelang/auth",
+  "version": "1.0.0",
+  "description": "FreeLang Native Authentication - JWT/HMAC token engine (zero npm dependencies)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "keywords": ["freelang", "auth", "jwt", "hmac", "authentication", "token"],
+  "author": "Claude AI",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/freelang-io/freelang-auth.git"
+  },
+  "homepage": "https://github.com/freelang-io/freelang-auth",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "echo 'Run tests with: npx ts-node test.ts'"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "publishConfig": { "access": "public" }
+}

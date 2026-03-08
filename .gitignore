@@ -1,0 +1,80 @@
+# Build
+dist/
+build/
+*.o
+*.a
+
+# Dependencies
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test
+coverage/
+*.lcov
+
+# Generated
+*.c
+*.h
+
+# But keep stdlib source files (Phase 26+)
+!stdlib/ffi/*.c
+!stdlib/ffi/*.h
+!stdlib/core/*.c
+!stdlib/core/*.h
+
+# Temporary
+.tmp/
+temp/
+*.temp
+
+# Environment
+.env
+.env.local
+*.bundle
+
+# System & User Files
+.bash_history
+.bashrc
+.zshrc
+.profile
+
+# Credentials & Security
+.git-credentials
+.ssh/
+.claude/.credentials.json
+
+# npm Cache
+.npm/
+.npm-global/
+.npmrc
+
+# Claude Code Files
+.claude/
+!.claude/CLAUDE.md
+!.claude/agents/
+!.claude/rules/
+
+# Backup Files
+backups/
+*.backup
+*.bak
+
+# Logs
+logs/
+*.log
+.npm/_logs/
+
+# OS Files
+.DS_Store
+Thumbs.db
+*.swp
+*~

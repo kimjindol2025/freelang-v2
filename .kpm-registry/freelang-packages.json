@@ -1,0 +1,148 @@
+{
+  "packages": [
+    {
+      "id": "freelang-compiler",
+      "name": "@freelang/compiler",
+      "version": "2.9.0",
+      "description": "FreeLang Official Compiler - Syntax analyzer, optimizer, code generator",
+      "category": "compiler",
+      "level": 3,
+      "completeness": 100,
+      "features": ["syntax-analysis", "optimization", "code-generation", "error-handling"],
+      "rating": 10,
+      "downloads": 1250
+    },
+    {
+      "id": "freelang-cli",
+      "name": "@freelang/cli",
+      "version": "2.9.1",
+      "description": "FreeLang Command-line Interface - Interactive shell, REPL, script execution",
+      "category": "cli",
+      "level": 3,
+      "completeness": 95,
+      "features": ["repl", "script-runner", "project-init", "debug-mode"],
+      "rating": 9,
+      "downloads": 980
+    },
+    {
+      "id": "freelang-lsp",
+      "name": "@freelang/lsp",
+      "version": "2.9.1",
+      "description": "FreeLang Language Server Protocol - IDE support, code completion, diagnostics",
+      "category": "tools",
+      "level": 3,
+      "completeness": 90,
+      "features": ["code-completion", "diagnostics", "hover-info", "goto-definition"],
+      "rating": 9,
+      "downloads": 750
+    },
+    {
+      "id": "freelang-vm",
+      "name": "@freelang/vm",
+      "version": "2.9.1",
+      "description": "FreeLang Runtime VM - Bytecode execution, memory management, GC",
+      "category": "runtime",
+      "level": 3,
+      "completeness": 100,
+      "features": ["bytecode-execution", "memory-management", "gc", "performance-optimized"],
+      "rating": 10,
+      "downloads": 1100
+    },
+    {
+      "id": "freelang-parser",
+      "name": "@freelang/parser",
+      "version": "2.9.1",
+      "description": "FreeLang Syntax Parser - AST generation, grammar validation",
+      "category": "compiler",
+      "level": 3,
+      "completeness": 100,
+      "features": ["ast-generation", "grammar-validation", "error-recovery"],
+      "rating": 10,
+      "downloads": 900
+    },
+    {
+      "id": "freelang-stdlib",
+      "name": "@freelang/stdlib",
+      "version": "2.9.1",
+      "description": "FreeLang Standard Library - 1,500+ built-in functions",
+      "category": "stdlib",
+      "level": 3,
+      "completeness": 100,
+      "features": ["1500-functions", "string-ops", "math-ops", "array-ops", "date-ops"],
+      "rating": 10,
+      "downloads": 1400
+    },
+    {
+      "id": "freelang-auth",
+      "name": "@freelang/auth",
+      "version": "1.0.0",
+      "description": "FreeLang Native Authentication - JWT/HMAC token engine (zero npm dependencies)",
+      "category": "native-libraries",
+      "level": 2,
+      "completeness": 100,
+      "features": ["jwt", "hmac-sha256", "token-signing", "token-verification", "expiration"],
+      "rating": 10,
+      "downloads": 45
+    },
+    {
+      "id": "freelang-validator",
+      "name": "@freelang/validator",
+      "version": "1.0.0",
+      "description": "FreeLang Native Input Validator - express-validator replacement (zero npm dependencies)",
+      "category": "native-libraries",
+      "level": 2,
+      "completeness": 100,
+      "features": ["schema-validation", "field-validation", "custom-rules", "error-formatting"],
+      "rating": 10,
+      "downloads": 38
+    },
+    {
+      "id": "freelang-security",
+      "name": "@freelang/security",
+      "version": "1.0.0",
+      "description": "FreeLang Native Security - CORS, CSP, Rate-limiting middleware (zero npm dependencies)",
+      "category": "native-libraries",
+      "level": 2,
+      "completeness": 100,
+      "features": ["cors", "csp", "rate-limiting", "security-headers", "ip-filtering"],
+      "rating": 10,
+      "downloads": 42
+    },
+    {
+      "id": "freelang-orm",
+      "name": "@freelang/orm",
+      "version": "1.0.0",
+      "description": "FreeLang Native ORM - Sequelize replacement with pre-compiled SQL (zero npm dependencies)",
+      "category": "native-libraries",
+      "level": 2,
+      "completeness": 100,
+      "features": ["query-builder", "models", "relationships", "transactions", "connection-pooling"],
+      "rating": 10,
+      "downloads": 51
+    },
+    {
+      "id": "freelang-web-forge",
+      "name": "@freelang/web-forge",
+      "version": "1.0.0",
+      "description": "FreeLang Native Web Framework - SSG/SSR engine with 21+ functions (zero npm dependencies)",
+      "category": "native-libraries",
+      "level": 2,
+      "completeness": 100,
+      "features": ["ssg", "ssr", "template-engine", "components", "markdown-support"],
+      "rating": 10,
+      "downloads": 48
+    },
+    {
+      "id": "freelang-http",
+      "name": "@freelang/http",
+      "version": "1.0.0",
+      "description": "FreeLang Native HTTP Client - Connection pooling, retries, timeouts (zero npm dependencies)",
+      "category": "native-libraries",
+      "level": 2,
+      "completeness": 100,
+      "features": ["connection-pooling", "retries", "timeout", "proxy-support", "streaming"],
+      "rating": 10,
+      "downloads": 39
+    }
+  ]
+}

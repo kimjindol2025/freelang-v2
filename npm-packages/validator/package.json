@@ -1,0 +1,17 @@
+{
+  "name": "@freelang/validator",
+  "version": "1.0.0",
+  "description": "FreeLang Native Request Validator - express-validator replacement (zero npm dependencies)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "keywords": ["freelang", "validator", "validation", "input", "schema"],
+  "author": "Claude AI",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/freelang-io/freelang-validator.git"
+  },
+  "engines": { "node": ">=18.0.0" },
+  "files": ["dist", "README.md", "LICENSE"],
+  "publishConfig": { "access": "public" }
+}

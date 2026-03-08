@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="FreeLang - 고성능 프로그래밍 언어. Native 라이브러리, 컴파일러, CLI, LSP 지원.">
+  <meta name="keywords" content="FreeLang, Programming Language, Compiler, Native Library, npm">
+  <meta name="author" content="FreeLang Team">
+  <title>FreeLang - 차세대 프로그래밍 언어</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background: #fff;
+    }
+
+    a {
+      color: #667eea;
+      text-decoration: none;
+      transition: color 0.3s ease;
+    }
+
+    a:hover {
+      color: #764ba2;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      font-size: 16px;
+      font-family: inherit;
+      transition: all 0.3s ease;
+    }
+
+    /* Header & Navigation */
+    header {
+      position: sticky;
+      top: 0;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      z-index: 1000;
+    }
+
+    nav {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      font-size: 24px;
+      font-weight: bold;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: #333;
+      font-weight: 500;
+    }
+
+    .nav-links a:hover {
+      color: #667eea;
+    }
+
+    @media (max-width: 768px) {
+      .nav-links {
+        display: none;
+      }
+    }
+
+    /* Hero Section */
+    .hero {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 100px 2rem;
+      text-align: center;
+    }
+
+    .hero-content {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .hero h1 {
+      font-size: clamp(32px, 8vw, 64px);
+      margin-bottom: 1rem;
+      font-weight: 700;
+    }
+
+    .hero p {
+      font-size: 18px;
+      margin-bottom: 2rem;
+      opacity: 0.9;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 12px 32px;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary {
+      background: white;
+      color: #667eea;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      border: 2px solid white;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    /* Container */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 2rem;
+    }
+
+    /* Section */
+    section {
+      padding: 80px 2rem;
+    }
+
+    section h2 {
+      font-size: clamp(28px, 6vw, 48px);
+      margin-bottom: 3rem;
+      text-align: center;
+      color: #333;
+    }
+
+    /* Features Section */
+    .features {
+      background: #f9f9f9;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 2rem;
+    }
+
+    .feature-card {
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+      transition: all 0.3s ease;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    }
+
+    .feature-icon {
+      font-size: 40px;
+      margin-bottom: 1rem;
+    }
+
+    .feature-card h3 {
+      font-size: 20px;
+      margin-bottom: 1rem;
+      color: #333;
+    }
+
+    .feature-card p {
+      color: #666;
+      font-size: 14px;
+      line-height: 1.8;
+    }
+
+    /* Install Section */
+    .install {
+      background: #f0f4ff;
+    }
+
+    .install-content {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .install-box {
+      background: white;
+      padding: 2rem;
+      border-radius: 8px;
+      border-left: 4px solid #667eea;
+      margin-bottom: 2rem;
+    }
+
+    .install-code {
+      background: #2d3748;
+      color: #68d391;
+      padding: 1.5rem;
+      border-radius: 6px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 14px;
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+
+    .install-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .step {
+      display: flex;
+      gap: 1.5rem;
+      align-items: flex-start;
+    }
+
+    .step-number {
+      background: #667eea;
+      color: white;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-weight: bold;
+    }
+
+    .step h3 {
+      color: #333;
+      margin-bottom: 0.5rem;
+    }
+
+    .step p {
+      color: #666;
+      font-size: 14px;
+    }
+
+    /* Packages Section */
+    .packages {
+      background: white;
+    }
+
+    .packages-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 2rem;
+    }
+
+    .package-card {
+      background: #f9f9f9;
+      padding: 1.5rem;
+      border-radius: 8px;
+      border: 1px solid #eee;
+      transition: all 0.3s ease;
+    }
+
+    .package-card:hover {
+      border-color: #667eea;
+      box-shadow: 0 5px 20px rgba(102, 126, 234, 0.1);
+    }
+
+    .package-name {
+      font-weight: 600;
+      color: #667eea;
+      font-size: 14px;
+      margin-bottom: 0.5rem;
+    }
+
+    .package-card h3 {
+      font-size: 18px;
+      margin-bottom: 1rem;
+      color: #333;
+    }
+
+    .package-card p {
+      color: #666;
+      font-size: 13px;
+      line-height: 1.6;
+      margin-bottom: 1rem;
+    }
+
+    .package-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .tag {
+      background: white;
+      border: 1px solid #ddd;
+      color: #666;
+      padding: 0.25rem 0.75rem;
+      border-radius: 12px;
+      font-size: 12px;
+    }
+
+    /* Community Section */
+    .community {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .community h2 {
+      color: white;
+    }
+
+    .community-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 2rem;
+      margin-bottom: 3rem;
+    }
+
+    .community-card {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      padding: 2rem;
+      border-radius: 12px;
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      transition: all 0.3s ease;
+    }
+
+    .community-card:hover {
+      background: rgba(255, 255, 255, 0.15);
+      transform: translateY(-5px);
+    }
+
+    .community-icon {
+      font-size: 48px;
+      margin-bottom: 1rem;
+    }
+
+    .community-card h3 {
+      margin-bottom: 0.5rem;
+      font-size: 20px;
+    }
+
+    .community-card p {
+      opacity: 0.9;
+      font-size: 14px;
+    }
+
+    .community-links {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      margin-top: 2rem;
+    }
+
+    .community-links a {
+      color: white;
+      background: rgba(255, 255, 255, 0.2);
+      padding: 10px 20px;
+      border-radius: 6px;
+      transition: all 0.3s ease;
+    }
+
+    .community-links a:hover {
+      background: white;
+      color: #667eea;
+    }
+
+    /* Docs Section */
+    .docs {
+      background: #f9f9f9;
+    }
+
+    .docs-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 2rem;
+    }
+
+    .doc-card {
+      background: white;
+      padding: 2rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+      transition: all 0.3s ease;
+    }
+
+    .doc-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    }
+
+    .doc-card h3 {
+      color: #667eea;
+      margin-bottom: 1rem;
+      font-size: 18px;
+    }
+
+    .doc-card p {
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 1.5rem;
+      line-height: 1.6;
+    }
+
+    .doc-card a {
+      display: inline-block;
+      color: #667eea;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    /* Footer */
+    footer {
+      background: #2d3748;
+      color: white;
+      padding: 3rem 2rem 1rem;
+    }
+
+    .footer-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 2rem;
+      margin-bottom: 2rem;
+    }
+
+    .footer-section h4 {
+      margin-bottom: 1rem;
+      color: #667eea;
+    }
+
+    .footer-section ul {
+      list-style: none;
+    }
+
+    .footer-section ul li {
+      margin-bottom: 0.5rem;
+    }
+
+    .footer-section a {
+      color: #ccc;
+      transition: color 0.3s ease;
+    }
+
+    .footer-section a:hover {
+      color: #667eea;
+    }
+
+    .footer-bottom {
+      border-top: 1px solid #444;
+      padding-top: 2rem;
+      text-align: center;
+      color: #999;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      section {
+        padding: 40px 1rem;
+      }
+
+      section h2 {
+        margin-bottom: 2rem;
+      }
+
+      .hero {
+        padding: 60px 1rem;
+      }
+
+      .hero h1 {
+        margin-bottom: 1.5rem;
+      }
+
+      .hero-buttons {
+        flex-direction: column;
+      }
+
+      .btn {
+        width: 100%;
+      }
+    }
+
+    /* Animations */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .fade-in {
+      animation: fadeInUp 0.6s ease forwards;
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <nav>
+      <div class="logo">✦ FreeLang</div>
+      <ul class="nav-links">
+        <li><a href="#features">기능</a></li>
+        <li><a href="#install">설치</a></li>
+        <li><a href="#packages">패키지</a></li>
+        <li><a href="#docs">문서</a></li>
+        <li><a href="#community">커뮤니티</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-content">
+      <h1>FreeLang</h1>
+      <p>고성능 프로그래밍 언어. Native 라이브러리, 현대적인 컴파일러, 풍부한 도구 생태계</p>
+      <div class="hero-buttons">
+        <button class="btn btn-primary" onclick="document.getElementById('install').scrollIntoView()">시작하기</button>
+        <a href="https://github.com/freelang-io" target="_blank" class="btn btn-secondary">GitHub</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section id="features" class="features">
+    <div class="container">
+      <h2>강력한 기능</h2>
+      <div class="features-grid">
+        <div class="feature-card fade-in">
+          <div class="feature-icon">⚡</div>
+          <h3>고성능</h3>
+          <p>최적화된 컴파일러와 런타임으로 빠른 실행 속도를 제공합니다. Zero-overhead abstraction.</p>
+        </div>
+        <div class="feature-card fade-in">
+          <div class="feature-icon">🔧</div>
+          <h3>Native 라이브러리</h3>
+          <p>JWT 인증, ORM, HTTP 클라이언트 등 6개의 프로덕션 레벨 Native 라이브러리를 제공합니다.</p>
+        </div>
+        <div class="feature-card fade-in">
+          <div class="feature-icon">📚</div>
+          <h3>1,500+ 빌트인 함수</h3>
+          <p>문자열, 배열, 날짜, 수학 등 다양한 카테고리의 풍부한 표준 라이브러리.</p>
+        </div>
+        <div class="feature-card fade-in">
+          <div class="feature-icon">🛠️</div>
+          <h3>완전한 도구 생태계</h3>
+          <p>CLI, LSP (IDE 지원), REPL, 디버거, 테스트 러너 등을 포함합니다.</p>
+        </div>
+        <div class="feature-card fade-in">
+          <div class="feature-icon">📦</div>
+          <h3>npm 패키지 지원</h3>
+          <p>npm registry와 완전히 호환되는 패키지 시스템으로 손쉬운 의존성 관리.</p>
+        </div>
+        <div class="feature-card fade-in">
+          <div class="feature-icon">🎯</div>
+          <h3>현대적인 문법</h3>
+          <p>함수형, 객체지향, 절차형 패러다임을 모두 지원하는 유연한 문법.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Install Section -->
+  <section id="install" class="install">
+    <div class="container">
+      <div class="install-content">
+        <h2>시작하기</h2>
+        <div class="install-box">
+          <h3>1️⃣  FreeLang 컴파일러 설치</h3>
+          <div class="install-code">npm install -g @freelang/cli</div>
+        </div>
+
+        <div class="install-box">
+          <h3>2️⃣  Native 라이브러리 설치</h3>
+          <div class="install-code">npm install @freelang/auth @freelang/validator @freelang/orm</div>
+        </div>
+
+        <div class="install-box">
+          <h3>3️⃣  첫 프로그램 작성</h3>
+          <div class="install-code">cat > hello.fl << 'EOF'
+fn main() {
+    print("Hello, FreeLang!")
+}
+
+main()
+EOF
+
+freelang hello.fl</div>
+        </div>
+
+        <div class="install-box">
+          <h3>추가 리소스</h3>
+          <div class="install-steps">
+            <div class="step">
+              <div class="step-number">→</div>
+              <div>
+                <h3><a href="#docs">공식 문서</a></h3>
+                <p>완전한 언어 레퍼런스와 API 문서</p>
+              </div>
+            </div>
+            <div class="step">
+              <div class="step-number">→</div>
+              <div>
+                <h3><a href="https://github.com/freelang-io/freelang-integration-guide">통합 가이드</a></h3>
+                <p>실제 애플리케이션 구축 예제</p>
+              </div>
+            </div>
+            <div class="step">
+              <div class="step-number">→</div>
+              <div>
+                <h3><a href="https://github.com/freelang-io">GitHub 저장소</a></h3>
+                <p>소스 코드와 예제</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Packages Section -->
+  <section id="packages" class="packages">
+    <div class="container">
+      <h2>📦 공식 패키지</h2>
+      <div class="packages-grid">
+        <div class="package-card">
+          <div class="package-name">@freelang/auth</div>
+          <h3>JWT/HMAC 인증</h3>
+          <p>토큰 생성, 검증, 만료 처리를 포함한 완전한 인증 엔진.</p>
+          <div class="package-tags">
+            <span class="tag">JWT</span>
+            <span class="tag">HMAC</span>
+            <span class="tag">Zero-deps</span>
+          </div>
+        </div>
+
+        <div class="package-card">
+          <div class="package-name">@freelang/validator</div>
+          <h3>입력 검증</h3>
+          <p>스키마 기반 검증과 커스텀 규칙을 지원하는 강력한 검증 라이브러리.</p>
+          <div class="package-tags">
+            <span class="tag">Validation</span>
+            <span class="tag">Schema</span>
+            <span class="tag">Zero-deps</span>
+          </div>
+        </div>
+
+        <div class="package-card">
+          <div class="package-name">@freelang/security</div>
+          <h3>보안 미들웨어</h3>
+          <p>CORS, CSP, Rate-limiting, 보안 헤더 등 웹 보안 기능 제공.</p>
+          <div class="package-tags">
+            <span class="tag">CORS</span>
+            <span class="tag">CSP</span>
+            <span class="tag">Rate-limiting</span>
+          </div>
+        </div>
+
+        <div class="package-card">
+          <div class="package-name">@freelang/orm</div>
+          <h3>데이터베이스 ORM</h3>
+          <p>Sequelize 대체. 쿼리 빌더, 관계, 트랜잭션, 연결 풀링 지원.</p>
+          <div class="package-tags">
+            <span class="tag">ORM</span>
+            <span class="tag">Query Builder</span>
+            <span class="tag">Transactions</span>
+          </div>
+        </div>
+
+        <div class="package-card">
+          <div class="package-name">@freelang/web-forge</div>
+          <h3>SSG/SSR 웹 프레임워크</h3>
+          <p>21+ 함수를 포함한 강력한 웹 렌더링 엔진. 템플릿, 컴포넌트 지원.</p>
+          <div class="package-tags">
+            <span class="tag">SSG</span>
+            <span class="tag">SSR</span>
+            <span class="tag">Templates</span>
+          </div>
+        </div>
+
+        <div class="package-card">
+          <div class="package-name">@freelang/http</div>
+          <h3>HTTP 클라이언트</h3>
+          <p>연결 풀링, 재시도, 타임아웃, 프록시 지원. 스트리밍 지원.</p>
+          <div class="package-tags">
+            <span class="tag">HTTP</span>
+            <span class="tag">Pooling</span>
+            <span class="tag">Streaming</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Community Section -->
+  <section id="community" class="community">
+    <div class="container">
+      <h2>커뮤니티</h2>
+      <div class="community-grid">
+        <div class="community-card">
+          <div class="community-icon">🐙</div>
+          <h3>GitHub</h3>
+          <p>소스 코드, 이슈, 토론. 모든 것이 공개되어 있습니다.</p>
+        </div>
+        <div class="community-card">
+          <div class="community-icon">💬</div>
+          <h3>커뮤니티</h3>
+          <p>개발자들과 질문을 나누고 경험을 공유하세요.</p>
+        </div>
+        <div class="community-card">
+          <div class="community-icon">📰</div>
+          <h3>블로그</h3>
+          <p>최신 업데이트, 튜토리얼, 성능 분석을 자주 공유합니다.</p>
+        </div>
+      </div>
+      <div class="community-links">
+        <a href="https://github.com/freelang-io" target="_blank">GitHub</a>
+        <a href="https://npmjs.com/org/freelang" target="_blank">npm Organization</a>
+        <a href="#docs">문서</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Docs Section -->
+  <section id="docs" class="docs">
+    <div class="container">
+      <h2>📚 문서 & 리소스</h2>
+      <div class="docs-grid">
+        <div class="doc-card">
+          <h3>통합 가이드</h3>
+          <p>여러 @freelang/* 패키지를 함께 사용하는 풀스택 웹 애플리케이션 구축 방법. 1,500줄의 완전한 예제 포함.</p>
+          <a href="https://github.com/freelang-io/freelang-integration-guide">가이드 읽기 →</a>
+        </div>
+
+        <div class="doc-card">
+          <h3>API 레퍼런스</h3>
+          <p>모든 빌트인 함수, 타입, 표준 라이브러리에 대한 완전한 레퍼런스 문서.</p>
+          <a href="https://github.com/freelang-io">API 문서 →</a>
+        </div>
+
+        <div class="doc-card">
+          <h3>튜토리얼</h3>
+          <p>단계별 튜토리얼로 FreeLang의 기초부터 고급 기능까지 배워보세요.</p>
+          <a href="https://github.com/freelang-io">튜토리얼 →</a>
+        </div>
+
+        <div class="doc-card">
+          <h3>예제 코드</h3>
+          <p>실제 동작하는 예제 코드로 빠르게 시작하세요. CLI, ORM, 웹 개발 등 다양한 예제 제공.</p>
+          <a href="https://github.com/freelang-io">예제 보기 →</a>
+        </div>
+
+        <div class="doc-card">
+          <h3>FAQ</h3>
+          <p>자주 묻는 질문과 답변. 설치, 성능, 호환성 등 다양한 주제를 다룹니다.</p>
+          <a href="https://github.com/freelang-io">FAQ 보기 →</a>
+        </div>
+
+        <div class="doc-card">
+          <h3>기여하기</h3>
+          <p>FreeLang 개발에 참여하고 싶으신가요? 기여 가이드를 확인해보세요.</p>
+          <a href="https://github.com/freelang-io/CONTRIBUTING.md">기여 가이드 →</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section">
+        <h4>FreeLang</h4>
+        <ul>
+          <li><a href="#features">기능</a></li>
+          <li><a href="#install">설치</a></li>
+          <li><a href="#packages">패키지</a></li>
+          <li><a href="#docs">문서</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h4>커뮤니티</h4>
+        <ul>
+          <li><a href="https://github.com/freelang-io" target="_blank">GitHub</a></li>
+          <li><a href="https://npmjs.com/org/freelang" target="_blank">npm</a></li>
+          <li><a href="https://gogs.dclub.kr" target="_blank">GOGS</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h4>리소스</h4>
+        <ul>
+          <li><a href="https://github.com/freelang-io/freelang-integration-guide">통합 가이드</a></li>
+          <li><a href="https://github.com/freelang-io">API 문서</a></li>
+          <li><a href="https://github.com/freelang-io">튜토리얼</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h4>정보</h4>
+        <ul>
+          <li><a href="https://github.com/freelang-io">라이센스</a></li>
+          <li><a href="https://github.com/freelang-io">코드 오브 컨덕트</a></li>
+          <li><a href="https://github.com/freelang-io/CONTRIBUTING.md">기여하기</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2024-2026 FreeLang. All rights reserved. | Made with ❤️ by the FreeLang Team</p>
+    </div>
+  </footer>
+
+  <script>
+    // Smooth animations on scroll
+    const observerOptions = {
+      threshold: 0.1,
+      rootMargin: '0px 0px -50px 0px'
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('fade-in');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, observerOptions);
+
+    document.querySelectorAll('.feature-card, .package-card, .doc-card').forEach(el => {
+      observer.observe(el);
+    });
+  </script>
+</body>
+</html>

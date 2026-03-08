@@ -1,0 +1,88 @@
+{
+  "search_index": [
+    {
+      "id": "freelang-compiler",
+      "name": "@freelang/compiler",
+      "searchable_text": "freelang compiler syntax analyzer optimizer code generator",
+      "ranking": 10,
+      "features": ["syntax-analysis", "optimization", "code-generation"]
+    },
+    {
+      "id": "freelang-cli",
+      "name": "@freelang/cli",
+      "searchable_text": "freelang cli command line interface repl shell script",
+      "ranking": 9,
+      "features": ["repl", "script-runner", "debug"]
+    },
+    {
+      "id": "freelang-lsp",
+      "name": "@freelang/lsp",
+      "searchable_text": "freelang lsp language server protocol ide vscode editor",
+      "ranking": 8,
+      "features": ["code-completion", "diagnostics", "goto-definition"]
+    },
+    {
+      "id": "freelang-vm",
+      "name": "@freelang/vm",
+      "searchable_text": "freelang vm runtime bytecode execution memory management",
+      "ranking": 10,
+      "features": ["bytecode", "memory", "gc", "performance"]
+    },
+    {
+      "id": "freelang-parser",
+      "name": "@freelang/parser",
+      "searchable_text": "freelang parser syntax grammar ast generation",
+      "ranking": 10,
+      "features": ["ast", "grammar", "error-recovery"]
+    },
+    {
+      "id": "freelang-stdlib",
+      "name": "@freelang/stdlib",
+      "searchable_text": "freelang stdlib standard library functions string array math",
+      "ranking": 10,
+      "features": ["1500-functions", "string", "math", "array", "date"]
+    },
+    {
+      "id": "freelang-auth",
+      "name": "@freelang/auth",
+      "searchable_text": "freelang auth authentication jwt hmac token signing verification",
+      "ranking": 9,
+      "features": ["jwt", "hmac", "token", "security", "crypto"]
+    },
+    {
+      "id": "freelang-validator",
+      "name": "@freelang/validator",
+      "searchable_text": "freelang validator validation input schema field rules",
+      "ranking": 9,
+      "features": ["schema", "validation", "rules", "email", "url"]
+    },
+    {
+      "id": "freelang-security",
+      "name": "@freelang/security",
+      "searchable_text": "freelang security cors csp rate limiting middleware headers",
+      "ranking": 9,
+      "features": ["cors", "csp", "rate-limiting", "security", "headers"]
+    },
+    {
+      "id": "freelang-orm",
+      "name": "@freelang/orm",
+      "searchable_text": "freelang orm database query sql models relationships transactions",
+      "ranking": 9,
+      "features": ["orm", "database", "query", "models", "relations"]
+    },
+    {
+      "id": "freelang-web-forge",
+      "name": "@freelang/web-forge",
+      "searchable_text": "freelang web forge ssg ssr static generation rendering template",
+      "ranking": 9,
+      "features": ["web", "ssg", "ssr", "template", "rendering"]
+    },
+    {
+      "id": "freelang-http",
+      "name": "@freelang/http",
+      "searchable_text": "freelang http client connection pooling retry timeout proxy",
+      "ranking": 9,
+      "features": ["http", "client", "pooling", "retry", "timeout"]
+    }
+  ]
+}

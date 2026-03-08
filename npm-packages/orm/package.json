@@ -1,0 +1,31 @@
+{
+  "name": "@freelang/orm",
+  "version": "1.0.0",
+  "description": "FreeLang Native ORM - Sequelize replacement with pre-compiled SQL (zero npm dependencies)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "keywords": ["freelang", "orm", "database", "sequelize", "query-builder", "sql"],
+  "author": "Claude AI",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/freelang-io/freelang-orm.git"
+  },
+  "homepage": "https://github.com/freelang-io/freelang-orm",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "echo 'Run tests with: npx ts-node test.ts'"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "publishConfig": { "access": "public" }
+}

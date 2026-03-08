@@ -1,0 +1,31 @@
+{
+  "name": "@freelang/http",
+  "version": "1.0.0",
+  "description": "FreeLang Native HTTP Client - Connection pooling, retries, timeouts (zero npm dependencies)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "keywords": ["freelang", "http", "client", "fetch", "connection-pooling", "retries"],
+  "author": "Claude AI",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/freelang-io/freelang-http.git"
+  },
+  "homepage": "https://github.com/freelang-io/freelang-http",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "echo 'Run tests with: npx ts-node test.ts'"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "publishConfig": { "access": "public" }
+}
