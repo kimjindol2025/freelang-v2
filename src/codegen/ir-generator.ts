@@ -1141,40 +1141,8 @@ export class IRGenerator {
       // ── Struct Declaration (Phase 16) ───────────────────────
       case 'struct':
       case 'StructDeclaration':
-        {
-          // Struct declaration: store struct metadata in the IR
-          // struct name { field1, field2, ... }
-          // Reified-Type-System: struct User<T> → typeParams 정보를 메타데이터로 포함
-
-          const structName = node.name;
-          const fields = node.fields || [];
-          const typeParams = node.typeParams;  // GenericTypeParam[] | undefined
-
-          // Create struct type object
-          out.push({ op: Op.STRUCT_NEW, arg: structName });
-
-          // Reified-Type-System: 제네릭 파라미터가 있으면 GENERIC_INST 메타데이터 emit
-          // arg 형식: "StructName[T,U]" → ReifiedTypeRegistry가 레이아웃 결정에 사용
-          if (typeParams && typeParams.length > 0) {
-            const paramStr = typeParams.map((p: any) =>
-              p.constraint ? `${p.name}:${p.constraint}` : p.name
-            ).join(',');
-            out.push({ op: Op.GENERIC_INST, arg: `${structName}[${paramStr}]` });
-          }
-
-          // Register struct fields
-          for (const field of fields) {
-            const fieldName = field.name || field;
-            // Reified-Type-System: nullable 필드(T?)는 null-check guard를 함께 등록
-            const rawFieldType: string = field.fieldType || 'any';
-            const isNullable = rawFieldType.endsWith('?');
-            // STRUCT_FIELD arg: "fieldName" 또는 "fieldName:nullable" (nullable 마킹)
-            out.push({ op: Op.STRUCT_FIELD, arg: isNullable ? `${fieldName}:nullable` : fieldName });
-          }
-
-          // Store struct definition
-          out.push({ op: Op.STORE, arg: `__struct_${structName}` });
-        }
+        // Struct declaration: pure type metadata, no runtime effect
+        // struct instances are created via object literals { field: value }
         break;
 
       // ── Reified-Type-System: 타입 별칭 선언 ──────────────────

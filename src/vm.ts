@@ -1255,6 +1255,52 @@ export class VM {
         this.pc++;
         break;
 
+      // ── Struct declarations (type metadata, no runtime effect) ──
+      case Op.STRUCT_NEW:
+        // struct 선언: 메타데이터만 저장, 런타임 효과 없음
+        this.pc++;
+        break;
+
+      case Op.STRUCT_FIELD:
+        // struct 필드 등록: 메타데이터만, 런타임 효과 없음
+        this.pc++;
+        break;
+
+      case Op.STRUCT_SET_FIELD: {
+        // struct 필드 값 설정: OBJ_SET과 동일하게 처리
+        const setFieldArg = String(inst.arg);
+        const colonIdx = setFieldArg.indexOf(':');
+        if (colonIdx !== -1) {
+          const structVar = setFieldArg.substring(0, colonIdx);
+          const fieldName = setFieldArg.substring(colonIdx + 1);
+          const val = this.stack.pop()!;
+          const obj = this.vars.get(structVar);
+          if (obj && typeof obj === 'object') {
+            (obj as any)[fieldName] = val;
+          }
+        }
+        this.pc++;
+        break;
+      }
+
+      case Op.STRUCT_GET_FIELD: {
+        // struct 필드 값 가져오기: OBJ_GET과 동일하게 처리
+        const fieldName = String(inst.arg);
+        const obj = this.stack.pop()!;
+        if (obj && typeof obj === 'object') {
+          this.stack.push((obj as any)[fieldName] ?? 0);
+        } else {
+          this.stack.push(0);
+        }
+        this.pc++;
+        break;
+      }
+
+      case Op.GENERIC_INST:
+        // 제네릭 인스턴스화: 메타데이터만, 런타임 효과 없음
+        this.pc++;
+        break;
+
       default:
         throw new Error('unknown_op:' + op);
     }

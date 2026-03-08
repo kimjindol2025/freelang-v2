@@ -1878,7 +1878,18 @@ export class Parser {
     while (this.check(TokenType.DOT) || this.check(TokenType.LBRACKET) || this.check(TokenType.LPAREN)) {
       if (this.check(TokenType.DOT)) {
         this.advance(); // consume .
-        const propName = this.expect(TokenType.IDENT, 'Expected property name').value;
+        // member access: allow keywords as property names (e.g., x.type, x.break)
+        let propName: string;
+        if (this.check(TokenType.IDENT) || this.check(TokenType.TYPE) ||
+            this.check(TokenType.LET) || this.check(TokenType.FN) ||
+            this.check(TokenType.RETURN) || this.check(TokenType.BREAK) ||
+            this.check(TokenType.CONTINUE) || this.check(TokenType.IF) ||
+            this.check(TokenType.ELSE) || this.check(TokenType.FOR) ||
+            this.check(TokenType.WHILE) || this.check(TokenType.MATCH)) {
+          propName = this.advance().value;
+        } else {
+          propName = this.expect(TokenType.IDENT, 'Expected property name').value;
+        }
         left = {
           type: 'member',
           object: left,
@@ -2032,12 +2043,15 @@ export class Parser {
       const properties: Array<{ key: string; value: Expression }> = [];
 
       while (!this.check(TokenType.RBRACE) && !this.check(TokenType.EOF)) {
-        // Key (string 또는 identifier)
+        // Key (string, identifier, or keyword used as key)
         let key: string;
         if (this.check(TokenType.STRING)) {
           key = this.current().value;
           this.advance();
-        } else if (this.check(TokenType.IDENT)) {
+        } else if (this.check(TokenType.IDENT) || this.check(TokenType.TYPE) ||
+                   this.check(TokenType.LET) || this.check(TokenType.FN) ||
+                   this.check(TokenType.RETURN) || this.check(TokenType.BREAK) ||
+                   this.check(TokenType.CONTINUE)) {
           key = this.current().value;
           this.advance();
         } else {
@@ -2642,10 +2656,15 @@ export class Parser {
 
     const consequent = this.parseBlockStatement();
 
-    let alternate: BlockStatement | undefined;
+    let alternate: BlockStatement | IfStatement | undefined;
     if (this.check(TokenType.ELSE)) {
       this.advance();
-      alternate = this.parseBlockStatement();
+      if (this.check(TokenType.IF)) {
+        // else if → 재귀적으로 if문 파싱
+        alternate = this.parseIfStatement();
+      } else {
+        alternate = this.parseBlockStatement();
+      }
     }
 
     return {
@@ -2653,7 +2672,7 @@ export class Parser {
       condition,
       consequent,
       alternate
-    };
+    } as any;
   }
 
   /**
@@ -3167,7 +3186,13 @@ export class Parser {
         }
       }
 
-      const fieldNameToken = this.expect(TokenType.IDENT, 'Expected field name');
+      // struct 필드 이름: IDENT 또는 키워드(type 등)도 허용
+      let fieldNameToken;
+      if (this.check(TokenType.IDENT) || this.check(TokenType.TYPE)) {
+        fieldNameToken = this.advance();
+      } else {
+        fieldNameToken = this.expect(TokenType.IDENT, 'Expected field name');
+      }
       const fieldName = fieldNameToken.value;
 
       let fieldType: string | undefined;

@@ -57,7 +57,7 @@ fn tokenize(source: string) -> any {
         pos = pos + 1
       }
       var lexeme: string = slice(source, start, pos)
-      var token: Token = Token { type: "INT", lexeme: lexeme, line: line }
+      var token: any = { type: "INT", lexeme: lexeme, line: line }
       push(tokens, token)
       continue
     }
@@ -80,34 +80,34 @@ fn tokenize(source: string) -> any {
         tok_type = "WHILE"
       }
 
-      var token: Token = Token { type: tok_type, lexeme: lexeme, line: line }
+      var token: any = { type: tok_type, lexeme: lexeme, line: line }
       push(tokens, token)
       continue
     }
 
     // 기호들
     if ch == "(" {
-      var token: Token = Token { type: "LPAREN", lexeme: "(", line: line }
+      var token: any = { type: "LPAREN", lexeme: "(", line: line }
       push(tokens, token)
       pos = pos + 1
     } else if ch == ")" {
-      var token: Token = Token { type: "RPAREN", lexeme: ")", line: line }
+      var token: any = { type: "RPAREN", lexeme: ")", line: line }
       push(tokens, token)
       pos = pos + 1
     } else if ch == "{" {
-      var token: Token = Token { type: "LBRACE", lexeme: "{", line: line }
+      var token: any = { type: "LBRACE", lexeme: "{", line: line }
       push(tokens, token)
       pos = pos + 1
     } else if ch == "}" {
-      var token: Token = Token { type: "RBRACE", lexeme: "}", line: line }
+      var token: any = { type: "RBRACE", lexeme: "}", line: line }
       push(tokens, token)
       pos = pos + 1
     } else if ch == "=" {
-      var token: Token = Token { type: "EQ", lexeme: "=", line: line }
+      var token: any = { type: "EQ", lexeme: "=", line: line }
       push(tokens, token)
       pos = pos + 1
     } else if ch == "+" {
-      var token: Token = Token { type: "PLUS", lexeme: "+", line: line }
+      var token: any = { type: "PLUS", lexeme: "+", line: line }
       push(tokens, token)
       pos = pos + 1
     } else {
@@ -115,7 +115,7 @@ fn tokenize(source: string) -> any {
     }
   }
 
-  var eof: Token = Token { type: "EOF", lexeme: "", line: line }
+  var eof: any = { type: "EOF", lexeme: "", line: line }
   push(tokens, eof)
   return tokens
 }
