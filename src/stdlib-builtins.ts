@@ -39,6 +39,7 @@ import { registerProxyTunnelFunctions, handleProxyResponse, proxyRouteTable } fr
 import { registerDotenvFunctions } from './stdlib/dotenv';
 import { registerNodemailerFunctions } from './stdlib-nodemailer';
 import { registerAxiosFunctions } from './stdlib-axios';
+import { registerMulterFunctions } from './stdlib-multer';
 import * as fs from 'fs';
 
 /**

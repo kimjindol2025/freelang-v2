@@ -1,0 +1,412 @@
+/**
+ * FreeLang v2 stdlib — nodemailer.fl
+ *
+ * npm nodemailer 완전 대체 (외부 npm 0개)
+ * Node.js 내장 net/tls 모듈로 SMTP 직접 구현
+ *
+ * 지원:
+ *   - STARTTLS (포트 587)
+ *   - SSL/TLS  (포트 465)
+ *   - Plain SMTP (포트 25)
+ *   - HTML 본문 / plain text
+ *   - 첨부파일 (Base64 MIME)
+ *   - 커넥션 풀
+ *   - Gmail / Outlook / Naver 프리셋
+ *
+ * 사용 예시:
+ *   import "nodemailer"
+ *
+ *   var transport = createTransport({
+ *     host: "smtp.gmail.com",
+ *     port: 587,
+ *     secure: false,
+ *     user: "me@gmail.com",
+ *     pass: "app-password",
+ *     pool: false,
+ *     maxConnections: 5,
+ *     timeout: 10000
+ *   })
+ *
+ *   var result = sendSimple(transport,
+ *     "to@example.com", "제목", "본문")
+ *
+ *   var gmail = gmailTransport("me@gmail.com", "app-pass")
+ */
+
+// ============================================
+// SMTPConfig — SMTP 서버 연결 설정
+// ============================================
+
+struct SMTPConfig {
+  host: string,            // SMTP 서버 호스트 (예: "smtp.gmail.com")
+  port: int,               // 포트: 587(STARTTLS) | 465(SSL) | 25(Plain)
+  secure: bool,            // true = SSL/TLS, false = STARTTLS
+  user: string,            // 인증 사용자명 (이메일)
+  pass: string,            // 인증 비밀번호 또는 앱 비밀번호
+  pool: bool,              // 커넥션 풀 사용 여부
+  maxConnections: int,     // 풀 최대 연결 수 (기본 5)
+  timeout: int             // 연결/응답 타임아웃 ms (기본 10000)
+}
+
+// ============================================
+// Attachment — 첨부파일
+// ============================================
+
+struct Attachment {
+  filename: string,        // 파일명 (예: "report.pdf")
+  path: string,            // 파일 시스템 경로 (path 또는 content 중 하나)
+  content: string,         // 직접 내용 (path 대신 사용)
+  contentType: string,     // MIME 타입 (예: "application/pdf")
+  encoding: string         // "base64" | "utf8" (기본 "base64")
+}
+
+// ============================================
+// MailOptions — 메일 전송 옵션
+// ============================================
+
+struct MailOptions {
+  from: string,            // 발신자: "이름 <email>" 또는 "email"
+  to: any,                 // 수신자: string 또는 string array
+  cc: any,                 // 참조: string 또는 string array
+  bcc: any,                // 숨은 참조: string 또는 string array
+  subject: string,         // 제목
+  text: string,            // 일반 텍스트 본문
+  html: string,            // HTML 본문 (text보다 우선)
+  attachments: array,      // Attachment[] 첨부파일 목록
+  headers: map,            // 커스텀 헤더
+  replyTo: string,         // Reply-To 헤더
+  priority: string         // "high" | "normal" | "low"
+}
+
+// ============================================
+// MailResult — 전송 결과
+// ============================================
+
+struct MailResult {
+  accepted: array,         // 수락된 수신자 주소 목록
+  rejected: array,         // 거부된 수신자 주소 목록
+  messageId: string,       // Message-ID 헤더 값
+  error: string            // 오류 메시지 (성공 시 빈 문자열)
+}
+
+// ============================================
+// Transporter — 재사용 가능한 SMTP 연결 핸들
+// ============================================
+
+struct Transporter {
+  config: SMTPConfig,      // 연결 설정
+  isConnected: bool,       // 연결 상태
+  connectionId: string     // 내부 커넥션 ID (네이티브 레이어 참조)
+}
+
+// ============================================
+// createTransport — Transporter 초기화
+// ============================================
+
+fn createTransport(config: SMTPConfig) -> Transporter {
+  // 기본값 보완
+  let host = config.host || "localhost"
+  let port = config.port || 587
+  let maxConnections = config.maxConnections || 5
+  let timeout = config.timeout || 10000
+
+  let fullConfig: SMTPConfig = {
+    host: host,
+    port: port,
+    secure: config.secure || false,
+    user: config.user || "",
+    pass: config.pass || "",
+    pool: config.pool || false,
+    maxConnections: maxConnections,
+    timeout: timeout
+  }
+
+  // 네이티브 레이어에 연결 초기화 (lazy — 실제 TCP 연결은 sendMail 시점)
+  let connId = nodemailer_connect(
+    fullConfig.host,
+    fullConfig.port,
+    fullConfig.secure,
+    fullConfig.user,
+    fullConfig.pass,
+    fullConfig.timeout
+  )
+
+  return {
+    config: fullConfig,
+    isConnected: connId != "",
+    connectionId: connId
+  }
+}
+
+// ============================================
+// normalizeAddresses — to/cc/bcc 주소 정규화
+// array → "a@x.com, b@x.com" 문자열
+// ============================================
+
+fn normalizeAddresses(addr: any) -> string {
+  if (typeof(addr) == "array") {
+    return arr.join(addr, ", ")
+  }
+  return str(addr) || ""
+}
+
+// ============================================
+// sendMail — 메일 전송 (풀 API)
+// ============================================
+
+fn sendMail(transport: Transporter, options: MailOptions) -> MailResult {
+  if (!transport.isConnected || transport.connectionId == "") {
+    return {
+      accepted: [],
+      rejected: [],
+      messageId: "",
+      error: "Transporter가 연결되지 않았습니다"
+    }
+  }
+
+  let toStr = normalizeAddresses(options.to)
+  let ccStr = normalizeAddresses(options.cc)
+  let bccStr = normalizeAddresses(options.bcc)
+
+  // 첨부파일이 있으면 MIME multipart 경로
+  if (arr.length(options.attachments) > 0) {
+    // 첨부파일 직렬화 (JSON)
+    let mailJson = jsonstringify({
+      from: options.from || transport.config.user,
+      to: toStr,
+      cc: ccStr,
+      bcc: bccStr,
+      subject: options.subject || "",
+      text: options.text || "",
+      html: options.html || "",
+      attachments: options.attachments,
+      replyTo: options.replyTo || "",
+      priority: options.priority || "normal",
+      headers: options.headers || {}
+    })
+    let raw = nodemailer_send_attachment(transport.connectionId, mailJson)
+    return {
+      accepted: raw.accepted || [],
+      rejected: raw.rejected || [],
+      messageId: raw.messageId || "",
+      error: raw.error || ""
+    }
+  }
+
+  // 첨부파일 없음 — 일반 경로
+  let raw = nodemailer_send(
+    transport.connectionId,
+    options.from || transport.config.user,
+    toStr,
+    ccStr,
+    bccStr,
+    options.subject || "",
+    options.text || "",
+    options.html || "",
+    options.replyTo || "",
+    options.priority || "normal"
+  )
+
+  return {
+    accepted: raw.accepted || [],
+    rejected: raw.rejected || [],
+    messageId: raw.messageId || "",
+    error: raw.error || ""
+  }
+}
+
+// ============================================
+// verify — SMTP 서버 연결 검증
+// ============================================
+
+fn verify(transport: Transporter) -> bool {
+  if (!transport.isConnected || transport.connectionId == "") {
+    return false
+  }
+  return nodemailer_verify(transport.connectionId)
+}
+
+// ============================================
+// close — Transporter 연결 해제
+// ============================================
+
+fn close(transport: Transporter) -> void {
+  if (transport.connectionId != "") {
+    nodemailer_close(transport.connectionId)
+    transport.isConnected = false
+    transport.connectionId = ""
+  }
+}
+
+// ============================================
+// renderTemplate — 문자열 템플릿 치환
+// "안녕 {{name}}님" + {name: "김"} → "안녕 김님"
+// ============================================
+
+fn renderTemplate(template: string, vars: map) -> string {
+  let result = template
+  let keys = arr.keys(vars)
+  let i = 0
+  while (i < arr.length(keys)) {
+    let key = keys[i]
+    let placeholder = "{{" + key + "}}"
+    let value = str(vars[key])
+    result = str.replace_all(result, placeholder, value)
+    i = i + 1
+  }
+  return result
+}
+
+// ============================================
+// sendSimple — 단순 텍스트 메일 전송
+// ============================================
+
+fn sendSimple(transport: Transporter, to: string, subject: string, text: string) -> MailResult {
+  return sendMail(transport, {
+    from: transport.config.user,
+    to: to,
+    cc: "",
+    bcc: "",
+    subject: subject,
+    text: text,
+    html: "",
+    attachments: [],
+    headers: {},
+    replyTo: "",
+    priority: "normal"
+  })
+}
+
+// ============================================
+// sendHTML — HTML 메일 전송
+// ============================================
+
+fn sendHTML(transport: Transporter, to: string, subject: string, html: string) -> MailResult {
+  return sendMail(transport, {
+    from: transport.config.user,
+    to: to,
+    cc: "",
+    bcc: "",
+    subject: subject,
+    text: "",
+    html: html,
+    attachments: [],
+    headers: {},
+    replyTo: "",
+    priority: "normal"
+  })
+}
+
+// ============================================
+// sendWithAttachment — 첨부파일 포함 메일 전송
+// filePath가 options.attachments에 없으면 자동 추가
+// ============================================
+
+fn sendWithAttachment(transport: Transporter, options: MailOptions, filePath: string) -> MailResult {
+  let attachments = options.attachments || []
+
+  // filePath가 주어지면 첨부파일 목록에 자동 추가
+  if (filePath != "") {
+    let filename = nodemailer_basename(filePath)
+    let ext = nodemailer_extname(filePath)
+    let mime = nodemailer_mime_type(ext)
+
+    attachments.push({
+      filename: filename,
+      path: filePath,
+      content: "",
+      contentType: mime,
+      encoding: "base64"
+    })
+  }
+
+  let mergedOptions: MailOptions = {
+    from: options.from || transport.config.user,
+    to: options.to || "",
+    cc: options.cc || "",
+    bcc: options.bcc || "",
+    subject: options.subject || "",
+    text: options.text || "",
+    html: options.html || "",
+    attachments: attachments,
+    headers: options.headers || {},
+    replyTo: options.replyTo || "",
+    priority: options.priority || "normal"
+  }
+
+  return sendMail(transport, mergedOptions)
+}
+
+// ============================================
+// gmailTransport — Gmail SMTP 프리셋
+//
+// ※ Gmail은 "앱 비밀번호" 필요
+//    (Google 계정 → 보안 → 앱 비밀번호)
+// ============================================
+
+fn gmailTransport(user: string, pass: string) -> Transporter {
+  return createTransport({
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false,   // STARTTLS
+    user: user,
+    pass: pass,
+    pool: false,
+    maxConnections: 5,
+    timeout: 10000
+  })
+}
+
+// ============================================
+// outlookTransport — Microsoft Outlook/365 프리셋
+// ============================================
+
+fn outlookTransport(user: string, pass: string) -> Transporter {
+  return createTransport({
+    host: "smtp-mail.outlook.com",
+    port: 587,
+    secure: false,   // STARTTLS
+    user: user,
+    pass: pass,
+    pool: false,
+    maxConnections: 5,
+    timeout: 10000
+  })
+}
+
+// ============================================
+// naverTransport — Naver 메일 SMTP 프리셋
+//
+// ※ 네이버 SMTP 사용: 네이버 메일 설정 → SMTP 허용
+// ============================================
+
+fn naverTransport(user: string, pass: string) -> Transporter {
+  return createTransport({
+    host: "smtp.naver.com",
+    port: 587,
+    secure: false,   // STARTTLS
+    user: user,
+    pass: pass,
+    pool: false,
+    maxConnections: 5,
+    timeout: 10000
+  })
+}
+
+// ============================================
+// sendTemplate — 템플릿 + 변수 치환 후 발송
+// ============================================
+
+fn sendTemplate(transport: Transporter, to: string, subject: string, template: string, vars: map) -> MailResult {
+  let body = renderTemplate(template, vars)
+  return sendSimple(transport, to, subject, body)
+}
+
+// ============================================
+// sendHTMLTemplate — HTML 템플릿 + 변수 치환 후 발송
+// ============================================
+
+fn sendHTMLTemplate(transport: Transporter, to: string, subject: string, htmlTemplate: string, vars: map) -> MailResult {
+  let html = renderTemplate(htmlTemplate, vars)
+  return sendHTML(transport, to, subject, html)
+}
