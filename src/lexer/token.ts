@@ -156,6 +156,7 @@ export const KEYWORDS: Record<string, TokenType> = {
   // v1 기본
   'fn': TokenType.FN,
   'let': TokenType.LET,
+  'var': TokenType.LET,
   'const': TokenType.CONST,
   'if': TokenType.IF,
   'else': TokenType.ELSE,

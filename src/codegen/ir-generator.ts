@@ -30,6 +30,7 @@ export class IRGenerator {
   private moduleLinkContext?: ModuleLinkContext;  // Phase 4 Step 5: Module linking
   private localScope: Set<string> = new Set();  // Function parameter scope tracking
   private immutabilityCodegen: ImmutabilityCodegen;  // v2.39: Native Immutable COW engine
+  private loopStack: Array<{ startAddr: number; breakJumps: number[] }> = [];  // break/continue support
 
   /**
    * AST → IR instructions
@@ -282,6 +283,18 @@ export class IRGenerator {
     // Step 5: 모듈 본체 IR 생성
     for (const stmt of module.statements) {
       this.traverse(stmt, instructions);
+    }
+
+    // Step 5b: main() 함수 자동 호출 (톱레벨에 명시적 main() 호출이 없는 경우)
+    const hasMainFn = module.statements.some(
+      (s: any) => s?.type === 'function' && s?.name === 'main'
+    );
+    const hasExplicitMainCall = module.statements.some(
+      (s: any) => s?.type === 'expression' && s?.expression?.type === 'call' && s?.expression?.name === 'main'
+    );
+    if (hasMainFn && !hasExplicitMainCall) {
+      instructions.push({ op: Op.CALL, arg: 'main' });
+      instructions.push({ op: Op.POP });
     }
 
     // Step 6: HALT 추가
@@ -669,8 +682,11 @@ export class IRGenerator {
         }
         break;
 
-      case 'WhileStatement':
+      case 'WhileStatement': {
         const loopStart = out.length;
+        const breakJumps: number[] = [];
+        this.loopStack.push({ startAddr: loopStart, breakJumps });
+
         this.traverse(node.condition, out);
         const whileJmpIdx = out.length;
         out.push({ op: Op.JMP_NOT, arg: 0 }); // placeholder
@@ -678,7 +694,14 @@ export class IRGenerator {
         this.traverse(node.body, out);
         out.push({ op: Op.JMP, arg: loopStart });
         out[whileJmpIdx].arg = out.length; // patch jump target
+
+        // Patch all break jumps to loop exit
+        for (const bj of breakJumps) {
+          out[bj].arg = out.length;
+        }
+        this.loopStack.pop();
         break;
+      }
 
       // ── Array Operations ────────────────────────────────────
       case 'ArrayLiteral':
@@ -828,9 +851,8 @@ export class IRGenerator {
 
       // ── For Statement (Iterator-based Loop) ──────────────────
       case 'ForStatement':
-      case 'for':
+      case 'for': {
         // for...in loop: array iteration
-        // Treat same as ForOfStatement - use index-based approach
 
         // 1. Initialize index variable with 0
         const forIdxVar = `_idx_${this.indexVarCounter++}`;
@@ -844,6 +866,9 @@ export class IRGenerator {
 
         // 3. Loop condition check
         const forLoopStartAddr = out.length;
+        const forBreakJumps: number[] = [];
+        this.loopStack.push({ startAddr: forLoopStartAddr, breakJumps: forBreakJumps });
+
         out.push({ op: Op.LOAD, arg: forIdxVar });
         out.push({ op: Op.ARR_LEN, arg: forArrVar });
         out.push({ op: Op.LT });
@@ -870,13 +895,20 @@ export class IRGenerator {
 
         // 8. Patch exit jump
         out[forJmpIdx].arg = out.length;
+
+        // Patch all break jumps
+        for (const bj of forBreakJumps) {
+          out[bj].arg = out.length;
+        }
+        this.loopStack.pop();
         break;
+      }
 
       // ── For...Of Statement (Array iteration with index) ────────
       // Phase 2: Convert for...of to index-based while loop
       // for item of array { body }  →  let _idx = 0; while _idx < array.length { ... }
       case 'ForOfStatement':
-      case 'forOf':
+      case 'forOf': {
         // 1. Generate unique index variable
         const indexVar = `_for_idx_${this.indexVarCounter++}`;
 
@@ -893,6 +925,8 @@ export class IRGenerator {
 
         // 5. Loop start: check if index < array.length
         const forOfLoopStart = out.length;
+        const forOfBreakJumps: number[] = [];
+        this.loopStack.push({ startAddr: forOfLoopStart, breakJumps: forOfBreakJumps });
 
         // Load index
         out.push({ op: Op.LOAD, arg: indexVar });
@@ -930,9 +964,13 @@ export class IRGenerator {
         // 10. Patch JMP_NOT to point here (loop end)
         out[forOfJmpNotIdx].arg = out.length;
 
-        // 11. Clean up temporary variables (optional)
-        // out.push({ op: Op.POP }); // Pop array from stack if needed
+        // Patch all break jumps
+        for (const bj of forOfBreakJumps) {
+          out[bj].arg = out.length;
+        }
+        this.loopStack.pop();
         break;
+      }
 
       // ── Array Method Calls (Phase 3 Step 2) ──────────────────────
       // object.method(args) → evaluate and call
@@ -1209,6 +1247,23 @@ export class IRGenerator {
             out.push({ op: Op.STR_NEW, arg: sourceDesc });
             out.push({ op: Op.CALL, arg: 'assert' });
           }
+        }
+        break;
+
+      // ── Break/Continue ─────────────────────────────────────
+      case 'break':
+      case 'BreakStatement':
+        if (this.loopStack.length > 0) {
+          const breakJumpIdx = out.length;
+          out.push({ op: Op.JMP, arg: 0 }); // placeholder, patched at loop exit
+          this.loopStack[this.loopStack.length - 1].breakJumps.push(breakJumpIdx);
+        }
+        break;
+
+      case 'continue':
+      case 'ContinueStatement':
+        if (this.loopStack.length > 0) {
+          out.push({ op: Op.JMP, arg: this.loopStack[this.loopStack.length - 1].startAddr });
         }
         break;
 

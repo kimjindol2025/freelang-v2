@@ -1507,10 +1507,13 @@ export class Parser {
 
     this.expect(TokenType.RPAREN, 'Expected ) after parameters');
 
-    // Self-Formatting Compiler: 반환 타입 지원 (-> returnType)
+    // Self-Formatting Compiler: 반환 타입 지원 (-> returnType 또는 : returnType)
     let returnType: string | undefined;
     if (this.check(TokenType.ARROW)) {
       this.advance(); // consume '->'
+      returnType = this.parseType();
+    } else if (this.check(TokenType.COLON)) {
+      this.advance(); // consume ':'
       returnType = this.parseType();
     }
 
@@ -2591,7 +2594,7 @@ export class Parser {
    *   let mut count: number = 0
    */
   private parseVariableDeclaration(): VariableDeclaration {
-    this.expect(TokenType.LET, 'Expected "let"');
+    this.expect(TokenType.LET, 'Expected "let" or "var"');
 
     // 가변성 검사 (let mut)
     let mutable = false;
