@@ -36,6 +36,7 @@ import { registerVaultFunctions } from './stdlib/vault';
 import { registerEnvShieldFunctions } from './stdlib/native-env-shield';
 import { registerSecureHasherFunctions } from './stdlib/native-secure-hasher';
 import { registerProxyTunnelFunctions, handleProxyResponse, proxyRouteTable } from './stdlib/proxy-tunnel';
+import { registerDotenvFunctions } from './stdlib/dotenv';
 import * as fs from 'fs';
 
 /**
@@ -4115,6 +4116,11 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
   // validate_schema_register/list/validate_request/validate_field/validate_email/
   // validate_min_max/validate_range/validate_required/validate_regex/validate_violation_list
   registerNativeRequestValidator(registry);
+
+  // dotenv.fl: npm dotenv 완전 대체 (외부 npm 0개)
+  // dotenv_load_file/dotenv_parse_content/dotenv_apply/dotenv_expand_map/
+  // dotenv_validate_vars/dotenv_keys_to_example/dotenv_load/dotenv_load_default
+  registerDotenvFunctions(registry);
 
   // Native-Env-Shield: dotenv-safe 완전 대체 (외부 npm 0개)
   // env_define/env_require/env_get/env_validate_all/env_boot_check/

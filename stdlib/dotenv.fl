@@ -1,0 +1,335 @@
+/**
+ * FreeLang stdlib — dotenv
+ *
+ * npm dotenv 완전 대체 구현
+ * .env 파일 파싱 및 환경변수 로딩
+ *
+ * 사용 예시:
+ *   import "stdlib/dotenv"
+ *
+ *   // 기본 사용 (.env 자동 로드)
+ *   dotenv_load_default()
+ *
+ *   // 경로 지정
+ *   loadFromPath("/app/config/.env.production")
+ *
+ *   // 상세 설정
+ *   let cfg = DotenvConfig {
+ *     path: ".env.local",
+ *     override: true,
+ *     debug: false,
+ *     expand: true
+ *   }
+ *   loadConfig(cfg)
+ *
+ *   // 필수 변수 검증
+ *   requireVars(["DB_HOST", "DB_PORT", "JWT_SECRET"])
+ *
+ *   // 타입 변환 접근자
+ *   let port    = getInt("PORT", 3000)
+ *   let isDebug = getBool("DEBUG", false)
+ *   let tags    = getList("TAGS", ",")
+ *
+ * 파싱 규칙:
+ *   # 주석 무시
+ *   KEY=VALUE
+ *   KEY="VALUE WITH SPACES"
+ *   KEY='single quotes'
+ *   KEY=                    ← 빈 값 허용
+ *   EXPORT KEY=VALUE        ← export 키워드 무시
+ *     KEY = VALUE           ← 공백 trim
+ *   BASE=/home
+ *   PATH=${BASE}/bin        ← expand:true 시 치환
+ *
+ * 네이티브 함수 (src/stdlib/dotenv.ts):
+ *   dotenv_load_file(path)              → string  (파일 내용)
+ *   dotenv_parse_line(line)             → any     (null | [key, val])
+ *   dotenv_apply(parsed, override)      → int     (로드된 변수 수)
+ *   dotenv_expand_map(parsed)           → any     (확장된 map)
+ *   dotenv_validate_vars(vars)          → any     ({ missing: [], valid: bool })
+ */
+
+// ============================================
+// Struct 정의
+// ============================================
+
+struct DotenvConfig {
+  path: string,        // .env 파일 경로 (기본: ".env")
+  override: bool,      // 이미 설정된 환경변수 덮어쓰기 여부
+  debug: bool,         // 파싱 과정 디버그 출력
+  expand: bool         // 변수 참조 확장 (${VAR} 형식)
+}
+
+struct DotenvResult {
+  parsed: any,         // 파싱된 KEY→VALUE 맵
+  error: string,       // 오류 메시지 (없으면 "")
+  loaded: int          // 로드된 변수 수
+}
+
+struct DotenvValidation {
+  required: any,       // 필수 환경변수 목록 (array)
+  missing: any,        // 없는 필수 변수 목록 (array)
+  valid: bool
+}
+
+// ============================================
+// 기본 설정 생성
+// ============================================
+
+fn defaultConfig() -> DotenvConfig {
+  return DotenvConfig {
+    path: ".env",
+    override: false,
+    debug: false,
+    expand: false
+  }
+}
+
+// ============================================
+// 파싱 (환경변수 설정 없이 map만 반환)
+// ============================================
+
+fn parse(content: string) -> any {
+  // 네이티브 구현으로 위임
+  return dotenv_parse_content(content)
+}
+
+// ============================================
+// 변수 참조 확장 (${VAR} 치환)
+// ============================================
+
+fn expand(parsed: any) -> any {
+  return dotenv_expand_map(parsed)
+}
+
+// ============================================
+// 핵심 로드 함수
+// ============================================
+
+fn loadConfig(config: DotenvConfig) -> DotenvResult {
+  // 1. 파일 읽기
+  let content = dotenv_load_file(config.path)
+
+  if content == null {
+    return DotenvResult {
+      parsed: null,
+      error: "ENOENT: 파일을 찾을 수 없습니다: " + config.path,
+      loaded: 0
+    }
+  }
+
+  if startswith(content, "ERROR:") {
+    return DotenvResult {
+      parsed: null,
+      error: content,
+      loaded: 0
+    }
+  }
+
+  if config.debug {
+    println("[dotenv] 파일 로드: " + config.path)
+  }
+
+  // 2. 파싱
+  let parsed = dotenv_parse_content(content)
+
+  // 3. 변수 참조 확장
+  if config.expand {
+    parsed = dotenv_expand_map(parsed)
+  }
+
+  // 4. 환경변수 적용
+  let loaded = dotenv_apply(parsed, config.override)
+
+  if config.debug {
+    println("[dotenv] 로드 완료: " + str(loaded) + "개 변수")
+  }
+
+  return DotenvResult {
+    parsed: parsed,
+    error: "",
+    loaded: loaded
+  }
+}
+
+// 경로 지정 로드
+fn loadFromPath(path: string) -> DotenvResult {
+  let config = defaultConfig()
+  config.path = path
+  return loadConfig(config)
+}
+
+// 기본 .env 파일 로드
+fn load() -> DotenvResult {
+  return loadConfig(defaultConfig())
+}
+
+// ============================================
+// 필수 변수 검증 (dotenv-safe)
+// ============================================
+
+fn validate(required: any) -> DotenvValidation {
+  let result = dotenv_validate_vars(required)
+  return DotenvValidation {
+    required: required,
+    missing: result.missing,
+    valid: result.valid
+  }
+}
+
+// 없으면 에러 출력 후 종료
+fn requireVars(vars: any) -> void {
+  let result = dotenv_validate_vars(vars)
+
+  if !result.valid {
+    println("[dotenv] ❌ 필수 환경변수 누락:")
+    let i = 0
+    while i < arr_len(result.missing) {
+      println("  - " + result.missing[i])
+      i = i + 1
+    }
+    println("[dotenv] .env 파일 또는 환경변수를 확인하세요.")
+    os_exit(1)
+  }
+}
+
+// ============================================
+// 타입 변환 접근자 (env_get 래핑)
+// ============================================
+
+// 문자열 반환
+fn get(key: string) -> string {
+  let val = env_get(key)
+  if val == null {
+    return ""
+  }
+  return val
+}
+
+// 기본값 포함 문자열 반환
+fn getDefault(key: string, defaultVal: string) -> string {
+  let val = env_get(key)
+  if val == null {
+    return defaultVal
+  }
+  if val == "" {
+    return defaultVal
+  }
+  return val
+}
+
+// 정수 변환
+fn getInt(key: string, defaultVal: int) -> int {
+  let val = env_get(key)
+  if val == null {
+    return defaultVal
+  }
+  if val == "" {
+    return defaultVal
+  }
+  return int(val)
+}
+
+// 불리언 변환
+// "true" / "1" / "yes" / "on" → true, 그 외 → false
+fn getBool(key: string, defaultVal: bool) -> bool {
+  let val = env_get(key)
+  if val == null {
+    return defaultVal
+  }
+  if val == "" {
+    return defaultVal
+  }
+
+  let lower = tolower(val)
+  if lower == "true" {
+    return true
+  }
+  if lower == "1" {
+    return true
+  }
+  if lower == "yes" {
+    return true
+  }
+  if lower == "on" {
+    return true
+  }
+  if lower == "false" {
+    return false
+  }
+  if lower == "0" {
+    return false
+  }
+  if lower == "no" {
+    return false
+  }
+  if lower == "off" {
+    return false
+  }
+
+  return defaultVal
+}
+
+// 리스트 변환: "a,b,c" → ["a","b","c"]
+fn getList(key: string, sep: string) -> any {
+  let val = env_get(key)
+  if val == null {
+    return []
+  }
+  if val == "" {
+    return []
+  }
+
+  let parts = split(val, sep)
+  let result = []
+  let i = 0
+
+  while i < arr_len(parts) {
+    let item = trim(parts[i])
+    if strlen(item) > 0 {
+      result = arr_push(result, item)
+    }
+    i = i + 1
+  }
+
+  return result
+}
+
+// ============================================
+// .env.example 파일 생성
+// ============================================
+
+fn generateExample(parsed: any, outputPath: string) -> void {
+  let content = dotenv_keys_to_example(parsed)
+  file_write(outputPath, content)
+  println("[dotenv] .env.example 생성 완료: " + outputPath)
+}
+
+// ============================================
+// Export
+// ============================================
+
+export {
+  DotenvConfig,
+  DotenvResult,
+  DotenvValidation,
+
+  load,
+  loadFromPath,
+  loadConfig,
+
+  parse,
+  expand,
+
+  validate,
+  requireVars,
+
+  get,
+  getDefault,
+  getInt,
+  getBool,
+  getList,
+
+  generateExample,
+  defaultConfig
+}
