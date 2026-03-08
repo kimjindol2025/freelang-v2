@@ -1,0 +1,98 @@
+// self-test-demo.fl - Self-Testing Compiler 데모
+//
+// 실행 방법:
+//   freelang test examples/self-test-demo.fl
+//   freelang build --test examples/self-test-demo.fl
+//
+// 릴리즈 빌드 (test 블록 0바이트):
+//   freelang run examples/self-test-demo.fl
+
+// ── 대상 함수 (비즈니스 로직) ──
+
+fn add(a, b) {
+  return a + b
+}
+
+fn multiply(a, b) {
+  return a * b
+}
+
+fn is_even(n) {
+  let r = n % 2
+  if (r == 0) {
+    return true
+  }
+  return false
+}
+
+fn clamp(val, min_val, max_val) {
+  if (val < min_val) {
+    return min_val
+  }
+  if (val > max_val) {
+    return max_val
+  }
+  return val
+}
+
+// ── 내장 어설션 (std/test.fl 인라인) ──
+
+fn assert_equal(actual, expected, message) {
+  if (actual == expected) {
+    let _ok = 0
+  } else {
+    print("__PROOF_FAIL:Expected " + string(expected) + ", got " + string(actual) + " - " + message)
+  }
+}
+
+fn assert_true(val, message) {
+  if (val == false) {
+    print("__PROOF_FAIL:" + message)
+  }
+}
+
+fn assert_false(val, message) {
+  if (val == true) {
+    print("__PROOF_FAIL:" + message)
+  }
+}
+
+// ── test 블록 (Self-Testing Compiler 신규 문법) ──
+// 릴리즈 빌드에서는 이 블록 전체가 0바이트로 제거됩니다
+
+test "덧셈 기본 검증" {
+  let result = add(10, 20)
+  assert_equal(result, 30, "10 + 20 = 30")
+  // NOTE: FreeLang v2 VM 다중 let 버그 우회: 직접 인라인 호출
+  assert_equal(add(-5, 5), 0, "-5 + 5 = 0")
+  assert_equal(add(0, 0), 0, "0 + 0 = 0")
+}
+
+test "곱셈 검증" {
+  let result = multiply(6, 7)
+  assert_equal(result, 42, "6 x 7 = 42")
+  let zero = multiply(100, 0)
+  assert_equal(zero, 0, "any * 0 = 0")
+}
+
+test "짝수 판별 검증" {
+  assert_true(is_even(4), "4는 짝수")
+  assert_true(is_even(0), "0은 짝수")
+  assert_false(is_even(7), "7은 홀수")
+  assert_false(is_even(-3), "-3은 홀수")
+}
+
+test "clamp 범위 제한 검증" {
+  assert_equal(clamp(5, 0, 10), 5, "범위 내 값은 그대로")
+  assert_equal(clamp(-1, 0, 10), 0, "최솟값 미만은 최솟값")
+  assert_equal(clamp(15, 0, 10), 10, "최댓값 초과는 최댓값")
+}
+
+test.skip "미구현 기능 테스트 (건너뜀)" {
+  assert_equal(1, 2, "이 테스트는 실행되지 않습니다")
+}
+
+// ── 메인 (릴리즈 빌드에서 실행되는 코드) ──
+
+let r = add(3, 4)
+print("3 + 4 = " + string(r))

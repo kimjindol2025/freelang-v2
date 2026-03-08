@@ -1,0 +1,201 @@
+/**
+ * REST API 서버 예제
+ * Express-Compatible Framework 사용
+ *
+ * 사용자(User) 관리 REST API:
+ * - GET /api/users          : 모든 사용자 조회
+ * - GET /api/users/:id      : 특정 사용자 조회
+ * - POST /api/users         : 사용자 생성
+ * - PUT /api/users/:id      : 사용자 수정
+ * - DELETE /api/users/:id   : 사용자 삭제
+ */
+
+import { createApp, get, post, put, delete, use, listen } from "./stdlib/express-compat"
+
+// ============================================
+// 메모리 DB (시뮬레이션)
+// ============================================
+
+let users = [
+  { id: 1, name: "Alice", email: "alice@example.com" },
+  { id: 2, name: "Bob", email: "bob@example.com" },
+  { id: 3, name: "Charlie", email: "charlie@example.com" }
+]
+
+let nextUserId = 4
+
+// ============================================
+// 미들웨어
+// ============================================
+
+// 로깅 미들웨어
+fn loggingMiddleware(req, res) {
+  println("[LOG]", req.method, req.path, "Query:", req.query)
+  return true  // 다음 미들웨어로
+}
+
+// JSON 파싱 미들웨어
+fn jsonParserMiddleware(req, res) {
+  if req.headers["content-type"] == "application/json" {
+    parseJson(req)
+  }
+  return true
+}
+
+// ============================================
+// 라우트 핸들러
+// ============================================
+
+// GET /api/users - 모든 사용자 조회
+fn getAllUsers(req, res) {
+  respondJson(res, {
+    success: true,
+    data: users,
+    count: arr.length(users)
+  })
+}
+
+// GET /api/users/:id - 특정 사용자 조회
+fn getUserById(req, res) {
+  let id = getParam(req, "id")
+  let userId = int(id)
+
+  let found = false
+  let i = 0
+  while i < arr.length(users) {
+    if users[i].id == userId {
+      respondJson(res, { success: true, data: users[i] })
+      found = true
+      break
+    }
+    i = i + 1
+  }
+
+  if !found {
+    setStatus(res, 404)
+    respondJson(res, { success: false, error: "User not found" })
+  }
+}
+
+// POST /api/users - 사용자 생성
+fn createUser(req, res) {
+  let newUser = parseJson(req)
+  newUser.id = nextUserId
+  nextUserId = nextUserId + 1
+
+  arr.push(users, newUser)
+
+  setStatus(res, 201)
+  respondJson(res, {
+    success: true,
+    message: "User created",
+    data: newUser
+  })
+}
+
+// PUT /api/users/:id - 사용자 수정
+fn updateUser(req, res) {
+  let id = getParam(req, "id")
+  let userId = int(id)
+  let updateData = parseJson(req)
+
+  let found = false
+  let i = 0
+  while i < arr.length(users) {
+    if users[i].id == userId {
+      // 필드 업데이트
+      if updateData.name != null {
+        users[i].name = updateData.name
+      }
+      if updateData.email != null {
+        users[i].email = updateData.email
+      }
+
+      respondJson(res, {
+        success: true,
+        message: "User updated",
+        data: users[i]
+      })
+      found = true
+      break
+    }
+    i = i + 1
+  }
+
+  if !found {
+    setStatus(res, 404)
+    respondJson(res, { success: false, error: "User not found" })
+  }
+}
+
+// DELETE /api/users/:id - 사용자 삭제
+fn deleteUser(req, res) {
+  let id = getParam(req, "id")
+  let userId = int(id)
+
+  let found = false
+  let i = 0
+  while i < arr.length(users) {
+    if users[i].id == userId {
+      let deleted = users[i]
+      // 배열에서 삭제 (간단한 구현)
+      // 주: FreeLang에 배열 splice가 필요
+      respondJson(res, {
+        success: true,
+        message: "User deleted",
+        data: deleted
+      })
+      found = true
+      break
+    }
+    i = i + 1
+  }
+
+  if !found {
+    setStatus(res, 404)
+    respondJson(res, { success: false, error: "User not found" })
+  }
+}
+
+// 헬스체크
+fn healthCheck(req, res) {
+  respondJson(res, {
+    status: "healthy",
+    timestamp: os.time(),
+    uptime: "0.0s"
+  })
+}
+
+// ============================================
+// 애플리케이션 설정
+// ============================================
+
+fn main() {
+  let app = createApp()
+
+  // 미들웨어 등록
+  use(app, loggingMiddleware)
+  use(app, jsonParserMiddleware)
+
+  // 라우트 등록
+  get(app, "/health", healthCheck)
+
+  get(app, "/api/users", getAllUsers)
+  get(app, "/api/users/:id", getUserById)
+  post(app, "/api/users", createUser)
+  put(app, "/api/users/:id", updateUser)
+  delete(app, "/api/users/:id", deleteUser)
+
+  // 서버 시작
+  listen(app, 3000)
+
+  println("✅ REST API 서버 시작!")
+  println("   GET    /health              - 헬스체크")
+  println("   GET    /api/users           - 모든 사용자 조회")
+  println("   GET    /api/users/:id       - 특정 사용자 조회")
+  println("   POST   /api/users           - 사용자 생성")
+  println("   PUT    /api/users/:id       - 사용자 수정")
+  println("   DELETE /api/users/:id       - 사용자 삭제")
+}
+
+main()

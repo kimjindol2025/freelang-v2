@@ -1,0 +1,3 @@
+fn countUp(max: i32) -> void {
+  println("test")
+}

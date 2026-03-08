@@ -1,0 +1,159 @@
+// FreeLang Observability System - Execution Tracer
+// 코드 실행의 논리와 과정을 자동으로 기록하는 시스템
+
+module observability {
+    
+    // 실행 추적 데이터 구조
+    type ExecutionTrace {
+        traceId: string,
+        timestamp: number,
+        functionName: string,
+        arguments: any,
+        result: any,
+        executionTimeMs: number,
+        memoryUsedMb: number,
+        stackTrace: string[],
+        status: "success" | "error" | "pending"
+    }
+
+    // 성능 메트릭
+    type PerformanceMetric {
+        functionName: string,
+        callCount: number,
+        totalTimeMs: number,
+        avgTimeMs: number,
+        minTimeMs: number,
+        maxTimeMs: number,
+        errorCount: number
+    }
+
+    // 추적 저장소
+    class TraceStore {
+        traces: ExecutionTrace[] = [],
+        maxTraces: number = 10000,
+        
+        fn addTrace(trace: ExecutionTrace) -> void {
+            if (traces.length >= maxTraces) {
+                traces.shift()  // FIFO
+            }
+            traces.append(trace)
+        },
+        
+        fn getTraces(functionName?: string) -> ExecutionTrace[] {
+            if (functionName == null) {
+                return traces
+            }
+            return traces.filter(t => t.functionName == functionName)
+        },
+        
+        fn clearTraces() -> void {
+            traces = []
+        },
+        
+        fn getMetrics() -> Map<string, PerformanceMetric> {
+            let metrics: Map<string, PerformanceMetric> = {}
+            
+            for trace in traces {
+                let fnName = trace.functionName
+                if (!(fnName in metrics)) {
+                    metrics[fnName] = {
+                        functionName: fnName,
+                        callCount: 0,
+                        totalTimeMs: 0,
+                        avgTimeMs: 0,
+                        minTimeMs: Infinity,
+                        maxTimeMs: 0,
+                        errorCount: 0
+                    }
+                }
+                
+                let metric = metrics[fnName]
+                metric.callCount += 1
+                metric.totalTimeMs += trace.executionTimeMs
+                metric.avgTimeMs = metric.totalTimeMs / metric.callCount
+                metric.minTimeMs = min(metric.minTimeMs, trace.executionTimeMs)
+                metric.maxTimeMs = max(metric.maxTimeMs, trace.executionTimeMs)
+                
+                if (trace.status == "error") {
+                    metric.errorCount += 1
+                }
+            }
+            
+            return metrics
+        }
+    }
+
+    // 글로벌 추적 저장소
+    let globalTracer: TraceStore = new TraceStore()
+
+    // 함수 추적 데코레이터
+    fn traceFunction(
+        functionName: string,
+        args: any[],
+        fn: function
+    ) -> any {
+        let startTime = now()
+        let startMemory = getMemoryUsage()
+        let traceId = generateTraceId()
+        
+        try {
+            let result = fn(...args)
+            let endTime = now()
+            let endMemory = getMemoryUsage()
+            
+            let trace: ExecutionTrace = {
+                traceId: traceId,
+                timestamp: startTime,
+                functionName: functionName,
+                arguments: args,
+                result: result,
+                executionTimeMs: endTime - startTime,
+                memoryUsedMb: endMemory - startMemory,
+                stackTrace: getStackTrace(),
+                status: "success"
+            }
+            
+            globalTracer.addTrace(trace)
+            return result
+        } catch error {
+            let endTime = now()
+            let trace: ExecutionTrace = {
+                traceId: traceId,
+                timestamp: startTime,
+                functionName: functionName,
+                arguments: args,
+                result: null,
+                executionTimeMs: endTime - startTime,
+                memoryUsedMb: 0,
+                stackTrace: getStackTrace(),
+                status: "error"
+            }
+            
+            globalTracer.addTrace(trace)
+            throw error
+        }
+    }
+
+    // 유틸리티 함수들
+    fn generateTraceId() -> string {
+        return "trace_" + randomUUID()
+    }
+
+    fn now() -> number {
+        return Date.now()
+    }
+
+    fn getMemoryUsage() -> number {
+        // 런타임에서 메모리 사용량 반환
+        return 0  // 플레이스홀더
+    }
+
+    fn getStackTrace() -> string[] {
+        // 스택 트레이스 반환
+        return []  // 플레이스홀더
+    }
+
+    fn getTracer() -> TraceStore {
+        return globalTracer
+    }
+}

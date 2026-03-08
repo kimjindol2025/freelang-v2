@@ -1,0 +1,54 @@
+// FreeLang Lexer - Simplified
+
+struct Token {
+  type: string,
+  lexeme: string,
+  line: i32
+}
+
+fn isAlpha(ch: string) -> bool {
+  return (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch == "_"
+}
+
+fn isDigit(ch: string) -> bool {
+  return ch >= "0" && ch <= "9"
+}
+
+fn tokenize(source: string) -> [Token] {
+  var tokens: [Token] = []
+  var pos: i32 = 0
+  var len: i32 = length(source)
+
+  while pos < len {
+    var ch: string = char_at(source, pos)
+
+    if ch == " " {
+      pos = pos + 1
+      continue
+    }
+
+    if isDigit(ch) {
+      var start: i32 = pos
+      while pos < len && isDigit(char_at(source, pos)) {
+        pos = pos + 1
+      }
+      var lexeme: string = slice(source, start, pos)
+      var token: Token = Token { type: "INT", lexeme: lexeme, line: 1 }
+      push(tokens, token)
+      continue
+    }
+
+    pos = pos + 1
+  }
+
+  var token: Token = Token { type: "EOF", lexeme: "", line: 1 }
+  push(tokens, token)
+  return tokens
+}
+
+fn main(): void {
+  var code: string = "123 456"
+  var tokens: [Token] = tokenize(code)
+
+  println("Tokens: " + str(length(tokens)))
+}

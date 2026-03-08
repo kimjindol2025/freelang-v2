@@ -1,0 +1,231 @@
+/**
+ * FreeLang OAuth2 인증
+ *
+ * Google, GitHub OAuth2 지원
+ * - 인증 코드 교환
+ * - 사용자 정보 조회
+ * - 토큰 갱신
+ *
+ * Phase C 확장
+ */
+
+// ============================================
+// OAuth2 설정
+// ============================================
+
+struct OAuth2Config {
+  provider: string,              // "google", "github"
+  clientId: string,
+  clientSecret: string,
+  redirectUri: string,
+  scope: string,                 // comma-separated
+  authorizationUrl: string,
+  tokenUrl: string,
+  userInfoUrl: string
+}
+
+// ============================================
+// OAuth2 사용자 정보
+// ============================================
+
+struct OAuth2User {
+  id: string,
+  email: string,
+  name: string,
+  picture: string,
+  provider: string,
+  raw: map                       // 원본 응답
+}
+
+// ============================================
+// Google OAuth2
+// ============================================
+
+fn googleOAuth2Config(clientId: string, clientSecret: string, redirectUri: string) -> OAuth2Config {
+  return {
+    provider: "google",
+    clientId: clientId,
+    clientSecret: clientSecret,
+    redirectUri: redirectUri,
+    scope: "openid profile email",
+    authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+    tokenUrl: "https://oauth2.googleapis.com/token",
+    userInfoUrl: "https://openidconnect.googleapis.com/v1/userinfo"
+  }
+}
+
+// ============================================
+// GitHub OAuth2
+// ============================================
+
+fn githubOAuth2Config(clientId: string, clientSecret: string, redirectUri: string) -> OAuth2Config {
+  return {
+    provider: "github",
+    clientId: clientId,
+    clientSecret: clientSecret,
+    redirectUri: redirectUri,
+    scope: "user:email",
+    authorizationUrl: "https://github.com/login/oauth/authorize",
+    tokenUrl: "https://github.com/login/oauth/access_token",
+    userInfoUrl: "https://api.github.com/user"
+  }
+}
+
+// ============================================
+// OAuth2 인증 URL 생성
+// ============================================
+
+fn getAuthorizationUrl(config: OAuth2Config, state: string) -> string {
+  let url = config.authorizationUrl
+
+  // 파라미터 구성
+  let params = "?client_id=" + config.clientId
+  params = params + "&redirect_uri=" + config.redirectUri
+  params = params + "&response_type=code"
+  params = params + "&scope=" + config.scope
+  params = params + "&state=" + state
+
+  return url + params
+}
+
+// ============================================
+// 인증 코드로 토큰 교환
+// ============================================
+
+fn exchangeCodeForToken(config: OAuth2Config, code: string) -> map {
+  // 토큰 엔드포인트에 POST 요청
+  let body = {
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
+    code: code,
+    redirect_uri: config.redirectUri,
+    grant_type: "authorization_code"
+  }
+
+  // HTTP POST 요청 (url encoding)
+  let params = ""
+  params = params + "client_id=" + config.clientId
+  params = params + "&client_secret=" + config.clientSecret
+  params = params + "&code=" + code
+  params = params + "&redirect_uri=" + config.redirectUri
+  params = params + "&grant_type=authorization_code"
+
+  // TODO: fetch 구현 필요
+  // let response = fetch(config.tokenUrl, {
+  //   method: "POST",
+  //   headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  //   body: params
+  // })
+  // let result = parseJson(response)
+  // return result
+
+  // 임시 구현 (fetch 불가능할 경우 대체)
+  return {
+    access_token: "temp_token_xxx",
+    token_type: "Bearer",
+    expires_in: 3600,
+    refresh_token: "temp_refresh_xxx"
+  }
+}
+
+// ============================================
+// 토큰으로 사용자 정보 조회
+// ============================================
+
+fn getUserInfo(config: OAuth2Config, accessToken: string) -> OAuth2User {
+  // userinfo 엔드포인트에 GET 요청
+  // Authorization: Bearer <accessToken>
+
+  // TODO: fetch 구현 필요
+  // let response = fetch(config.userInfoUrl, {
+  //   method: "GET",
+  //   headers: {
+  //     "Authorization": "Bearer " + accessToken
+  //   }
+  // })
+  // let data = parseJson(response)
+
+  // 임시 구현 (fetch 불가능할 경우)
+  let data = {
+    sub: "temp_user_123",
+    id: 123,
+    email: "user@example.com",
+    name: "Test User",
+    login: "testuser",
+    picture: "https://example.com/avatar.jpg",
+    avatar_url: "https://example.com/avatar.jpg"
+  }
+
+  let user: OAuth2User = {
+    id: data.sub || data.id || "",
+    email: data.email || "",
+    name: data.name || data.login || "",
+    picture: data.picture || data.avatar_url || "",
+    provider: config.provider,
+    raw: data
+  }
+
+  return user
+}
+
+// ============================================
+// OAuth2 콜백 처리
+// ============================================
+
+fn handleOAuth2Callback(config: OAuth2Config, code: string, state: string) -> OAuth2User {
+  // 1. code로 token 교환
+  let tokenResponse = exchangeCodeForToken(config, code)
+
+  if tokenResponse == null {
+    return null
+  }
+
+  let accessToken = tokenResponse.access_token
+
+  // 2. token으로 사용자 정보 조회
+  let user = getUserInfo(config, accessToken)
+
+  return user
+}
+
+// ============================================
+// 토큰 갱신
+// ============================================
+
+fn refreshAccessToken(config: OAuth2Config, refreshToken: string) -> string {
+  // 토큰 갱신 요청
+  let params = ""
+  params = params + "client_id=" + config.clientId
+  params = params + "&client_secret=" + config.clientSecret
+  params = params + "&refresh_token=" + refreshToken
+  params = params + "&grant_type=refresh_token"
+
+  // TODO: fetch 구현 필요
+  // let response = fetch(config.tokenUrl, {
+  //   method: "POST",
+  //   headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  //   body: params
+  // })
+  // let data = parseJson(response)
+  // return data.access_token
+
+  return "refreshed_access_token_xxx"
+}
+
+// ============================================
+// Export
+// ============================================
+
+export {
+  OAuth2Config,
+  OAuth2User,
+
+  googleOAuth2Config,
+  githubOAuth2Config,
+
+  getAuthorizationUrl,
+  exchangeCodeForToken,
+  getUserInfo,
+  handleOAuth2Callback,
+  refreshAccessToken
+}

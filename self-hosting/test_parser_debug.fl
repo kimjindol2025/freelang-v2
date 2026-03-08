@@ -1,0 +1,44 @@
+struct Token {
+  type: string,
+  lexeme: string,
+  line: i32
+}
+
+fn tokenizeSimple(source: string) -> string {
+  var result: string = "["
+  var pos: i32 = 0
+  var len: i32 = length(source)
+  var line: i32 = 1
+  var first: bool = true
+
+  while pos < len {
+    var ch: string = char_at(source, pos)
+
+    if first {
+      first = false
+    } else {
+      result = result + ","
+    }
+
+    // 숫자 토큰
+    if ch >= "0" && ch <= "9" {
+      var start: i32 = pos
+      while pos < len && char_at(source, pos) >= "0" && char_at(source, pos) <= "9" {
+        pos = pos + 1
+      }
+      var lexeme: string = slice(source, start, pos)
+      result = result + "INT:" + lexeme
+      continue
+    }
+
+    pos = pos + 1
+  }
+
+  result = result + "]"
+  return result
+}
+
+fn main(): void {
+  var output: string = tokenizeSimple("123")
+  println(output)
+}

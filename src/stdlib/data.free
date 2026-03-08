@@ -1,0 +1,143 @@
+/**
+ * data.free - 데이터 처리 표준 라이브러리
+ * 배열, JSON, 객체 조작
+ */
+
+// 배열 매핑
+fn map(array: array, callback: fn(any) -> any) -> array {
+  let result: array = []
+  let i = 0
+  while i < array.length {
+    let item = array[i]
+    let mapped = callback(item)
+    result.push(mapped)
+    i = i + 1
+  }
+  return result
+}
+
+// 배열 필터링
+fn filter(array: array, callback: fn(any) -> bool) -> array {
+  let result: array = []
+  let i = 0
+  while i < array.length {
+    let item = array[i]
+    if callback(item) {
+      result.push(item)
+    }
+    i = i + 1
+  }
+  return result
+}
+
+// 배열 리듀싱
+fn reduce(array: array, callback: fn(any, any) -> any, initial: any) -> any {
+  let accumulator = initial
+  let i = 0
+  while i < array.length {
+    let item = array[i]
+    accumulator = callback(accumulator, item)
+    i = i + 1
+  }
+  return accumulator
+}
+
+// 배열 순회
+fn forEach(array: array, callback: fn(any) -> void) -> void {
+  let i = 0
+  while i < array.length {
+    let item = array[i]
+    callback(item)
+    i = i + 1
+  }
+}
+
+// 배열 찾기 (첫 번째 일치)
+fn find(array: array, callback: fn(any) -> bool) -> any {
+  let i = 0
+  while i < array.length {
+    let item = array[i]
+    if callback(item) {
+      return item
+    }
+    i = i + 1
+  }
+  return null
+}
+
+// 배열 인덱스 찾기
+fn findIndex(array: array, callback: fn(any) -> bool) -> int {
+  let i = 0
+  while i < array.length {
+    let item = array[i]
+    if callback(item) {
+      return i
+    }
+    i = i + 1
+  }
+  return -1
+}
+
+// 배열 길이
+fn length(array: array) -> int {
+  return array.length
+}
+
+// 배열 포함 여부
+fn includes(array: array, value: any) -> bool {
+  let i = 0
+  while i < array.length {
+    if array[i] == value {
+      return true
+    }
+    i = i + 1
+  }
+  return false
+}
+
+// JSON 파싱
+fn parseJson(str: string) -> any {
+  return vm.json.parse(str)
+}
+
+// JSON 직렬화
+fn stringifyJson(obj: any) -> string {
+  return vm.json.stringify(obj)
+}
+
+// 객체 키 가져오기
+fn keys(obj: any) -> array {
+  return vm.object.keys(obj)
+}
+
+// 객체 값 가져오기
+fn values(obj: any) -> array {
+  return vm.object.values(obj)
+}
+
+// 객체 항목 가져오기
+fn entries(obj: any) -> array {
+  return vm.object.entries(obj)
+}
+
+// 객체 병합
+fn merge(obj1: any, obj2: any) -> any {
+  return vm.object.assign(obj1, obj2)
+}
+
+export {
+  map,
+  filter,
+  reduce,
+  forEach,
+  find,
+  findIndex,
+  length,
+  includes,
+  parseJson,
+  stringifyJson,
+  keys,
+  values,
+  entries,
+  merge
+}

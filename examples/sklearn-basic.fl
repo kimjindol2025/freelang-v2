@@ -1,0 +1,64 @@
+/**
+ * FreeLang scikit-learn Phase 7 - Basic ML Demo
+ *
+ * 기본 머신러닝 함수 데모
+ */
+
+fn main() {
+  println("=================================")
+  println("FreeLang ML Phase 7 - Basic Demo")
+  println("=================================")
+  println("")
+
+  // 1. 통계 함수
+  println("1️⃣  통계 함수")
+  let data = [1.0, 2.0, 3.0, 4.0, 5.0]
+  let mean_val = stats_mean(data)
+  let std_val = stats_std_dev(data)
+  println("Mean: " + str(mean_val))
+  println("Std Dev: " + str(std_val))
+  println("")
+
+  // 2. 정규화
+  println("2️⃣  데이터 정규화 (Z-score)")
+  let normalized = ml_normalize_zscore(data)
+  println("Normalized count: " + str(arr_len(normalized)))
+  println("")
+
+  // 3. 거리 함수
+  println("3️⃣  거리 함수")
+  let p1 = [0.0, 0.0]
+  let p2 = [3.0, 4.0]
+  let dist_euclidean = ml_distance_euclidean(p1, p2)
+  let dist_manhattan = ml_distance_manhattan(p1, p2)
+  println("Euclidean: " + str(dist_euclidean))
+  println("Manhattan: " + str(dist_manhattan))
+  println("")
+
+  // 4. 선형 회귀
+  println("4️⃣  선형 회귀")
+  let x_data = [1.0, 2.0, 3.0, 4.0, 5.0]
+  let y_data = [2.0, 4.0, 5.0, 4.0, 5.0]
+  let model = ml_linear_regression(x_data, y_data)
+  println("Slope: " + str(model.slope))
+  println("Intercept: " + str(model.intercept))
+  println("R²: " + str(model.r2))
+  println("")
+
+  // 5. K-Means
+  println("5️⃣  K-Means")
+  let points = [
+    [1.0, 2.0],
+    [2.0, 3.0],
+    [3.0, 4.0],
+    [10.0, 11.0],
+    [11.0, 12.0]
+  ]
+  let centers = ml_kmeans_init(3, points)
+  println("Centers initialized: " + str(arr_len(centers)))
+  println("")
+
+  println("✅ All tests passed!")
+}
+
+main()

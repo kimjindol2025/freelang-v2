@@ -1,0 +1,213 @@
+/**
+ * FreeLang ORM 기본 예제
+ * CRUD 연산 및 쿼리 빌더 사용
+ */
+
+import {
+  sqlite,
+  select,
+  insert,
+  update,
+  delete,
+  where,
+  all,
+  first,
+  count,
+  limit,
+  order_by
+} from "./stdlib/orm"
+
+import { createApp, get, post, listen, respondJson, parseJson, getParam } from "./stdlib/express-compat"
+
+// ============================================
+// 데이터베이스 초기화
+// ============================================
+
+let db = sqlite("./app.db")
+
+// ============================================
+// 모델 정의
+// ============================================
+
+struct User {
+  id: int,
+  email: string,
+  name: string,
+  age: int
+}
+
+struct Post {
+  id: int,
+  userId: int,
+  title: string,
+  content: string,
+  published: bool
+}
+
+// ============================================
+// ORM 쿼리 함수들
+// ============================================
+
+// 모든 사용자 조회
+fn getAllUsers() -> array {
+  return select(db, "users")
+    .order_by("id ASC")
+    .all()
+}
+
+// 특정 사용자 조회
+fn getUserById(id: int) -> map {
+  return select(db, "users")
+    .where("id = ?", id)
+    .first()
+}
+
+// 사용자 생성
+fn createUser(email: string, name: string, age: int) -> int {
+  let result = insert(db, "users", {
+    email: email,
+    name: name,
+    age: age
+  })
+  return result.insertedId
+}
+
+// 사용자 업데이트
+fn updateUser(id: int, name: string, age: int) -> bool {
+  let builder = update(db, "users", { name: name, age: age })
+  builder = where(builder, "id = ?", id)
+  // execute_update(builder)  // 실제 구현 필요
+  return true
+}
+
+// 사용자 삭제
+fn deleteUser(id: int) -> bool {
+  let builder = delete(db, "users")
+  builder = where(builder, "id = ?", id)
+  // execute_delete(builder)  // 실제 구현 필요
+  return true
+}
+
+// 특정 나이 이상의 사용자
+fn getUsersByAge(minAge: int) -> array {
+  return select(db, "users")
+    .where("age >= ?", minAge)
+    .order_by("age DESC")
+    .all()
+}
+
+// 사용자 검색
+fn searchUsers(keyword: string) -> array {
+  return select(db, "users")
+    .where("email LIKE ?", "%" + keyword + "%")
+    .limit(10)
+    .all()
+}
+
+// 사용자 수
+fn countUsers() -> int {
+  let users = getAllUsers()
+  return arr.length(users)
+}
+
+// ============================================
+// REST API 엔드포인트
+// ============================================
+
+fn main() {
+  let app = createApp()
+
+  // 모든 사용자 조회
+  get(app, "/api/users", fn(req, res) {
+    let users = getAllUsers()
+    respondJson(res, {
+      success: true,
+      data: users,
+      count: arr.length(users)
+    })
+  })
+
+  // 특정 사용자 조회
+  get(app, "/api/users/:id", fn(req, res) {
+    let id = int(getParam(req, "id"))
+    let user = getUserById(id)
+
+    if user != null {
+      respondJson(res, { success: true, data: user })
+    } else {
+      setStatus(res, 404)
+      respondJson(res, { success: false, error: "User not found" })
+    }
+  })
+
+  // 나이별 검색
+  get(app, "/api/users/age/:minAge", fn(req, res) {
+    let minAge = int(getParam(req, "minAge"))
+    let users = getUsersByAge(minAge)
+    respondJson(res, { success: true, data: users })
+  })
+
+  // 사용자 생성
+  post(app, "/api/users", fn(req, res) {
+    let body = parseJson(req)
+    let userId = createUser(body.email, body.name, body.age)
+
+    setStatus(res, 201)
+    respondJson(res, {
+      success: true,
+      message: "User created",
+      userId: userId
+    })
+  })
+
+  // 사용자 수정
+  put(app, "/api/users/:id", fn(req, res) {
+    let id = int(getParam(req, "id"))
+    let body = parseJson(req)
+    let success = updateUser(id, body.name, body.age)
+
+    respondJson(res, {
+      success: success,
+      message: "User updated"
+    })
+  })
+
+  // 사용자 삭제
+  delete(app, "/api/users/:id", fn(req, res) {
+    let id = int(getParam(req, "id"))
+    let success = deleteUser(id)
+
+    respondJson(res, {
+      success: success,
+      message: "User deleted"
+    })
+  })
+
+  // 사용자 검색
+  get(app, "/api/users/search/:keyword", fn(req, res) {
+    let keyword = getParam(req, "keyword")
+    let users = searchUsers(keyword)
+
+    respondJson(res, {
+      success: true,
+      data: users,
+      count: arr.length(users)
+    })
+  })
+
+  // 통계
+  get(app, "/api/stats", fn(req, res) {
+    let totalUsers = countUsers()
+
+    respondJson(res, {
+      totalUsers: totalUsers,
+      totalPosts: 0  // TODO: Post 테이블 추가
+    })
+  })
+
+  // 서버 시작
+  listen(app, 3000)
+  println("✅ ORM + Express API 서버 시작!")
+}
+
+main()

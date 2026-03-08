@@ -1,0 +1,52 @@
+// FreeLang v2 Commit-Gate 예시
+// .git/hooks 미사용 → git config core.hooksPath 방식
+//
+// 설치:
+//   freelang gate install examples/commit-gate.free
+//
+// 이후 git commit 시 자동으로 아래 함수들이 실행됨.
+
+// ──────────────────────────────────────────────────────────────────
+// pre-commit: 커밋 전 무결성 검사
+// 린트 + 시크릿 감지 + 타입 검사
+// ──────────────────────────────────────────────────────────────────
+@git_hook(event: .pre_commit)
+fn validate_before_save() {
+    let info = vcs_info()
+    println("Commit-Gate 가동: " + str(info))
+
+    // 1. 하드코딩된 시크릿 차단
+    vcs_check_secrets()
+
+    // 2. 린트 검사 (TypeScript / ESLint)
+    vcs_lint()
+
+    println("Commit-Gate: 무결성 검증 통과")
+}
+
+// ──────────────────────────────────────────────────────────────────
+// pre-push: 푸시 전 전체 테스트 실행
+// ──────────────────────────────────────────────────────────────────
+@git_hook(event: .pre_push)
+fn full_test_before_push() {
+    let staged = git_staged_files()
+    let branch = git_branch()
+
+    println("Push 검증 - 브랜치: " + branch)
+
+    // 보호 브랜치에 직접 push 차단
+    if branch == "main" {
+        vcs_exit_error("main 브랜치에 직접 push는 금지되어 있습니다. PR을 사용하세요.")
+    }
+
+    // 전체 테스트 실행
+    vcs_test()
+
+    println("Push 검증 통과: " + str(git_staged_files()))
+}
+
+fn main() {
+    println("Commit-Gate 정의 파일")
+    println("  freelang gate install examples/commit-gate.free  로 설치")
+    println("  freelang gate status  로 상태 확인")
+}

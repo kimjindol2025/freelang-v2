@@ -1,0 +1,214 @@
+/**
+ * vm.web.fl - FreeLang v2 웹 자원 관리 모듈
+ *
+ * HTML/CSS/JS 통합 처리
+ * 메모리 효율적 자원 저장 및 라우팅
+ */
+
+// ============ 웹 자원 타입 정의 ============
+
+type WebResource = {
+  path: string,
+  html: string,
+  css: string,
+  js: string,
+  content_type: string,
+  is_dynamic: bool
+}
+
+type VMWeb = {
+  resources: map<string, WebResource>,
+  routes: map<string, string>,
+  cache: map<string, string>
+}
+
+// ============ VMWeb 초기화 ============
+
+fn init_vm_web() -> VMWeb {
+  VMWeb {
+    resources: {},
+    routes: {},
+    cache: {}
+  }
+}
+
+// ============ 자원 등록 ============
+
+fn add_resource(vm: &mut VMWeb, path: string, html: string, css: string, js: string) {
+  let resource = WebResource {
+    path: path,
+    html: html,
+    css: css,
+    js: js,
+    content_type: "text/html",
+    is_dynamic: false
+  }
+
+  vm.resources[path] = resource
+  vm.routes[path] = path
+}
+
+fn add_json_resource(vm: &mut VMWeb, path: string, json_data: string) {
+  let resource = WebResource {
+    path: path,
+    html: json_data,
+    css: "",
+    js: "",
+    content_type: "application/json",
+    is_dynamic: true
+  }
+
+  vm.resources[path] = resource
+}
+
+// ============ HTML 생성 ============
+
+fn create_html_page(title: string, content: string, css_inline: string) -> string {
+  let html = ""
+  html = html + "<!DOCTYPE html>\n"
+  html = html + "<html lang=\"ko\">\n"
+  html = html + "<head>\n"
+  html = html + "  <meta charset=\"UTF-8\">\n"
+  html = html + "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
+  html = html + "  <title>" + title + "</title>\n"
+
+  if css_inline.length > 0 {
+    html = html + "  <style>\n"
+    html = html + css_inline
+    html = html + "  </style>\n"
+  }
+
+  html = html + "</head>\n"
+  html = html + "<body>\n"
+  html = html + content
+  html = html + "</body>\n"
+  html = html + "</html>\n"
+
+  html
+}
+
+fn create_json_response(obj: map<string, any>) -> string {
+  let json = "{"
+  let first = true
+
+  for key in obj.keys {
+    if !first {
+      json = json + ","
+    }
+    first = false
+
+    let value = obj[key]
+    json = json + "\"" + key + "\":"
+
+    if typeof value == "string" {
+      json = json + "\"" + value + "\""
+    } else if typeof value == "number" {
+      json = json + str(value)
+    } else if typeof value == "bool" {
+      json = json + (if value { "true" } else { "false" })
+    } else {
+      json = json + "null"
+    }
+  }
+
+  json = json + "}"
+  json
+}
+
+// ============ 요청 처리 ============
+
+fn handle_web_request(vm: &VMWeb, path: string) -> (string, string) {
+  // 캐시 확인
+  if vm.cache.contains(path) {
+    return (vm.cache[path], "text/html")
+  }
+
+  // 자원 조회
+  if vm.resources.contains(path) {
+    let resource = vm.resources[path]
+
+    let response = if resource.content_type == "application/json" {
+      resource.html
+    } else {
+      // HTML + CSS + JS 통합
+      let html = ""
+      html = html + "<!DOCTYPE html>\n<html>\n<head>\n"
+
+      if resource.css.length > 0 {
+        html = html + "<style>\n" + resource.css + "\n</style>\n"
+      }
+
+      html = html + "</head>\n<body>\n"
+      html = html + resource.html
+      html = html + "\n</body>\n"
+
+      if resource.js.length > 0 {
+        html = html + "<script>\n" + resource.js + "\n</script>\n"
+      }
+
+      html = html + "</html>"
+      html
+    }
+
+    // 캐시 저장
+    vm.cache[path] = response
+
+    return (response, resource.content_type)
+  }
+
+  // 404
+  let notfound = create_html_page(
+    "404 Not Found",
+    "<h1>404 Not Found</h1><p>요청한 페이지를 찾을 수 없습니다.</p>",
+    "body { font-family: Arial; margin: 50px; }"
+  )
+
+  return (notfound, "text/html")
+}
+
+// ============ HTTP 헤더 생성 ============
+
+fn create_http_header(status: i32, content_type: string, content_length: i32) -> string {
+  let status_text = match status {
+    200 => "OK",
+    404 => "Not Found",
+    500 => "Internal Server Error",
+    _ => "Unknown"
+  }
+
+  let header = ""
+  header = header + "HTTP/1.1 " + str(status) + " " + status_text + "\r\n"
+  header = header + "Content-Type: " + content_type + "; charset=utf-8\r\n"
+  header = header + "Content-Length: " + str(content_length) + "\r\n"
+  header = header + "Connection: close\r\n"
+  header = header + "\r\n"
+
+  header
+}
+
+fn create_http_response(status: i32, content_type: string, body: string) -> string {
+  let header = create_http_header(status, content_type, body.length)
+  header + body
+}
+
+// ============ 라우트 추가 ============
+
+fn add_route(vm: &mut VMWeb, method: string, path: string, handler: string) {
+  let route_key = method + " " + path
+  vm.routes[route_key] = handler
+}
+
+// ============ 내보내기 ============
+
+pub mod {
+  init_vm_web,
+  add_resource,
+  add_json_resource,
+  create_html_page,
+  create_json_response,
+  handle_web_request,
+  create_http_response,
+  add_route,
+  WebResource,
+  VMWeb
+}

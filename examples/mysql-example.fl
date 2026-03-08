@@ -1,0 +1,139 @@
+/**
+ * FreeLang MySQL Driver Example
+ *
+ * MySQL 데이터베이스 연결 및 기본 CRUD 작업 예제
+ */
+
+import {
+  mysql,
+  select,
+  where,
+  insert,
+  update,
+  delete,
+  all,
+  first
+} from "../src/stdlib/orm"
+
+import {
+  mysql_create_table,
+  mysql_drop_table,
+  mysql_begin,
+  mysql_commit,
+  mysql_rollback,
+  mysql_info
+} from "../src/stdlib/mysql-driver"
+
+fn main() {
+  // 1. MySQL 연결
+  println("[MYSQL] Connecting to MySQL server...")
+  let conn = mysql("localhost", 3306, "root", "password", "myapp")
+
+  if !conn.isConnected {
+    println("[ERROR] Failed to connect to MySQL")
+    return
+  }
+
+  println("[OK] Connected to MySQL")
+
+  // 2. 테이블 생성
+  println("[MYSQL] Creating users table...")
+  let createTableSQL = "
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    age INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  "
+  let success = mysql_create_table(conn.mysqlConn, "users", createTableSQL)
+  println("[OK] Table created:", success)
+
+  // 3. 데이터 삽입 (INSERT)
+  println("[MYSQL] Inserting user data...")
+  let user1 = insert(conn, "users", {
+    name: "Alice",
+    email: "alice@example.com",
+    age: 25
+  })
+  println("[OK] User 1 inserted. Affected rows:", user1.affectedRows)
+
+  let user2 = insert(conn, "users", {
+    name: "Bob",
+    email: "bob@example.com",
+    age: 30
+  })
+  println("[OK] User 2 inserted. Affected rows:", user2.affectedRows)
+
+  // 4. 데이터 조회 (SELECT)
+  println("[MYSQL] Querying all users...")
+  let query = select(conn, "users")
+  let users = all(query)
+  println("[OK] Total users:", arr.length(users))
+
+  let i = 0
+  while i < arr.length(users) {
+    let user = users[i]
+    println("  -", user.name, "(", user.email, ",", "age:", user.age, ")")
+    i = i + 1
+  }
+
+  // 5. 단일 사용자 조회
+  println("[MYSQL] Finding user by name...")
+  let query2 = select(conn, "users") as builder
+  where(builder, "name = ?", "Alice")
+  let alice = first(builder)
+
+  if alice != null {
+    println("[OK] Found user:", alice.name, "Age:", alice.age)
+  } else {
+    println("[ERROR] User not found")
+  }
+
+  // 6. 데이터 업데이트 (UPDATE)
+  println("[MYSQL] Updating user age...")
+  let updateResult = update(conn, "users", { age: 26 })
+  where(updateResult, "name = ?", "Alice")
+  execute_update_where(updateResult)
+  println("[OK] Updated")
+
+  // 7. 트랜잭션 예제
+  println("[MYSQL] Starting transaction...")
+  mysql_begin(conn.mysqlConn)
+
+  // 트랜잭션 내에서 여러 작업 수행
+  let user3 = insert(conn, "users", {
+    name: "Charlie",
+    email: "charlie@example.com",
+    age: 35
+  })
+
+  // 커밋 또는 롤백
+  if user3.affectedRows > 0 {
+    mysql_commit(conn.mysqlConn)
+    println("[OK] Transaction committed")
+  } else {
+    mysql_rollback(conn.mysqlConn)
+    println("[ERROR] Transaction rolled back")
+  }
+
+  // 8. 데이터 삭제 (DELETE)
+  println("[MYSQL] Deleting user...")
+  let deleteResult = delete(conn, "users")
+  where(deleteResult, "name = ?", "Bob")
+  execute_delete_where(deleteResult)
+  println("[OK] User deleted")
+
+  // 9. 데이터베이스 정보 조회
+  println("[MYSQL] Database info...")
+  let info = mysql_info(conn.mysqlConn)
+  println("  - Host:", info.host)
+  println("  - Database:", info.database)
+  println("  - Table count:", info.tableCount)
+
+  // 10. 테이블 삭제
+  println("[MYSQL] Dropping users table...")
+  let dropSuccess = mysql_drop_table(conn.mysqlConn, "users")
+  println("[OK] Table dropped:", dropSuccess)
+
+  println("[MYSQL] Example completed!")
+}

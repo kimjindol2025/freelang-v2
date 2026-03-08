@@ -1,0 +1,206 @@
+// FreeLang v2 - scikit-learn Phase 5 데모
+// 평가 지표 함수들의 실제 사용 예제
+// Version: 1.0.0
+
+// ════════════════════════════════════════════════════════════════
+// Example 1: 분류 모델 평가
+// ════════════════════════════════════════════════════════════════
+fn example_classification_metrics() {
+  println("=== Example 1: 분류 모델 평가 ===");
+  
+  let y_true = [0, 1, 1, 0, 1, 0, 1, 1];
+  let y_pred = [0, 1, 1, 0, 0, 0, 1, 0];
+  
+  let acc = native_call("sklearn_accuracy_score", [y_true, y_pred]);
+  let prec = native_call("sklearn_precision", [y_true, y_pred]);
+  let rec = native_call("sklearn_recall", [y_true, y_pred]);
+  let f1 = native_call("sklearn_f1_score", [y_true, y_pred]);
+  
+  println("Accuracy: " + acc);
+  println("Precision: " + prec);
+  println("Recall: " + rec);
+  println("F1 Score: " + f1);
+  println("");
+}
+
+// ════════════════════════════════════════════════════════════════
+// Example 2: 혼동 행렬
+// ════════════════════════════════════════════════════════════════
+fn example_confusion_matrix() {
+  println("=== Example 2: 혼동 행렬 ===");
+  
+  let y_true = [0, 0, 0, 1, 1, 1];
+  let y_pred = [0, 0, 1, 0, 1, 1];
+  
+  let cm = native_call("sklearn_confusion_matrix", [y_true, y_pred]);
+  
+  println("Confusion Matrix:");
+  println("  [ " + cm[0][0] + ", " + cm[0][1] + " ]");  // [TN, FP]
+  println("  [ " + cm[1][0] + ", " + cm[1][1] + " ]");  // [FN, TP]
+  println("");
+}
+
+// ════════════════════════════════════════════════════════════════
+// Example 3: 회귀 모델 평가
+// ════════════════════════════════════════════════════════════════
+fn example_regression_metrics() {
+  println("=== Example 3: 회귀 모델 평가 ===");
+  
+  let y_true = [3.0, -0.5, 2.0, 7.0];
+  let y_pred = [2.5, 0.0, 2.0, 8.0];
+  
+  let mse = native_call("sklearn_mse", [y_true, y_pred]);
+  let mae = native_call("sklearn_mae", [y_true, y_pred]);
+  let r2 = native_call("sklearn_r2_score", [y_true, y_pred]);
+  
+  println("MSE: " + mse);
+  println("MAE: " + mae);
+  println("R²: " + r2);
+  println("");
+}
+
+// ════════════════════════════════════════════════════════════════
+// Example 4: 데이터 정규화
+// ════════════════════════════════════════════════════════════════
+fn example_standard_scaler() {
+  println("=== Example 4: 데이터 정규화 ===");
+  
+  let X = [
+    [1.0, 100.0],
+    [2.0, 200.0],
+    [3.0, 300.0],
+    [4.0, 400.0]
+  ];
+  
+  let scaler = native_call("sklearn_standard_scaler_fit", [X]);
+  println("Scaler fitted");
+  println("Means: " + scaler["means"]);
+  println("Stds: " + scaler["stds"]);
+  
+  let X_scaled = native_call("sklearn_standard_scaler_transform", [X, scaler]);
+  println("Scaled data (first sample):");
+  println("  " + X_scaled[0]);
+  println("");
+}
+
+// ════════════════════════════════════════════════════════════════
+// Example 5: 학습/테스트 데이터 분할
+// ════════════════════════════════════════════════════════════════
+fn example_train_test_split() {
+  println("=== Example 5: 학습/테스트 분할 ===");
+  
+  let X = [[1, 2], [2, 3], [3, 4], [4, 5], [5, 6]];
+  let y = [10, 20, 30, 40, 50];
+  
+  let split = native_call("sklearn_train_test_split", [X, y, 0.2]);
+  
+  println("X_train size: " + len(split["X_train"]));
+  println("X_test size: " + len(split["X_test"]));
+  println("y_train: " + split["y_train"]);
+  println("y_test: " + split["y_test"]);
+  println("");
+}
+
+// ════════════════════════════════════════════════════════════════
+// Example 6: 선형 회귀
+// ════════════════════════════════════════════════════════════════
+fn example_linear_regression() {
+  println("=== Example 6: 선형 회귀 ===");
+  
+  let X = [[1.0], [2.0], [3.0], [4.0], [5.0]];
+  let y = [2.0, 4.0, 6.0, 8.0, 10.0];
+  
+  let model = native_call("sklearn_linear_fit", [X, y, 0.01, 100]);
+  
+  println("Model trained");
+  println("Weights: " + model["weights"]);
+  println("Bias: " + model["bias"]);
+  println("Final loss: " + model["loss_history"][len(model["loss_history"]) - 1]);
+  
+  let X_test = [[2.5], [3.5]];
+  let predictions = native_call("sklearn_linear_predict", [X_test, model]);
+  println("Predictions: " + predictions);
+  println("");
+}
+
+// ════════════════════════════════════════════════════════════════
+// Example 7: 로지스틱 회귀
+// ════════════════════════════════════════════════════════════════
+fn example_logistic_regression() {
+  println("=== Example 7: 로지스틱 회귀 ===");
+  
+  let X = [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0]];
+  let y = [0, 0, 1, 1];
+  
+  let model = native_call("sklearn_logistic_fit", [X, y, 0.01, 100]);
+  
+  println("Model trained");
+  println("Weights: " + model["weights"]);
+  println("Bias: " + model["bias"]);
+  
+  let X_test = [[2.5, 3.5], [3.5, 4.5]];
+  let predictions = native_call("sklearn_logistic_predict", [X_test, model]);
+  println("Predictions (probabilities): " + predictions);
+  println("");
+}
+
+// ════════════════════════════════════════════════════════════════
+// Example 8: K-Means 클러스터링
+// ════════════════════════════════════════════════════════════════
+fn example_kmeans() {
+  println("=== Example 8: K-Means 클러스터링 ===");
+  
+  let X = [
+    [1.0, 2.0],
+    [1.5, 1.8],
+    [8.0, 9.0],
+    [8.5, 9.5]
+  ];
+  
+  let model = native_call("sklearn_kmeans_fit", [X, 2, 100, 42]);
+  
+  println("Model trained");
+  println("Cluster centers: " + model["centers"]);
+  println("Labels: " + model["labels"]);
+  println("Inertia: " + model["inertia"]);
+  
+  let X_new = [[1.2, 1.9], [8.2, 8.9]];
+  let predictions = native_call("sklearn_kmeans_predict", [X_new, model]);
+  println("New predictions: " + predictions);
+  println("");
+}
+
+// ════════════════════════════════════════════════════════════════
+// Example 9: K-Nearest Neighbors
+// ════════════════════════════════════════════════════════════════
+fn example_knn() {
+  println("=== Example 9: K-Nearest Neighbors ===");
+  
+  let X_train = [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0]];
+  let y_train = [0, 0, 1, 1];
+  
+  let model = native_call("sklearn_knn_fit", [X_train, y_train]);
+  
+  println("Model trained");
+  
+  let X_test = [[1.5, 2.5], [3.5, 4.5]];
+  let predictions = native_call("sklearn_knn_predict", [X_test, model, 2]);
+  println("Predictions (k=2): " + predictions);
+  println("");
+}
+
+// ════════════════════════════════════════════════════════════════
+// Main: 모든 예제 실행
+// ════════════════════════════════════════════════════════════════
+
+example_classification_metrics();
+example_confusion_matrix();
+example_regression_metrics();
+example_standard_scaler();
+example_train_test_split();
+example_linear_regression();
+example_logistic_regression();
+example_kmeans();
+example_knn();
+
+println("=== Phase 5-6 모든 예제 완료 ===");

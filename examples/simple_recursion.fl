@@ -1,0 +1,11 @@
+// 간단한 재귀 함수 테스트
+
+fn count_down(n) {
+  if (n <= 0) {
+    return 0;
+  }
+  return 1 + count_down(n - 1);
+}
+
+let result = count_down(5);
+println(result);  // Expected: 5

@@ -1,0 +1,133 @@
+/**
+ * FreeLang Phase 18 - Redis Integration Test
+ * Tests async Redis operations with real Redis server
+ *
+ * Prerequisites: Redis server running on 127.0.0.1:6379
+ */
+
+import { connect, close, get, set, del, incr, ping, is_connected } from "redis";
+
+let test_results = [];
+let test_count = 0;
+let test_passed = 0;
+
+fn add_result(name, passed, message) => {
+  test_count = test_count + 1;
+  if (passed) {
+    test_passed = test_passed + 1;
+    println("✓ " + name + ": " + message);
+  } else {
+    println("✗ " + name + ": " + message);
+  }
+};
+
+fn main() => {
+  println("═══════════════════════════════════════");
+  println("Phase 18 Redis Integration Test");
+  println("═══════════════════════════════════════");
+  println("");
+
+  // Test 1: Connect to Redis
+  println("[Test 1] Connecting to Redis...");
+  let client = connect("127.0.0.1", 6379);
+
+  if (client >= 0) {
+    add_result("redis_connect", true, "Connected (client=" + client + ")");
+  } else {
+    add_result("redis_connect", false, "Failed to connect");
+    return;
+  }
+
+  // Give connection time to establish
+  let i = 0;
+  while (i < 10000000) {
+    i = i + 1;
+  }
+
+  // Test 2: Check connection status
+  println("");
+  println("[Test 2] Checking connection status...");
+  let connected = is_connected(client);
+  add_result("is_connected", connected == 1, "Connection status: " + connected);
+
+  // Test 3: SET a key
+  println("");
+  println("[Test 3] SET command...");
+  set(client, "freelang_test_key", "freelang_value", fn(result) => {
+    if (result != null) {
+      add_result("redis_set", true, "SET response: " + result);
+    } else {
+      add_result("redis_set", false, "SET failed");
+    }
+  });
+
+  // Test 4: GET the key
+  println("");
+  println("[Test 4] GET command...");
+  get(client, "freelang_test_key", fn(result) => {
+    if (result != null) {
+      add_result("redis_get", true, "GET response: " + result);
+    } else {
+      add_result("redis_get", false, "GET failed (nil)");
+    }
+  });
+
+  // Test 5: INCR counter
+  println("");
+  println("[Test 5] INCR command...");
+  incr(client, "freelang_counter", fn(result) => {
+    if (result != null) {
+      add_result("redis_incr", true, "INCR response: " + result);
+    } else {
+      add_result("redis_incr", false, "INCR failed");
+    }
+  });
+
+  // Test 6: DEL key
+  println("");
+  println("[Test 6] DEL command...");
+  del(client, "freelang_test_key", fn(result) => {
+    if (result != null) {
+      add_result("redis_del", true, "DEL response: " + result);
+    } else {
+      add_result("redis_del", false, "DEL failed");
+    }
+  });
+
+  // Test 7: PING
+  println("");
+  println("[Test 7] PING command...");
+  ping(client, fn(result) => {
+    if (result != null) {
+      add_result("redis_ping", true, "PING response: " + result);
+    } else {
+      add_result("redis_ping", false, "PING failed");
+    }
+  });
+
+  // Give callbacks time to execute
+  let j = 0;
+  while (j < 100000000) {
+    j = j + 1;
+  }
+
+  // Test 8: Close connection
+  println("");
+  println("[Test 8] Closing connection...");
+  close(client);
+  add_result("redis_close", true, "Connection closed");
+
+  // Summary
+  println("");
+  println("═══════════════════════════════════════");
+  println("Test Summary: " + test_passed + " / " + test_count + " passed");
+  println("═══════════════════════════════════════");
+
+  if (test_passed == test_count) {
+    println("🎉 ALL TESTS PASSED!");
+  } else {
+    println("⚠️  " + (test_count - test_passed) + " test(s) failed");
+  }
+};
+
+main();

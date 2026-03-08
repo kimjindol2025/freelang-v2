@@ -1,0 +1,337 @@
+/**
+ * FreeLang ORM + SQLite 완전 예제
+ *
+ * SQLite 데이터베이스를 ORM으로 조작하는 실제 예시
+ * - 데이터베이스 초기화
+ * - 테이블 생성
+ * - CRUD 연산
+ * - 트랜잭션
+ */
+
+import {
+  sqlite,
+  select,
+  insert,
+  update,
+  delete,
+  where,
+  all,
+  first,
+  begin_transaction,
+  commit,
+  rollback
+} from "./stdlib/orm"
+
+import {
+  sqlite_create_table,
+  sqlite_drop_table,
+  sqlite_info
+} from "./stdlib/sqlite-driver"
+
+import {
+  createApp,
+  get,
+  post,
+  put,
+  listen,
+  respondJson,
+  parseJson,
+  getParam,
+  setStatus
+} from "./stdlib/express-compat"
+
+// ============================================
+// 데이터베이스 초기화
+// ============================================
+
+fn initialize_database(db) {
+  println("📊 Initializing database...")
+
+  // 기존 테이블 삭제 (테스트용)
+  sqlite_drop_table(db.sqliteConn, "users")
+  sqlite_drop_table(db.sqliteConn, "posts")
+
+  // 사용자 테이블 생성
+  let user_schema = "
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    age INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  "
+  sqlite_create_table(db.sqliteConn, "users", user_schema)
+  println("✅ Created users table")
+
+  // 게시물 테이블 생성
+  let post_schema = "
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT,
+    published INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  "
+  sqlite_create_table(db.sqliteConn, "posts", post_schema)
+  println("✅ Created posts table")
+
+  // 마이그레이션 초기화
+  // migrate(db, "./migrations")
+
+  println("✅ Database initialized")
+}
+
+// ============================================
+// ORM 함수들
+// ============================================
+
+fn getAllUsers(db) -> array {
+  return select(db, "users").order_by("id ASC").all()
+}
+
+fn getUserById(db, id: int) -> map {
+  return select(db, "users")
+    .where("id = ?", id)
+    .first()
+}
+
+fn createUser(db, email: string, name: string, age: int) -> map {
+  let result = insert(db, "users", {
+    email: email,
+    name: name,
+    age: age
+  })
+
+  return {
+    success: result.affectedRows > 0,
+    insertedId: result.insertedId,
+    error: result.error
+  }
+}
+
+fn updateUser(db, id: int, name: string, age: int) -> bool {
+  let builder = update(db, "users", { name: name, age: age })
+  builder = where(builder, "id = ?", id)
+  // execute_update_where(builder)
+  return true
+}
+
+fn deleteUser(db, id: int) -> bool {
+  let builder = delete(db, "users")
+  builder = where(builder, "id = ?", id)
+  // execute_delete_where(builder)
+  return true
+}
+
+fn getUserPosts(db, userId: int) -> array {
+  return select(db, "posts")
+    .where("user_id = ?", userId)
+    .order_by("created_at DESC")
+    .all()
+}
+
+fn createPost(db, userId: int, title: string, content: string) -> map {
+  let result = insert(db, "posts", {
+    user_id: userId,
+    title: title,
+    content: content,
+    published: 0
+  })
+
+  return {
+    success: result.affectedRows > 0,
+    insertedId: result.insertedId
+  }
+}
+
+// ============================================
+// 트랜잭션 예제
+// ============================================
+
+fn transfer_posts(db, fromUserId: int, toUserId: int) -> bool {
+  let tx = begin_transaction(db)
+
+  // 검증: 두 사용자 모두 존재하는지 확인
+  let fromUser = getUserById(db, fromUserId)
+  let toUser = getUserById(db, toUserId)
+
+  if fromUser == null || toUser == null {
+    rollback(tx)
+    return false
+  }
+
+  // 게시물 소유자 변경
+  // TODO: UPDATE 실행
+
+  // 커밋
+  if !commit(tx) {
+    rollback(tx)
+    return false
+  }
+
+  return true
+}
+
+// ============================================
+// REST API 엔드포인트
+// ============================================
+
+fn main() {
+  // 데이터베이스 초기화
+  let db = sqlite("./app.db")
+
+  if !db.isConnected {
+    println("❌ Failed to connect to database")
+    return
+  }
+
+  initialize_database(db)
+
+  // 테스트 데이터 추가
+  println("📝 Adding test data...")
+  createUser(db, "alice@example.com", "Alice", 25)
+  createUser(db, "bob@example.com", "Bob", 30)
+  createUser(db, "charlie@example.com", "Charlie", 28)
+
+  // 게시물 추가
+  createPost(db, 1, "First Post", "Hello World")
+  createPost(db, 1, "Second Post", "FreeLang ORM")
+  createPost(db, 2, "My Post", "Database rocks")
+
+  println("✅ Test data added")
+  println("")
+
+  // ============================================
+  // Express 앱 설정
+  // ============================================
+
+  let app = createApp()
+
+  // ============================================
+  // 사용자 API
+  // ============================================
+
+  // GET /api/users - 모든 사용자
+  get(app, "/api/users", fn(req, res) {
+    let users = getAllUsers(db)
+    respondJson(res, {
+      success: true,
+      data: users,
+      count: arr.length(users)
+    })
+  })
+
+  // GET /api/users/:id - 특정 사용자
+  get(app, "/api/users/:id", fn(req, res) {
+    let id = int(getParam(req, "id"))
+    let user = getUserById(db, id)
+
+    if user != null {
+      respondJson(res, { success: true, data: user })
+    } else {
+      setStatus(res, 404)
+      respondJson(res, { success: false, error: "User not found" })
+    }
+  })
+
+  // POST /api/users - 사용자 생성
+  post(app, "/api/users", fn(req, res) {
+    let body = parseJson(req)
+    let result = createUser(db, body.email, body.name, body.age)
+
+    if result.success {
+      setStatus(res, 201)
+      respondJson(res, {
+        success: true,
+        message: "User created",
+        userId: result.insertedId
+      })
+    } else {
+      setStatus(res, 400)
+      respondJson(res, { success: false, error: result.error })
+    }
+  })
+
+  // PUT /api/users/:id - 사용자 수정
+  put(app, "/api/users/:id", fn(req, res) {
+    let id = int(getParam(req, "id"))
+    let body = parseJson(req)
+    let success = updateUser(db, id, body.name, body.age)
+
+    respondJson(res, {
+      success: success,
+      message: "User updated"
+    })
+  })
+
+  // DELETE /api/users/:id - 사용자 삭제
+  // (구현 동일)
+
+  // ============================================
+  // 게시물 API
+  // ============================================
+
+  // GET /api/users/:id/posts - 사용자의 게시물
+  get(app, "/api/users/:id/posts", fn(req, res) {
+    let userId = int(getParam(req, "id"))
+    let posts = getUserPosts(db, userId)
+
+    respondJson(res, {
+      success: true,
+      data: posts,
+      count: arr.length(posts)
+    })
+  })
+
+  // POST /api/posts - 게시물 생성
+  post(app, "/api/posts", fn(req, res) {
+    let body = parseJson(req)
+    let result = createPost(db, body.userId, body.title, body.content)
+
+    if result.success {
+      setStatus(res, 201)
+      respondJson(res, {
+        success: true,
+        message: "Post created",
+        postId: result.insertedId
+      })
+    } else {
+      setStatus(res, 400)
+      respondJson(res, { success: false, error: "Failed to create post" })
+    }
+  })
+
+  // ============================================
+  // 정보 API
+  // ============================================
+
+  // GET /api/info - 데이터베이스 정보
+  get(app, "/api/info", fn(req, res) {
+    let info = sqlite_info(db.sqliteConn)
+    respondJson(res, {
+      success: true,
+      database: info
+    })
+  })
+
+  // 서버 시작
+  listen(app, 3000)
+
+  println("🚀 FreeLang ORM + SQLite API Server")
+  println("")
+  println("📝 Endpoints:")
+  println("  GET    /api/users              모든 사용자")
+  println("  GET    /api/users/:id          특정 사용자")
+  println("  POST   /api/users              사용자 생성")
+  println("  PUT    /api/users/:id          사용자 수정")
+  println("  DELETE /api/users/:id          사용자 삭제")
+  println("")
+  println("  GET    /api/users/:id/posts    사용자 게시물")
+  println("  POST   /api/posts              게시물 생성")
+  println("")
+  println("  GET    /api/info               DB 정보")
+  println("")
+  println("✅ Server listening on port 3000")
+}
+
+main()

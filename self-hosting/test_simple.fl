@@ -1,0 +1,9 @@
+// 간단한 테스트: 배열과 기본 연산
+let arr = [1, 2, 3, 4, 5];
+print(arr);
+
+let sum = 0;
+for item in arr {
+  sum = sum + item;
+}
+print(sum); // 기대: 15

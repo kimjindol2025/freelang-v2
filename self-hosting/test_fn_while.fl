@@ -1,0 +1,9 @@
+fn countUp(max: i32) -> void {
+  var i: i32 = 0
+  while i < max {
+    println(str(i))
+    i = i + 1
+  }
+}
+
+countUp(3)

@@ -1,0 +1,150 @@
+/**
+ * FreeLang scikit-learn Phase 7 - Advanced ML Demo
+ *
+ * 고급 머신러닝 파이프라인
+ * - 데이터 전처리
+ * - 회귀 분석
+ * - 분류 평가
+ */
+
+fn main() {
+  println("=================================")
+  println("ML Phase 7 - Advanced Pipeline")
+  println("=================================")
+  println("")
+
+  // ============================================
+  // Section 1: 데이터 전처리
+  // ============================================
+
+  println("📊 1. 데이터 전처리")
+  println("---------------------------------")
+
+  // 원본 데이터
+  let raw_data = [10.0, 20.0, 15.0, 25.0, 30.0, 35.0, 28.0, 32.0]
+
+  // 통계
+  let mean = stats_mean(raw_data)
+  let median = stats_median(raw_data)
+  let variance = stats_variance(raw_data)
+  let std = stats_std_dev(raw_data)
+  let range = stats_range(raw_data)
+
+  println("Raw data: 8 samples")
+  println("Mean: " + str(mean))
+  println("Median: " + str(median))
+  println("Variance: " + str(variance))
+  println("Std Dev: " + str(std))
+  println("Range: " + str(range))
+  println("")
+
+  // 정규화 (Min-Max)
+  let normalized = ml_normalize_minmax(raw_data)
+  println("Min-Max Normalized: " + str(arr_len(normalized)) + " values")
+  println("")
+
+  // 표준화 (Z-score)
+  let standardized = ml_normalize_zscore(raw_data)
+  println("Z-score Standardized: " + str(arr_len(standardized)) + " values")
+  println("")
+
+  // ============================================
+  // Section 2: 회귀 분석
+  // ============================================
+
+  println("📈 2. 선형 회귀 분석")
+  println("---------------------------------")
+
+  let x_train = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+  let y_train = [2.0, 4.0, 5.0, 4.0, 5.0, 7.0, 8.0, 8.0]
+
+  let regression = ml_linear_regression(x_train, y_train)
+
+  println("Training data: 8 samples")
+  println("Equation: y = " + str(regression.slope) + " * x + " + str(regression.intercept))
+  println("R² Score: " + str(regression.r2))
+  println("")
+
+  // ============================================
+  // Section 3: 거리 메트릭
+  // ============================================
+
+  println("📏 3. 거리 메트릭")
+  println("---------------------------------")
+
+  let point_a = [0.0, 0.0, 0.0]
+  let point_b = [3.0, 4.0, 0.0]
+
+  let euclidean_dist = ml_distance_euclidean(point_a, point_b)
+  let manhattan_dist = ml_distance_manhattan(point_a, point_b)
+  let cosine_dist = ml_distance_cosine(point_a, point_b)
+
+  println("Distance between [0,0,0] and [3,4,0]:")
+  println("Euclidean: " + str(euclidean_dist))
+  println("Manhattan: " + str(manhattan_dist))
+  println("Cosine: " + str(cosine_dist))
+  println("")
+
+  // ============================================
+  // Section 4: 분류 성능 평가
+  // ============================================
+
+  println("🎯 4. 분류 성능 평가")
+  println("---------------------------------")
+
+  // 실제 vs 예측 레이블
+  let y_actual = [1, 1, 0, 1, 0, 0, 1, 1]
+  let y_pred = [1, 1, 0, 1, 0, 1, 1, 0]
+
+  // 혼동 행렬
+  let confusion = ml_confusion_matrix(y_actual, y_pred)
+  println("TP: " + str(confusion.tp))
+  println("TN: " + str(confusion.tn))
+  println("FP: " + str(confusion.fp))
+  println("FN: " + str(confusion.fn))
+  println("")
+
+  // 성능 지표
+  let precision = ml_precision(y_actual, y_pred)
+  let recall = ml_recall(y_actual, y_pred)
+  let f1 = ml_f1_score(y_actual, y_pred)
+  let accuracy = ml_accuracy(y_actual, y_pred)
+
+  println("Precision: " + str(precision))
+  println("Recall: " + str(recall))
+  println("F1-Score: " + str(f1))
+  println("Accuracy: " + str(accuracy))
+  println("")
+
+  // ============================================
+  // Section 5: 이상 탐지
+  // ============================================
+
+  println("🔍 5. 이상 탐지")
+  println("---------------------------------")
+
+  let ts_data = [5.0, 5.1, 5.2, 5.3, 5.2, 5.1, 15.0, 5.0, 5.1, 5.2]
+  let zscore_anomaly = ml_zscore_anomaly(ts_data, 2.0)
+
+  println("Time series data: 10 points")
+  println("Anomalies detected: " + str(arr_len(zscore_anomaly)))
+  println("")
+
+  // ============================================
+  // Summary
+  // ============================================
+
+  println("=================================")
+  println("✅ Advanced Pipeline Complete")
+  println("=================================")
+  println("")
+  println("Features tested:")
+  println("  ✓ Descriptive statistics")
+  println("  ✓ Data normalization")
+  println("  ✓ Linear regression")
+  println("  ✓ Distance metrics")
+  println("  ✓ Classification metrics")
+  println("  ✓ Anomaly detection")
+}
+
+main()

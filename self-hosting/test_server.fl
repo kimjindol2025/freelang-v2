@@ -1,0 +1,11 @@
+#!/usr/bin/env freelang
+
+fn main() {
+    println!("🔷 HITL HTTP Server (FreeLang)")
+    println!("HTTP 서버 초기화 중...")
+    
+    // 간단한 테스트
+    let port = 50270
+    println!("✅ 포트 {}", port)
+    println!("🚀 서버 준비 완료")
+}

@@ -1,0 +1,508 @@
+/**
+ * FreeLang MySQL Driver
+ *
+ * MySQL 데이터베이스 연결 및 쿼리 실행
+ * - mysql_connect: MySQL 서버에 연결
+ * - mysql_query: SELECT 쿼리 실행
+ * - mysql_exec: INSERT/UPDATE/DELETE 실행
+ * - mysql_one: 첫 행 반환
+ * - mysql_begin/commit/rollback: 트랜잭션
+ * - mysql_table_exists: 테이블 존재 확인
+ * - mysql_create_table: 테이블 생성
+ * - mysql_drop_table: 테이블 삭제
+ * - mysql_close: 연결 종료
+ *
+ * Phase F 구현 (MySQL 드라이버)
+ */
+
+// ============================================
+// MySQL 연결 구조체
+// ============================================
+
+struct MySQLConnection {
+  host: string,
+  port: int,
+  user: string,
+  password: string,
+  database: string,
+  connId: int,          // Native connection ID
+  isConnected: bool,
+  lastError: string,
+  charset: string,
+  timezone: string
+}
+
+// ============================================
+// MySQL 연결 풀 관리
+// ============================================
+
+struct MySQLConnectionPool {
+  connections: array,   // 사용 가능한 연결 목록
+  activeCount: int,
+  maxConnections: int,
+  host: string,
+  port: int,
+  user: string,
+  password: string,
+  database: string
+}
+
+// ============================================
+// MySQL 쿼리 결과
+// ============================================
+
+struct MySQLResult {
+  rows: array,
+  rowCount: int,
+  affectedRows: int,
+  insertId: int,
+  error: string,
+  success: bool
+}
+
+// ============================================
+// MySQL 연결 생성
+// ============================================
+
+fn mysql_connect(host: string, port: int, user: string, password: string, database: string) -> MySQLConnection {
+  // Native mysql.connect 호출
+  let connId = mysql.connect(host, port, user, password, database)
+
+  if connId < 0 {
+    return {
+      host: host,
+      port: port,
+      user: user,
+      password: password,
+      database: database,
+      connId: -1,
+      isConnected: false,
+      lastError: "Failed to connect to MySQL server",
+      charset: "utf8mb4",
+      timezone: "+00:00"
+    }
+  }
+
+  return {
+    host: host,
+    port: port,
+    user: user,
+    password: password,
+    database: database,
+    connId: connId,
+    isConnected: true,
+    lastError: "",
+    charset: "utf8mb4",
+    timezone: "+00:00"
+  }
+}
+
+// ============================================
+// MySQL 쿼리 실행 (SELECT)
+// ============================================
+
+fn mysql_query(conn: MySQLConnection, sql: string, params: array) -> MySQLResult {
+  if !conn.isConnected {
+    return {
+      rows: [],
+      rowCount: 0,
+      affectedRows: 0,
+      insertId: 0,
+      error: "Database not connected",
+      success: false
+    }
+  }
+
+  // Native mysql.query 호출
+  let result = mysql.query(conn.connId, sql, params)
+
+  if result == null {
+    return {
+      rows: [],
+      rowCount: 0,
+      affectedRows: 0,
+      insertId: 0,
+      error: "Query execution failed",
+      success: false
+    }
+  }
+
+  return {
+    rows: result.rows != null ? result.rows : [],
+    rowCount: result.rowCount != null ? result.rowCount : 0,
+    affectedRows: 0,
+    insertId: 0,
+    error: "",
+    success: true
+  }
+}
+
+// ============================================
+// MySQL 한 행 조회
+// ============================================
+
+fn mysql_one(conn: MySQLConnection, sql: string, params: array) -> map {
+  let result = mysql_query(conn, sql, params)
+
+  if !result.success || arr.length(result.rows) == 0 {
+    return null
+  }
+
+  return result.rows[0]
+}
+
+// ============================================
+// MySQL 실행 (INSERT/UPDATE/DELETE)
+// ============================================
+
+fn mysql_exec(conn: MySQLConnection, sql: string, params: array) -> MySQLResult {
+  if !conn.isConnected {
+    return {
+      rows: [],
+      rowCount: 0,
+      affectedRows: 0,
+      insertId: 0,
+      error: "Database not connected",
+      success: false
+    }
+  }
+
+  // Native mysql.exec 호출
+  let result = mysql.exec(conn.connId, sql, params)
+
+  if result == null {
+    return {
+      rows: [],
+      rowCount: 0,
+      affectedRows: 0,
+      insertId: 0,
+      error: "Execution failed",
+      success: false
+    }
+  }
+
+  return {
+    rows: [],
+    rowCount: 0,
+    affectedRows: result.affectedRows != null ? result.affectedRows : 0,
+    insertId: result.insertId != null ? result.insertId : 0,
+    error: "",
+    success: true
+  }
+}
+
+// ============================================
+// 모든 행 조회
+// ============================================
+
+fn mysql_all(conn: MySQLConnection, sql: string, params: array) -> array {
+  let result = mysql_query(conn, sql, params)
+  return result.rows
+}
+
+// ============================================
+// 행 개수 조회
+// ============================================
+
+fn mysql_count(conn: MySQLConnection, table: string, where: string, params: array) -> int {
+  let sql = "SELECT COUNT(*) as cnt FROM " + table
+
+  if where != "" {
+    sql = sql + " WHERE " + where
+  }
+
+  let result = mysql_one(conn, sql, params)
+
+  if result == null {
+    return 0
+  }
+
+  return result.cnt != null ? result.cnt : 0
+}
+
+// ============================================
+// 트랜잭션 시작
+// ============================================
+
+fn mysql_begin(conn: MySQLConnection) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  let result = mysql_exec(conn, "START TRANSACTION", [])
+  return result.success
+}
+
+// ============================================
+// 커밋
+// ============================================
+
+fn mysql_commit(conn: MySQLConnection) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  let result = mysql_exec(conn, "COMMIT", [])
+  return result.success
+}
+
+// ============================================
+// 롤백
+// ============================================
+
+fn mysql_rollback(conn: MySQLConnection) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  let result = mysql_exec(conn, "ROLLBACK", [])
+  return result.success
+}
+
+// ============================================
+// 테이블 존재 확인
+// ============================================
+
+fn mysql_table_exists(conn: MySQLConnection, table: string) -> bool {
+  let sql = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME=?"
+  let result = mysql_one(conn, sql, [conn.database, table])
+  return result != null
+}
+
+// ============================================
+// 테이블 생성
+// ============================================
+
+fn mysql_create_table(conn: MySQLConnection, table: string, schema: string) -> bool {
+  let sql = "CREATE TABLE IF NOT EXISTS " + table + " (" + schema + ")"
+  let result = mysql_exec(conn, sql, [])
+  return result.success
+}
+
+// ============================================
+// 테이블 삭제
+// ============================================
+
+fn mysql_drop_table(conn: MySQLConnection, table: string) -> bool {
+  let sql = "DROP TABLE IF EXISTS " + table
+  let result = mysql_exec(conn, sql, [])
+  return result.success
+}
+
+// ============================================
+// 테이블 잘라내기 (모든 행 삭제)
+// ============================================
+
+fn mysql_truncate_table(conn: MySQLConnection, table: string) -> bool {
+  let sql = "TRUNCATE TABLE " + table
+  let result = mysql_exec(conn, sql, [])
+  return result.success
+}
+
+// ============================================
+// 열 추가
+// ============================================
+
+fn mysql_add_column(conn: MySQLConnection, table: string, column: string, dataType: string) -> bool {
+  let sql = "ALTER TABLE " + table + " ADD COLUMN " + column + " " + dataType
+  let result = mysql_exec(conn, sql, [])
+  return result.success
+}
+
+// ============================================
+// 열 삭제
+// ============================================
+
+fn mysql_drop_column(conn: MySQLConnection, table: string, column: string) -> bool {
+  let sql = "ALTER TABLE " + table + " DROP COLUMN " + column
+  let result = mysql_exec(conn, sql, [])
+  return result.success
+}
+
+// ============================================
+// 데이터베이스 정보 조회
+// ============================================
+
+fn mysql_info(conn: MySQLConnection) -> map {
+  // 테이블 목록
+  let tables_sql = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=?"
+  let tables = mysql_all(conn, tables_sql, [conn.database])
+
+  // 데이터베이스 크기
+  let size_sql = "SELECT SUM(data_length + index_length) as size FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=?"
+  let size_result = mysql_one(conn, size_sql, [conn.database])
+
+  return {
+    host: conn.host,
+    port: conn.port,
+    database: conn.database,
+    isConnected: conn.isConnected,
+    charset: conn.charset,
+    timezone: conn.timezone,
+    tables: tables,
+    tableCount: arr.length(tables),
+    size: size_result != null ? size_result.size : 0
+  }
+}
+
+// ============================================
+// 마이그레이션 테이블 초기화
+// ============================================
+
+fn mysql_init_migrations(conn: MySQLConnection) -> bool {
+  let sql = "CREATE TABLE IF NOT EXISTS migrations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    batch INT NOT NULL,
+    executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )"
+
+  let result = mysql_exec(conn, sql, [])
+  return result.success
+}
+
+// ============================================
+// 마이그레이션 상태 조회
+// ============================================
+
+fn mysql_get_migrations(conn: MySQLConnection) -> array {
+  let sql = "SELECT name, batch, executed_at FROM migrations ORDER BY batch ASC"
+  return mysql_all(conn, sql, [])
+}
+
+// ============================================
+// 마이그레이션 기록
+// ============================================
+
+fn mysql_record_migration(conn: MySQLConnection, name: string, batch: int) -> bool {
+  let sql = "INSERT INTO migrations (name, batch) VALUES (?, ?)"
+  let result = mysql_exec(conn, sql, [name, batch])
+  return result.success
+}
+
+// ============================================
+// 마이그레이션 롤백
+// ============================================
+
+fn mysql_rollback_migration(conn: MySQLConnection, name: string) -> bool {
+  let sql = "DELETE FROM migrations WHERE name = ?"
+  let result = mysql_exec(conn, sql, [name])
+  return result.success
+}
+
+// ============================================
+// 연결 풀 생성
+// ============================================
+
+fn mysql_pool_create(host: string, port: int, user: string, password: string, database: string, maxConnections: int) -> MySQLConnectionPool {
+  return {
+    connections: [],
+    activeCount: 0,
+    maxConnections: maxConnections,
+    host: host,
+    port: port,
+    user: user,
+    password: password,
+    database: database
+  }
+}
+
+// ============================================
+// 연결 풀에서 연결 획득
+// ============================================
+
+fn mysql_pool_get(pool: MySQLConnectionPool) -> MySQLConnection {
+  if arr.length(pool.connections) > 0 {
+    let conn = pool.connections[0]
+    // 첫 번째 연결 제거
+    pool.connections = arr.slice(pool.connections, 1, arr.length(pool.connections))
+    pool.activeCount = pool.activeCount + 1
+    return conn
+  }
+
+  // 새로운 연결 생성
+  let conn = mysql_connect(pool.host, pool.port, pool.user, pool.password, pool.database)
+  pool.activeCount = pool.activeCount + 1
+
+  return conn
+}
+
+// ============================================
+// 연결을 풀에 반환
+// ============================================
+
+fn mysql_pool_release(pool: MySQLConnectionPool, conn: MySQLConnection) -> void {
+  if conn.isConnected {
+    pool.connections = arr.push(pool.connections, conn)
+    pool.activeCount = pool.activeCount - 1
+  }
+}
+
+// ============================================
+// 연결 종료
+// ============================================
+
+fn mysql_close(conn: MySQLConnection) -> void {
+  if !conn.isConnected {
+    return
+  }
+
+  // Native mysql.close 호출
+  mysql.close(conn.connId)
+  conn.isConnected = false
+}
+
+// ============================================
+// 연결 상태 확인
+// ============================================
+
+fn mysql_is_connected(conn: MySQLConnection) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  // 간단한 핑 쿼리
+  let result = mysql_query(conn, "SELECT 1", [])
+  return result.success
+}
+
+// ============================================
+// Export
+// ============================================
+
+export {
+  MySQLConnection,
+  MySQLConnectionPool,
+  MySQLResult,
+
+  mysql_connect,
+  mysql_query,
+  mysql_one,
+  mysql_all,
+  mysql_exec,
+  mysql_count,
+
+  mysql_begin,
+  mysql_commit,
+  mysql_rollback,
+
+  mysql_table_exists,
+  mysql_create_table,
+  mysql_drop_table,
+  mysql_truncate_table,
+  mysql_add_column,
+  mysql_drop_column,
+  mysql_info,
+
+  mysql_init_migrations,
+  mysql_get_migrations,
+  mysql_record_migration,
+  mysql_rollback_migration,
+
+  mysql_pool_create,
+  mysql_pool_get,
+  mysql_pool_release,
+
+  mysql_close,
+  mysql_is_connected
+}

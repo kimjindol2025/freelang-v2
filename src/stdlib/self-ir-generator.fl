@@ -1,0 +1,652 @@
+// ─────────────────────────────────────────────────────────────────
+// FreeLang v2: Self-IR Generator (자체 IR 생성기)
+// ─────────────────────────────────────────────────────────────────
+//
+// 목표: AST 객체를 받아서 IR 명령어 배열로 변환
+// 전략: 단순 선형 순회 + 객체 리터럴 사용 (구조체 없음)
+// 특징: 모든 함수는 v2 stdlib만 사용
+//
+// 사용 가능 함수:
+//   - arr_push, arr_len, arr_get: 배열 조작
+//   - map.new, map.set, map.get: 객체/맵 조작
+//   - str: 숫자 → 문자열 변환
+//
+
+// ─────────────────────────────────────────────────────────────────
+// 1. Generator 초기화
+// ─────────────────────────────────────────────────────────────────
+
+fn createGenerator() {
+  return {
+    insts: [],
+    tempCount: 0
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+// 2. 명령어 생성 헬퍼 함수들
+// ─────────────────────────────────────────────────────────────────
+
+// 일반 명령어 생성 (op + arg)
+fn emit(gen, op, arg) {
+  let inst = {}
+  inst.op = op
+  if (arg != 0) {
+    inst.arg = arg
+  }
+  arr_push(gen.insts, inst)
+  return gen
+}
+
+// PUSH 명령어 (상수값 스택에 올림)
+fn emitPush(gen, val) {
+  return emit(gen, "PUSH", val)
+}
+
+// STORE 명령어 (변수에 값 저장)
+fn emitStore(gen, name) {
+  return emit(gen, "STORE", name)
+}
+
+// LOAD 명령어 (변수값 스택에 올림)
+fn emitLoad(gen, name) {
+  return emit(gen, "LOAD", name)
+}
+
+// 산술 명령어
+fn emitAdd(gen) {
+  return emit(gen, "ADD", 0)
+}
+
+fn emitSub(gen) {
+  return emit(gen, "SUB", 0)
+}
+
+fn emitMul(gen) {
+  return emit(gen, "MUL", 0)
+}
+
+fn emitDiv(gen) {
+  return emit(gen, "DIV", 0)
+}
+
+// 비교 명령어
+fn emitEq(gen) {
+  return emit(gen, "EQ", 0)
+}
+
+fn emitNeq(gen) {
+  return emit(gen, "NEQ", 0)
+}
+
+fn emitLt(gen) {
+  return emit(gen, "LT", 0)
+}
+
+fn emitGt(gen) {
+  return emit(gen, "GT", 0)
+}
+
+fn emitLte(gen) {
+  return emit(gen, "LTE", 0)
+}
+
+fn emitGte(gen) {
+  return emit(gen, "GTE", 0)
+}
+
+// 문자열 명령어
+fn emitStr(gen, val) {
+  return emit(gen, "STR_NEW", val)
+}
+
+// 함수 호출 명령어
+fn emitCall(gen, name) {
+  return emit(gen, "CALL", name)
+}
+
+// 점프 명령어
+fn emitJmp(gen, label) {
+  return emit(gen, "JMP", label)
+}
+
+fn emitJmpNot(gen, label) {
+  return emit(gen, "JMP_NOT", label)
+}
+
+// 라벨 명령어
+fn emitLabel(gen, label) {
+  return emit(gen, "LABEL", label)
+}
+
+// 반환 명령어
+fn emitRet(gen) {
+  return emit(gen, "RET", 0)
+}
+
+// 정지 명령어
+fn emitHalt(gen) {
+  return emit(gen, "HALT", 0)
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+// 3. 라벨 생성 헬퍼
+// ─────────────────────────────────────────────────────────────────
+
+fn newLabel(gen) {
+  let label = "L" + str(gen.tempCount)
+  gen.tempCount = gen.tempCount + 1
+  return label
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+// 4. Expression 생성 함수
+// ─────────────────────────────────────────────────────────────────
+
+fn generateExpression(gen, expr) {
+  if (expr == 0) {
+    return gen
+  }
+
+  let exprType = expr.type
+
+  // 숫자 리터럴: 42
+  if (exprType == "NumberLiteral") {
+    return emitPush(gen, expr.value)
+  }
+
+  // 문자열 리터럴: "hello"
+  if (exprType == "StringLiteral") {
+    return emitStr(gen, expr.value)
+  }
+
+  // 식별자: x
+  if (exprType == "Identifier") {
+    return emitLoad(gen, expr.name)
+  }
+
+  // 이항 연산: x + y
+  if (exprType == "BinaryOp") {
+    return generateBinaryOp(gen, expr)
+  }
+
+  // 함수 호출: println(x)
+  if (exprType == "CallExpr") {
+    return generateCallExpr(gen, expr)
+  }
+
+  return gen
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+// 5. BinaryOp 생성 함수 (x + y, x > y 등)
+// ─────────────────────────────────────────────────────────────────
+
+fn generateBinaryOp(gen, expr) {
+  // 좌측 피연산자
+  generateExpression(gen, expr.left)
+
+  // 우측 피연산자
+  generateExpression(gen, expr.right)
+
+  // 연산자 명령어
+  let op = expr.op
+
+  if (op == "+") {
+    return emitAdd(gen)
+  }
+
+  if (op == "-") {
+    return emitSub(gen)
+  }
+
+  if (op == "*") {
+    return emitMul(gen)
+  }
+
+  if (op == "/") {
+    return emitDiv(gen)
+  }
+
+  if (op == "==") {
+    return emitEq(gen)
+  }
+
+  if (op == "!=") {
+    return emitNeq(gen)
+  }
+
+  if (op == "<") {
+    return emitLt(gen)
+  }
+
+  if (op == ">") {
+    return emitGt(gen)
+  }
+
+  if (op == "<=") {
+    return emitLte(gen)
+  }
+
+  if (op == ">=") {
+    return emitGte(gen)
+  }
+
+  return gen
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+// 6. CallExpr 생성 함수 (함수 호출)
+// ─────────────────────────────────────────────────────────────────
+
+fn generateCallExpr(gen, expr) {
+  let args = expr.args
+  let i = 0
+
+  // 모든 인자 생성
+  while (i < arr_len(args)) {
+    let arg = arr_get(args, i)
+    generateExpression(gen, arg)
+    i = i + 1
+  }
+
+  // CALL 명령어
+  let funcName = expr.callee.name
+  return emitCall(gen, funcName)
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+// 7. Statement 생성 함수들
+// ─────────────────────────────────────────────────────────────────
+
+fn generateStatement(gen, stmt) {
+  if (stmt == 0) {
+    return gen
+  }
+
+  let stmtType = stmt.type
+
+  // let x = 10
+  if (stmtType == "LetDecl") {
+    return generateLetDecl(gen, stmt)
+  }
+
+  // return x
+  if (stmtType == "ReturnStmt") {
+    return generateReturnStmt(gen, stmt)
+  }
+
+  // if (x > 5) { ... } else { ... }
+  if (stmtType == "IfStmt") {
+    return generateIfStmt(gen, stmt)
+  }
+
+  // while (x < 10) { ... }
+  if (stmtType == "WhileStmt") {
+    return generateWhileStmt(gen, stmt)
+  }
+
+  // println(x)
+  if (stmtType == "ExpressionStmt") {
+    return generateExpression(gen, stmt.expr)
+  }
+
+  return gen
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+// 8. Let 선언 생성 (let x = 10)
+// ─────────────────────────────────────────────────────────────────
+
+fn generateLetDecl(gen, stmt) {
+  // 초기값 계산
+  generateExpression(gen, stmt.value)
+
+  // 변수에 저장
+  return emitStore(gen, stmt.name)
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+// 9. Return 문 생성 (return x)
+// ─────────────────────────────────────────────────────────────────
+
+fn generateReturnStmt(gen, stmt) {
+  // 반환값 계산 (있으면)
+  if (stmt.value != 0) {
+    generateExpression(gen, stmt.value)
+  }
+
+  // RET 명령어
+  return emitRet(gen)
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+// 10. If/Else 문 생성
+// ─────────────────────────────────────────────────────────────────
+
+fn generateIfStmt(gen, stmt) {
+  let elseLabel = newLabel(gen)
+  let endLabel = newLabel(gen)
+
+  // 조건 계산
+  generateExpression(gen, stmt.condition)
+
+  // 거짓이면 else로 점프
+  emitJmpNot(gen, elseLabel)
+
+  // then 블록
+  let thenBody = stmt.then
+  let i = 0
+  while (i < arr_len(thenBody)) {
+    let s = arr_get(thenBody, i)
+    generateStatement(gen, s)
+    i = i + 1
+  }
+
+  // 끝으로 점프
+  emitJmp(gen, endLabel)
+
+  // else 라벨
+  emitLabel(gen, elseLabel)
+
+  // else 블록 (있으면)
+  let elseBody = stmt.else
+  if (elseBody != 0) {
+    let j = 0
+    while (j < arr_len(elseBody)) {
+      let s = arr_get(elseBody, j)
+      generateStatement(gen, s)
+      j = j + 1
+    }
+  }
+
+  // 끝 라벨
+  emitLabel(gen, endLabel)
+
+  return gen
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+// 11. While 루프 생성
+// ─────────────────────────────────────────────────────────────────
+
+fn generateWhileStmt(gen, stmt) {
+  let loopLabel = newLabel(gen)
+  let endLabel = newLabel(gen)
+
+  // 루프 시작 라벨
+  emitLabel(gen, loopLabel)
+
+  // 조건 계산
+  generateExpression(gen, stmt.condition)
+
+  // 거짓이면 끝으로 점프
+  emitJmpNot(gen, endLabel)
+
+  // 루프 본체
+  let body = stmt.body
+  let i = 0
+  while (i < arr_len(body)) {
+    let s = arr_get(body, i)
+    generateStatement(gen, s)
+    i = i + 1
+  }
+
+  // 루프 시작으로 점프
+  emitJmp(gen, loopLabel)
+
+  // 끝 라벨
+  emitLabel(gen, endLabel)
+
+  return gen
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+// 12. 메인 IR 생성 함수
+// ─────────────────────────────────────────────────────────────────
+
+fn generateIR(ast) {
+  let gen = createGenerator()
+
+  // AST 본체의 모든 statement 처리
+  let body = ast.body
+  let i = 0
+  while (i < arr_len(body)) {
+    let stmt = arr_get(body, i)
+    generateStatement(gen, stmt)
+    i = i + 1
+  }
+
+  // 프로그램 종료
+  emitHalt(gen)
+
+  return gen.insts
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+// 13. 유틸리티: IR 출력 (디버깅용)
+// ─────────────────────────────────────────────────────────────────
+
+fn irToString(ir) {
+  let result = ""
+  let i = 0
+  while (i < arr_len(ir)) {
+    let inst = arr_get(ir, i)
+    let line = inst.op
+    if (inst.arg != 0) {
+      line = line + " " + str(inst.arg)
+    }
+    result = result + line + "\n"
+    i = i + 1
+  }
+  return result
+}
+
+fn printIR(ir) {
+  println(irToString(ir))
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+// 14. 테스트: 기본 식 생성
+// ─────────────────────────────────────────────────────────────────
+
+fn testBasicExpr() {
+  println("=== Test 1: Basic Expression (3 + 4) ===")
+
+  let ast = {
+    body: [
+      {
+        type: "ExpressionStmt",
+        expr: {
+          type: "BinaryOp",
+          op: "+",
+          left: { type: "NumberLiteral", value: 3 },
+          right: { type: "NumberLiteral", value: 4 }
+        }
+      }
+    ]
+  }
+
+  let ir = generateIR(ast)
+  printIR(ir)
+  println("")
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+// 15. 테스트: 변수 선언 + 반환
+// ─────────────────────────────────────────────────────────────────
+
+fn testLetReturn() {
+  println("=== Test 2: Let Declaration + Return ===")
+
+  let ast = {
+    body: [
+      {
+        type: "LetDecl",
+        name: "x",
+        value: { type: "NumberLiteral", value: 42 }
+      },
+      {
+        type: "ReturnStmt",
+        value: { type: "Identifier", name: "x" }
+      }
+    ]
+  }
+
+  let ir = generateIR(ast)
+  printIR(ir)
+  println("")
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+// 16. 테스트: If/Else 문
+// ─────────────────────────────────────────────────────────────────
+
+fn testIfStmt() {
+  println("=== Test 3: If/Else Statement ===")
+
+  let ast = {
+    body: [
+      {
+        type: "LetDecl",
+        name: "x",
+        value: { type: "NumberLiteral", value: 10 }
+      },
+      {
+        type: "IfStmt",
+        condition: {
+          type: "BinaryOp",
+          op: ">",
+          left: { type: "Identifier", name: "x" },
+          right: { type: "NumberLiteral", value: 5 }
+        },
+        then: [
+          {
+            type: "ExpressionStmt",
+            expr: { type: "NumberLiteral", value: 100 }
+          }
+        ],
+        else: [
+          {
+            type: "ExpressionStmt",
+            expr: { type: "NumberLiteral", value: 200 }
+          }
+        ]
+      }
+    ]
+  }
+
+  let ir = generateIR(ast)
+  printIR(ir)
+  println("")
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+// 17. 테스트: While 루프
+// ─────────────────────────────────────────────────────────────────
+
+fn testWhileStmt() {
+  println("=== Test 4: While Loop ===")
+
+  let ast = {
+    body: [
+      {
+        type: "LetDecl",
+        name: "i",
+        value: { type: "NumberLiteral", value: 0 }
+      },
+      {
+        type: "WhileStmt",
+        condition: {
+          type: "BinaryOp",
+          op: "<",
+          left: { type: "Identifier", name: "i" },
+          right: { type: "NumberLiteral", value: 10 }
+        },
+        body: [
+          {
+            type: "ExpressionStmt",
+            expr: {
+              type: "BinaryOp",
+              op: "+",
+              left: { type: "Identifier", name: "i" },
+              right: { type: "NumberLiteral", value: 1 }
+            }
+          }
+        ]
+      }
+    ]
+  }
+
+  let ir = generateIR(ast)
+  printIR(ir)
+  println("")
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+// 18. 테스트: 함수 호출
+// ─────────────────────────────────────────────────────────────────
+
+fn testCallExpr() {
+  println("=== Test 5: Function Call ===")
+
+  let ast = {
+    body: [
+      {
+        type: "ExpressionStmt",
+        expr: {
+          type: "CallExpr",
+          callee: { name: "println" },
+          args: [
+            { type: "NumberLiteral", value: 42 }
+          ]
+        }
+      }
+    ]
+  }
+
+  let ir = generateIR(ast)
+  printIR(ir)
+  println("")
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+// 19. 전체 테스트 실행
+// ─────────────────────────────────────────────────────────────────
+
+fn runAllTests() {
+  println("╔═════════════════════════════════════════════════════════╗")
+  println("║  FreeLang v2 Self-IR Generator Test Suite               ║")
+  println("╚═════════════════════════════════════════════════════════╝")
+  println("")
+
+  testBasicExpr()
+  testLetReturn()
+  testIfStmt()
+  testWhileStmt()
+  testCallExpr()
+
+  println("✓ All tests completed")
+}
+
+
+// 테스트 실행 (주석 처리)
+// runAllTests()

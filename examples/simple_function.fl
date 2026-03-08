@@ -1,0 +1,8 @@
+// 가장 간단한 함수 테스트
+
+fn get_five() {
+  return 5;
+}
+
+let x = get_five();
+println(x);

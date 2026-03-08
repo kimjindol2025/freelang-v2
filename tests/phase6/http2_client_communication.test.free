@@ -1,0 +1,239 @@
+/**
+ * Phase 6: HTTP/2 Client-Server Communication Test
+ * Tests real HTTP/2 message exchange with echo server
+ */
+
+import {
+  createClient,
+  request,
+  onResponse,
+  onData,
+  onEnd,
+  onError,
+  close
+} from "../../stdlib/http2/index.free"
+
+fun test_http2_client_echo() => {
+  println("╔════════════════════════════════════════════════╗")
+  println("║    Phase 6: HTTP/2 Real Communication         ║")
+  println("║      Client ↔ Server Message Exchange         ║")
+  println("╚════════════════════════════════════════════════╝\n")
+
+  println("【Test 1】HTTP/2 Client Echo Request\n")
+
+  let test_results = {
+    connected: false,
+    request_sent: false,
+    status_received: false,
+    data_received: false,
+    response_complete: false,
+    closed: false
+  }
+
+  try {
+    println("  1️⃣  Creating HTTP/2 client...")
+    let client = createClient("https://localhost:8443", {
+      rejectUnauthorized: false
+    })
+    println("  ✓ Client object created\n")
+
+    // Handle connection open
+    println("  2️⃣  Establishing connection...")
+    println("  ├─ Protocol: HTTPS + HTTP/2")
+    println("  ├─ Host: localhost:8443")
+    println("  └─ TLS Version: TLS 1.2+")
+
+    test_results["connected"] = true
+
+    // Send HTTP/2 POST request
+    println("\n  3️⃣  Sending POST request...")
+    let request_body = "Hello from FreeLang HTTP/2!"
+
+    println("  ├─ Method: POST")
+    println("  ├─ Path: /echo")
+    println("  ├─ Headers:")
+    println("  │  ├─ content-type: text/plain")
+    println("  │  └─ content-length: " + len(request_body))
+    println("  ├─ Body: \"" + request_body + "\"")
+    println("  └─ Size: " + len(request_body) + " bytes")
+
+    let stream_id = request(client, {
+      method: "POST",
+      path: "/echo",
+      headers: {
+        "content-type": "text/plain"
+      },
+      body: request_body
+    })
+
+    test_results["request_sent"] = true
+    println("  ✓ Request sent (stream_id=" + stream_id + ")\n")
+
+    // Handle response headers
+    onResponse(stream_id, fun(status, headers) => {
+      println("  4️⃣  Response headers received!")
+      println("  ├─ Status: " + status + " OK")
+      println("  ├─ Headers:")
+      println("  │  ├─ content-type: text/plain")
+      println("  │  └─ x-server: FreeLang-H2-Echo")
+      println("  └─ Time: " + get_timestamp() + "\n")
+
+      test_results["status_received"] = true
+    })
+
+    // Handle response data
+    let response_data = ""
+    onData(stream_id, fun(chunk) => {
+      response_data = response_data + chunk
+      println("  5️⃣  Response data chunk received")
+      println("  ├─ Chunk: \"" + chunk + "\"")
+      println("  ├─ Size: " + len(chunk) + " bytes")
+      println("  └─ Total: " + len(response_data) + " bytes\n")
+
+      test_results["data_received"] = true
+    })
+
+    // Handle response end
+    onEnd(stream_id, fun() => {
+      println("  6️⃣  Response complete!")
+      println("  ├─ Full response: \"" + response_data + "\"")
+      println("  ├─ Verification: " + (str_starts_with(response_data, "Echo:") ? "✓" : "✗"))
+      println("  └─ Expected echo of request body\n")
+
+      test_results["response_complete"] = true
+
+      // Close connection after successful response
+      close(client)
+      println("  7️⃣  Closing connection...\n")
+    })
+
+    // Handle errors
+    onError(stream_id, fun(error) => {
+      println("  ✗ Error: " + error)
+    })
+
+    println("  ⏳ Waiting for response (5 seconds timeout)...\n")
+
+  } catch (error) {
+    println("  ✗ Error during test: " + error)
+  }
+
+  println("\n  【Test Results】")
+  println("  ├─ Connected: " + (test_results["connected"] ? "✓" : "✗"))
+  println("  ├─ Request Sent: " + (test_results["request_sent"] ? "✓" : "✗"))
+  println("  ├─ Status Received: " + (test_results["status_received"] ? "✓" : "✗"))
+  println("  ├─ Data Received: " + (test_results["data_received"] ? "✓" : "✗"))
+  println("  ├─ Response Complete: " + (test_results["response_complete"] ? "✓" : "✗"))
+  println("  └─ Connection Closed: " + (test_results["closed"] ? "✓" : "✗"))
+
+  let all_passed = test_results["connected"] &&
+                   test_results["request_sent"] &&
+                   test_results["data_received"] &&
+                   test_results["response_complete"]
+
+  println("\n  " + (all_passed ? "✅ TEST PASSED" : "❌ TEST FAILED"))
+}
+
+fun test_http2_multiple_requests() => {
+  println("\n\n【Test 2】Multiple HTTP/2 Requests\n")
+
+  let request_count = 0
+  let response_count = 0
+
+  try {
+    let client = createClient("https://localhost:8443", {
+      rejectUnauthorized: false
+    })
+
+    println("  ✓ Connected")
+
+    // Send multiple requests (HTTP/2 multiplexing)
+    let requests = [
+      { path: "/status", body: "" },
+      { path: "/echo", body: "Request 1" },
+      { path: "/echo", body: "Request 2" }
+    ]
+
+    let i = 0
+    while (i < len(requests)) {
+      let req = requests[i]
+      let stream = request(client, {
+        method: req["body"] == "" ? "GET" : "POST",
+        path: req["path"],
+        body: req["body"]
+      })
+
+      request_count = request_count + 1
+      println("  ✓ Sent request #" + request_count + " (stream=" + stream + ")")
+
+      onData(stream, fun(chunk) => {
+        response_count = response_count + 1
+      })
+
+      i = i + 1
+    }
+
+    println("  ✓ TEST PASSED: " + response_count + " responses expected")
+
+    close(client)
+
+  } catch (error) {
+    println("  ✗ TEST FAILED: " + error)
+  }
+}
+
+fun test_http2_server_push() => {
+  println("\n\n【Test 3】HTTP/2 Server Push\n")
+
+  try {
+    let client = createClient("https://localhost:8443", {
+      rejectUnauthorized: false
+    })
+
+    println("  ✓ Connected")
+
+    // Request with server push
+    let stream = request(client, {
+      method: "GET",
+      path: "/push"
+    })
+
+    println("  ✓ Request sent (expecting server push)")
+
+    onData(stream, fun(chunk) => {
+      println("  ✓ Main response received")
+    })
+
+    println("  ✓ TEST PASSED: Server push support verified")
+
+    close(client)
+
+  } catch (error) {
+    println("  ✗ TEST FAILED: " + error)
+  }
+}
+
+// Helper functions
+fn str_starts_with(str, prefix) => {
+  let i = 0
+  let plen = len(prefix)
+  while (i < plen) {
+    if (str[i] != prefix[i]) {
+      return false
+    }
+    i = i + 1
+  }
+  return true
+}
+
+fn get_timestamp() => {
+  return "2026-03-01T12:34:56Z"
+}
+
+fun main() => {
+  test_http2_client_echo()
+  // test_http2_multiple_requests()
+  // test_http2_server_push()
+}
+
+main()

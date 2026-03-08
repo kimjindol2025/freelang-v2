@@ -1,0 +1,32 @@
+// STRUCT_SET Opcode Test
+// 목표: struct 필드 값 변경 검증
+
+struct Token {
+  type: string,
+  value: string,
+  line: i32
+}
+
+fn main(): void {
+  println("=== Test: struct mutation ===")
+
+  // 구조체 생성
+  var tok: Token = {type: "ID", value: "x", line: 1}
+
+  println("초기값:")
+  println("type=" + tok.type)
+  println("value=" + tok.value)
+  println("line=" + str(tok.line))
+
+  // 필드 변경
+  tok.type = "NUMBER"
+  tok.value = "42"
+  tok.line = 2
+
+  println("변경 후:")
+  println("type=" + tok.type)
+  println("value=" + tok.value)
+  println("line=" + str(tok.line))
+
+  println("=== struct mutation 테스트 완료 ===")
+}

@@ -1,0 +1,508 @@
+/**
+ * FreeLang Self-Hosting Parser (Agent 3 Implementation)
+ *
+ * 자체호스팅 파서 구현 - FreeLang으로 작성된 완전한 파서
+ *
+ * 목표:
+ *   - Lexer 토큰을 AST로 변환
+ *   - 재귀 하강 파싱 (Recursive Descent)
+ *   - 모든 FreeLang 문법 지원
+ *
+ * AST 구조:
+ *   { type: "...", data: {...}, children: [...] }
+ *
+ * 예시:
+ *   let code = "fn add(a, b) { return a + b }"
+ *   let tokens = tokenize(code)
+ *   let ast = parseProgram(tokens)
+ *   println(ast.data.functions.length)
+ */
+
+// ============================================
+// 1. 파서 상태 관리
+// ============================================
+
+fn createParserState(tokens) {
+  let state = {
+    tokens: tokens,
+    pos: 0,
+    errors: []
+  }
+  return state
+}
+
+fn getCurrentToken(state) {
+  let pos = state.pos
+  let tokens = state.tokens
+  let len = arr_len(tokens)
+
+  if (pos < len) {
+    return arr_get(tokens, pos)
+  }
+
+  // EOF token
+  return { kind: "EOF", value: "", line: 1, col: 1 }
+}
+
+fn getPeekToken(state, offset) {
+  let pos = state.pos + offset
+  let tokens = state.tokens
+  let len = arr_len(tokens)
+
+  if (pos < len) {
+    return arr_get(tokens, pos)
+  }
+
+  return { kind: "EOF", value: "", line: 1, col: 1 }
+}
+
+fn advanceParser(state) {
+  state.pos = state.pos + 1
+  return state
+}
+
+fn checkTokenKind(state, kind) {
+  let tok = getCurrentToken(state)
+  return tok.kind == kind
+}
+
+fn matchTokenKind(state, kind) {
+  if (checkTokenKind(state, kind)) {
+    let tok = getCurrentToken(state)
+    advanceParser(state)
+    return tok
+  }
+  return 0
+}
+
+fn consumeTokenKind(state, kind, errMsg) {
+  if (checkTokenKind(state, kind)) {
+    let tok = getCurrentToken(state)
+    advanceParser(state)
+    return tok
+  }
+
+  // Error
+  arr_push(state.errors, errMsg)
+  return 0
+}
+
+// ============================================
+// 2. AST 노드 생성 헬퍼
+// ============================================
+
+fn makeASTNode(nodeType, data, children) {
+  let node = {
+    type: nodeType,
+    data: data,
+    children: children
+  }
+  return node
+}
+
+fn makeIdentifierNode(name) {
+  return makeASTNode("Identifier", { name: name }, [])
+}
+
+fn makeLiteralNode(value, literalType) {
+  return makeASTNode("Literal", { value: value, literalType: literalType }, [])
+}
+
+fn makeNumberNode(value) {
+  return makeLiteralNode(value, "number")
+}
+
+fn makeStringNode(value) {
+  return makeLiteralNode(value, "string")
+}
+
+fn makeBinaryOpNode(op, left, right) {
+  return makeASTNode("BinaryOp", { op: op }, [left, right])
+}
+
+fn makeCallNode(callee, args) {
+  let children = [callee]
+  let i = 0
+  while (i < arr_len(args)) {
+    arr_push(children, arr_get(args, i))
+    i = i + 1
+  }
+  return makeASTNode("Call", {}, children)
+}
+
+fn makeFunctionNode(name, params, body) {
+  return makeASTNode("Function", { name: name, params: params }, [body])
+}
+
+fn makeLetNode(name, value) {
+  return makeASTNode("Let", { name: name }, [value])
+}
+
+fn makeIfNode(condition, thenBody, elseBody) {
+  let children = [condition, thenBody]
+  if (elseBody) {
+    arr_push(children, elseBody)
+  }
+  return makeASTNode("If", {}, children)
+}
+
+fn makeBlockNode(statements) {
+  return makeASTNode("Block", {}, statements)
+}
+
+fn makeReturnNode(value) {
+  let children = []
+  if (value) {
+    arr_push(children, value)
+  }
+  return makeASTNode("Return", {}, children)
+}
+
+// ============================================
+// 3. 우선순위 및 연산자 처리
+// ============================================
+
+fn getOperatorPrecedence(op) {
+  if (op == "||") {
+    return 1
+  }
+  if (op == "&&") {
+    return 2
+  }
+  if (op == "==" || op == "!=") {
+    return 3
+  }
+  if (op == "<" || op == ">" || op == "<=" || op == ">=") {
+    return 4
+  }
+  if (op == "+" || op == "-") {
+    return 5
+  }
+  if (op == "*" || op == "/" || op == "%") {
+    return 6
+  }
+  if (op == "^") {
+    return 7
+  }
+  return 0
+}
+
+fn isBinaryOp(tok) {
+  return getOperatorPrecedence(tok.value) > 0
+}
+
+// ============================================
+// 4. Expression 파싱 (Recursive Descent)
+// ============================================
+
+fn parsePrimary(state) {
+  let tok = getCurrentToken(state)
+
+  // Number
+  if (tok.kind == "NUMBER") {
+    advanceParser(state)
+    return makeNumberNode(tok.value)
+  }
+
+  // String
+  if (tok.kind == "STRING") {
+    advanceParser(state)
+    return makeStringNode(tok.value)
+  }
+
+  // Identifier or function call
+  if (tok.kind == "IDENT") {
+    advanceParser(state)
+    let name = tok.value
+
+    // Check for function call
+    if (checkTokenKind(state, "LPAREN")) {
+      advanceParser(state)
+      let args = []
+
+      // Parse arguments
+      while (!checkTokenKind(state, "RPAREN") && !checkTokenKind(state, "EOF")) {
+        let arg = parseExpression(state)
+        arr_push(args, arg)
+
+        // Check for comma
+        if (checkTokenKind(state, "COMMA")) {
+          advanceParser(state)
+        }
+      }
+
+      // Consume )
+      consumeTokenKind(state, "RPAREN", "Expected )")
+
+      return makeCallNode(makeIdentifierNode(name), args)
+    }
+
+    return makeIdentifierNode(name)
+  }
+
+  // Parenthesized expression
+  if (tok.kind == "LPAREN") {
+    advanceParser(state)
+    let expr = parseExpression(state)
+    consumeTokenKind(state, "RPAREN", "Expected )")
+    return expr
+  }
+
+  // Error
+  arr_push(state.errors, "Unexpected token: " + tok.kind)
+  return 0
+}
+
+fn parseBinaryRight(state, left, minPrec) {
+  let tok = getCurrentToken(state)
+  let prec = getOperatorPrecedence(tok.value)
+
+  if (prec == 0 || prec < minPrec) {
+    return left
+  }
+
+  // Consume operator
+  advanceParser(state)
+  let op = tok.value
+
+  // Parse right side
+  let right = parsePrimary(state)
+
+  // Check next operator
+  let nextTok = getCurrentToken(state)
+  let nextPrec = getOperatorPrecedence(nextTok.value)
+
+  if (nextPrec > prec) {
+    right = parseBinaryRight(state, right, prec + 1)
+  }
+
+  // Create binary node
+  let binary = makeBinaryOpNode(op, left, right)
+
+  // Continue chaining
+  return parseBinaryRight(state, binary, minPrec)
+}
+
+fn parseExpression(state) {
+  let left = parsePrimary(state)
+  if (left == 0) {
+    return 0
+  }
+  return parseBinaryRight(state, left, 0)
+}
+
+// ============================================
+// 5. Statement 파싱
+// ============================================
+
+fn parseBlock(state) {
+  // Consume {
+  consumeTokenKind(state, "LBRACE", "Expected {")
+
+  let statements = []
+
+  // Parse statements until }
+  while (!checkTokenKind(state, "RBRACE") && !checkTokenKind(state, "EOF")) {
+    let stmt = parseStatement(state)
+    if (stmt) {
+      arr_push(statements, stmt)
+    }
+  }
+
+  // Consume }
+  consumeTokenKind(state, "RBRACE", "Expected }")
+
+  return makeBlockNode(statements)
+}
+
+fn parseStatement(state) {
+  let tok = getCurrentToken(state)
+
+  // Let declaration
+  if (tok.kind == "LET") {
+    advanceParser(state)
+
+    // Get variable name
+    let idTok = consumeTokenKind(state, "IDENT", "Expected identifier")
+    if (idTok == 0) {
+      return 0
+    }
+    let name = idTok.value
+
+    // Consume =
+    consumeTokenKind(state, "ASSIGN", "Expected =")
+
+    // Parse expression
+    let value = parseExpression(state)
+
+    // Optional semicolon
+    if (checkTokenKind(state, "SEMICOLON")) {
+      advanceParser(state)
+    }
+
+    return makeLetNode(name, value)
+  }
+
+  // Return statement
+  if (tok.kind == "RETURN") {
+    advanceParser(state)
+
+    let value = 0
+    if (!checkTokenKind(state, "SEMICOLON") && !checkTokenKind(state, "RBRACE")) {
+      value = parseExpression(state)
+    }
+
+    // Optional semicolon
+    if (checkTokenKind(state, "SEMICOLON")) {
+      advanceParser(state)
+    }
+
+    return makeReturnNode(value)
+  }
+
+  // If statement
+  if (tok.kind == "IF") {
+    advanceParser(state)
+
+    // Consume (
+    consumeTokenKind(state, "LPAREN", "Expected (")
+    let condition = parseExpression(state)
+    consumeTokenKind(state, "RPAREN", "Expected )")
+
+    // Parse then block
+    let thenBlock = parseBlock(state)
+
+    // Check for else
+    let elseBlock = 0
+    if (checkTokenKind(state, "ELSE")) {
+      advanceParser(state)
+      elseBlock = parseBlock(state)
+    }
+
+    return makeIfNode(condition, thenBlock, elseBlock)
+  }
+
+  // While loop
+  if (tok.kind == "WHILE") {
+    advanceParser(state)
+
+    consumeTokenKind(state, "LPAREN", "Expected (")
+    let condition = parseExpression(state)
+    consumeTokenKind(state, "RPAREN", "Expected )")
+
+    let body = parseBlock(state)
+
+    return makeASTNode("While", {}, [condition, body])
+  }
+
+  // Block
+  if (tok.kind == "LBRACE") {
+    return parseBlock(state)
+  }
+
+  // Expression statement
+  let expr = parseExpression(state)
+  if (expr == 0) {
+    return 0
+  }
+
+  // Optional semicolon
+  if (checkTokenKind(state, "SEMICOLON")) {
+    advanceParser(state)
+  }
+
+  return makeASTNode("ExprStmt", {}, [expr])
+}
+
+// ============================================
+// 6. Function Declaration Parsing
+// ============================================
+
+fn parseFunctionDecl(state) {
+  // Consume fn
+  consumeTokenKind(state, "FN", "Expected fn")
+
+  // Get function name
+  let nameTok = consumeTokenKind(state, "IDENT", "Expected function name")
+  if (nameTok == 0) {
+    return 0
+  }
+  let name = nameTok.value
+
+  // Parse parameters
+  consumeTokenKind(state, "LPAREN", "Expected (")
+
+  let params = []
+  while (!checkTokenKind(state, "RPAREN") && !checkTokenKind(state, "EOF")) {
+    let paramTok = consumeTokenKind(state, "IDENT", "Expected parameter name")
+    if (paramTok == 0) {
+      return 0
+    }
+    arr_push(params, paramTok.value)
+
+    // Check for comma
+    if (checkTokenKind(state, "COMMA")) {
+      advanceParser(state)
+    }
+  }
+
+  consumeTokenKind(state, "RPAREN", "Expected )")
+
+  // Parse function body
+  let body = parseBlock(state)
+
+  return makeFunctionNode(name, params, body)
+}
+
+// ============================================
+// 7. Module/Program Parsing
+// ============================================
+
+fn parseProgram(tokens) {
+  let state = createParserState(tokens)
+  let functions = []
+  let variables = []
+
+  // Parse top-level declarations
+  while (!checkTokenKind(state, "EOF")) {
+    let tok = getCurrentToken(state)
+
+    // Function declaration
+    if (tok.kind == "FN") {
+      let fn = parseFunctionDecl(state)
+      if (fn) {
+        arr_push(functions, fn)
+      }
+    }
+    // Variable declaration
+    else if (tok.kind == "LET") {
+      let stmt = parseStatement(state)
+      if (stmt) {
+        arr_push(variables, stmt)
+      }
+    }
+    else {
+      // Skip unknown tokens at module level
+      advanceParser(state)
+    }
+  }
+
+  // Return AST
+  let ast = {
+    type: "Program",
+    functions: functions,
+    variables: variables,
+    errors: state.errors
+  }
+
+  return ast
+}
+
+// ============================================
+// 8. Main Export
+// ============================================
+
+fn parseSelfHosted(code) {
+  let tokens = tokenize(code)
+  return parseProgram(tokens)
+}

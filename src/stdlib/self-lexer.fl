@@ -1,0 +1,682 @@
+/**
+ * FreeLang Self-Hosting Lexer (Pure v2 Implementation)
+ *
+ * 자체호스팅 Lexer - FreeLang으로 작성된 토크나이저
+ *
+ * ⚠️ 제약사항:
+ *   - struct 선언 금지 (객체 리터럴만 사용)
+ *   - JS 메서드 금지 (.charCodeAt, .charAt, .length 등)
+ *   - v2 stdlib 함수만 사용 (charAt, string_length, substr 등)
+ *
+ * 기능:
+ *   - 키워드, 식별자, 숫자, 문자열 인식
+ *   - 연산자 및 구두점 토크나이제이션
+ *   - 라인/컬럼 위치 추적
+ *   - 주석 처리 (라인, 블록)
+ *
+ * 예시:
+ *   let code = "fn add(a, b) { return a + b }"
+ *   let tokens = tokenize(code)
+ *   // [{kind: "KEYWORD", value: "fn"}, {kind: "IDENT", value: "add"}, ...]
+ */
+
+// ============================================
+// 1. Token 객체 생성 함수 (struct 대신 사용)
+// ============================================
+
+/**
+ * Token 객체 생성
+ * {kind, value, line, col, length}
+ */
+fn makeToken(kind, value, line, col, length) {
+  return {
+    kind: kind,
+    value: value,
+    line: line,
+    col: col,
+    length: length
+  }
+}
+
+// ============================================
+// 2. Lexer 상태 객체 생성
+// ============================================
+
+/**
+ * Lexer 초기화
+ * {source, pos, line, col, tokens}
+ */
+fn createLexer(source) {
+  return {
+    source: source,
+    pos: 0,
+    line: 1,
+    col: 1,
+    tokens: []
+  }
+}
+
+// ============================================
+// 3. 기본 문자 조회 함수
+// ============================================
+
+/**
+ * 현재 위치의 문자 반환
+ * 끝이면 ""
+ */
+fn current(lexer) {
+  let p = lexer.pos
+  let s = lexer.source
+  let len = string_length(s)
+
+  if (p >= len) {
+    return ""
+  }
+  return charAt(s, p)
+}
+
+/**
+ * offset만큼 앞의 문자 미리보기
+ * 예: peek(lexer, 1) = 다음 문자
+ */
+fn peek(lexer, offset) {
+  let p = lexer.pos + offset
+  let s = lexer.source
+  let len = string_length(s)
+
+  if (p >= len) {
+    return ""
+  }
+  return charAt(s, p)
+}
+
+/**
+ * 현재 위치 전진
+ * 줄바꿈 시 line++, col 리셋
+ */
+fn advance(lexer) {
+  let ch = current(lexer)
+
+  if (ch == "\n") {
+    lexer.line = lexer.line + 1
+    lexer.col = 1
+  } else {
+    lexer.col = lexer.col + 1
+  }
+  lexer.pos = lexer.pos + 1
+}
+
+// ============================================
+// 4. 문자 검사 함수들
+// ============================================
+
+/**
+ * 알파벳 검사 (a-z, A-Z, _)
+ * ASCII 코드 비교로 구현
+ */
+fn isAlpha(ch) {
+  if (ch == "") {
+    return 0
+  }
+
+  // ASCII를 사용하지 않고 문자 직접 비교
+  let c0 = charAt("abcdefghijklmnopqrstuvwxyz", 0)
+  let c1 = charAt("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 0)
+  let c2 = charAt("_", 0)
+
+  // 간단히: 소문자 a-z 포함
+  if (ch == "a") { return 1 }
+  if (ch == "b") { return 1 }
+  if (ch == "c") { return 1 }
+  if (ch == "d") { return 1 }
+  if (ch == "e") { return 1 }
+  if (ch == "f") { return 1 }
+  if (ch == "g") { return 1 }
+  if (ch == "h") { return 1 }
+  if (ch == "i") { return 1 }
+  if (ch == "j") { return 1 }
+  if (ch == "k") { return 1 }
+  if (ch == "l") { return 1 }
+  if (ch == "m") { return 1 }
+  if (ch == "n") { return 1 }
+  if (ch == "o") { return 1 }
+  if (ch == "p") { return 1 }
+  if (ch == "q") { return 1 }
+  if (ch == "r") { return 1 }
+  if (ch == "s") { return 1 }
+  if (ch == "t") { return 1 }
+  if (ch == "u") { return 1 }
+  if (ch == "v") { return 1 }
+  if (ch == "w") { return 1 }
+  if (ch == "x") { return 1 }
+  if (ch == "y") { return 1 }
+  if (ch == "z") { return 1 }
+
+  // 대문자 A-Z
+  if (ch == "A") { return 1 }
+  if (ch == "B") { return 1 }
+  if (ch == "C") { return 1 }
+  if (ch == "D") { return 1 }
+  if (ch == "E") { return 1 }
+  if (ch == "F") { return 1 }
+  if (ch == "G") { return 1 }
+  if (ch == "H") { return 1 }
+  if (ch == "I") { return 1 }
+  if (ch == "J") { return 1 }
+  if (ch == "K") { return 1 }
+  if (ch == "L") { return 1 }
+  if (ch == "M") { return 1 }
+  if (ch == "N") { return 1 }
+  if (ch == "O") { return 1 }
+  if (ch == "P") { return 1 }
+  if (ch == "Q") { return 1 }
+  if (ch == "R") { return 1 }
+  if (ch == "S") { return 1 }
+  if (ch == "T") { return 1 }
+  if (ch == "U") { return 1 }
+  if (ch == "V") { return 1 }
+  if (ch == "W") { return 1 }
+  if (ch == "X") { return 1 }
+  if (ch == "Y") { return 1 }
+  if (ch == "Z") { return 1 }
+
+  // 언더스코어
+  if (ch == "_") { return 1 }
+
+  return 0
+}
+
+/**
+ * 숫자 검사 (0-9)
+ */
+fn isDigit(ch) {
+  if (ch == "") {
+    return 0
+  }
+
+  if (ch == "0") { return 1 }
+  if (ch == "1") { return 1 }
+  if (ch == "2") { return 1 }
+  if (ch == "3") { return 1 }
+  if (ch == "4") { return 1 }
+  if (ch == "5") { return 1 }
+  if (ch == "6") { return 1 }
+  if (ch == "7") { return 1 }
+  if (ch == "8") { return 1 }
+  if (ch == "9") { return 1 }
+
+  return 0
+}
+
+/**
+ * 알파벳 또는 숫자 검사
+ */
+fn isAlphaNumeric(ch) {
+  let a = isAlpha(ch)
+  let d = isDigit(ch)
+
+  if (a == 1) { return 1 }
+  if (d == 1) { return 1 }
+
+  return 0
+}
+
+/**
+ * 공백 문자 검사 (space, tab, newline, carriage return)
+ */
+fn isWhitespace(ch) {
+  if (ch == " ") { return 1 }
+  if (ch == "\t") { return 1 }
+  if (ch == "\n") { return 1 }
+  if (ch == "\r") { return 1 }
+
+  return 0
+}
+
+// ============================================
+// 5. 주석 스킵 함수
+// ============================================
+
+/**
+ * 라인 주석 스킵 (// 처리)
+ */
+fn skipLineComment(lexer) {
+  // // 두 글자 건너뛰기
+  advance(lexer)
+  advance(lexer)
+
+  // 줄 끝까지 읽기
+  let ch = current(lexer)
+  while (ch != "" && ch != "\n") {
+    advance(lexer)
+    ch = current(lexer)
+  }
+
+  // \n 도달 시 한 번 더 advance (줄 넘기기)
+  if (ch == "\n") {
+    advance(lexer)
+  }
+}
+
+/**
+ * 블록 주석 스킵 (/* */ 처리)
+ */
+fn skipBlockComment(lexer) {
+  // /* 두 글자 건너뛰기
+  advance(lexer)
+  advance(lexer)
+
+  // */ 찾을 때까지 읽기
+  let ch = current(lexer)
+  let next_ch = peek(lexer, 1)
+
+  while (ch != "") {
+    if (ch == "*" && next_ch == "/") {
+      // */ 도달
+      advance(lexer)  // *
+      advance(lexer)  // /
+      break
+    }
+    advance(lexer)
+    ch = current(lexer)
+    next_ch = peek(lexer, 1)
+  }
+}
+
+/**
+ * 공백과 주석 건너뛰기
+ */
+fn skipWhitespace(lexer) {
+  let ch = current(lexer)
+
+  while (ch != "") {
+    // 공백 문자
+    if (isWhitespace(ch) == 1) {
+      advance(lexer)
+      ch = current(lexer)
+      continue
+    }
+
+    // 라인 주석
+    if (ch == "/" && peek(lexer, 1) == "/") {
+      skipLineComment(lexer)
+      ch = current(lexer)
+      continue
+    }
+
+    // 블록 주석
+    if (ch == "/" && peek(lexer, 1) == "*") {
+      skipBlockComment(lexer)
+      ch = current(lexer)
+      continue
+    }
+
+    // 공백/주석 아님
+    break
+  }
+}
+
+// ============================================
+// 6. 키워드 검사 함수
+// ============================================
+
+/**
+ * 키워드 검사
+ */
+fn isKeyword(word) {
+  if (word == "fn") { return 1 }
+  if (word == "let") { return 1 }
+  if (word == "return") { return 1 }
+  if (word == "if") { return 1 }
+  if (word == "else") { return 1 }
+  if (word == "while") { return 1 }
+  if (word == "for") { return 1 }
+  if (word == "in") { return 1 }
+  if (word == "break") { return 1 }
+  if (word == "continue") { return 1 }
+  if (word == "match") { return 1 }
+  if (word == "struct") { return 1 }
+  if (word == "enum") { return 1 }
+  if (word == "impl") { return 1 }
+  if (word == "trait") { return 1 }
+  if (word == "type") { return 1 }
+  if (word == "as") { return 1 }
+  if (word == "pub") { return 1 }
+  if (word == "mut") { return 1 }
+  if (word == "const") { return 1 }
+  if (word == "static") { return 1 }
+  if (word == "async") { return 1 }
+  if (word == "await") { return 1 }
+  if (word == "try") { return 1 }
+  if (word == "catch") { return 1 }
+  if (word == "throw") { return 1 }
+  if (word == "true") { return 1 }
+  if (word == "false") { return 1 }
+  if (word == "null") { return 1 }
+  if (word == "undefined") { return 1 }
+
+  return 0
+}
+
+// ============================================
+// 7. 식별자/키워드 스캔
+// ============================================
+
+/**
+ * 식별자 또는 키워드 스캔
+ * 문자나 언더스코어로 시작
+ * 문자, 숫자, 언더스코어 포함 가능
+ */
+fn scanIdentifier(lexer) {
+  let start_line = lexer.line
+  let start_col = lexer.col
+  let start_pos = lexer.pos
+
+  // 식별자 문자 읽기
+  let word = ""
+  let ch = current(lexer)
+
+  while (ch != "" && isAlphaNumeric(ch) == 1) {
+    word = word + ch
+    advance(lexer)
+    ch = current(lexer)
+  }
+
+  // 키워드 여부 확인
+  let kind = "IDENT"
+  if (isKeyword(word) == 1) {
+    kind = "KEYWORD"
+  }
+
+  let len = string_length(word)
+  return makeToken(kind, word, start_line, start_col, len)
+}
+
+// ============================================
+// 8. 숫자 스캔
+// ============================================
+
+/**
+ * 숫자 스캔 (정수 및 실수)
+ * 예: 123, 123.456, .456
+ */
+fn scanNumber(lexer) {
+  let start_line = lexer.line
+  let start_col = lexer.col
+  let start_pos = lexer.pos
+
+  let num = ""
+  let ch = current(lexer)
+
+  // 정수 부분
+  while (ch != "" && isDigit(ch) == 1) {
+    num = num + ch
+    advance(lexer)
+    ch = current(lexer)
+  }
+
+  // 소수점 처리
+  if (ch == "." && isDigit(peek(lexer, 1)) == 1) {
+    num = num + ch
+    advance(lexer)
+    ch = current(lexer)
+
+    // 소수 부분
+    while (ch != "" && isDigit(ch) == 1) {
+      num = num + ch
+      advance(lexer)
+      ch = current(lexer)
+    }
+  }
+
+  let len = string_length(num)
+  return makeToken("NUMBER", num, start_line, start_col, len)
+}
+
+// ============================================
+// 9. 문자열 스캔
+// ============================================
+
+/**
+ * 문자열 스캔 ("..." 처리)
+ * 이스케이프 시퀀스: \n, \t, \\, \"
+ */
+fn scanString(lexer) {
+  let start_line = lexer.line
+  let start_col = lexer.col
+
+  // 시작 따옴표 건너뛰기
+  advance(lexer)
+
+  let str = ""
+  let ch = current(lexer)
+
+  while (ch != "" && ch != "\"") {
+    if (ch == "\\") {
+      // 이스케이프 시퀀스
+      advance(lexer)
+      let next = current(lexer)
+
+      if (next == "n") {
+        str = str + "\n"
+      } else if (next == "t") {
+        str = str + "\t"
+      } else if (next == "\\") {
+        str = str + "\\"
+      } else if (next == "\"") {
+        str = str + "\""
+      } else {
+        // 알 수 없는 이스케이프: 그냥 문자 추가
+        str = str + next
+      }
+
+      advance(lexer)
+      ch = current(lexer)
+    } else {
+      str = str + ch
+      advance(lexer)
+      ch = current(lexer)
+    }
+  }
+
+  // 종료 따옴표 건너뛰기
+  if (ch == "\"") {
+    advance(lexer)
+  }
+
+  let len = string_length(str)
+  return makeToken("STRING", str, start_line, start_col, len)
+}
+
+// ============================================
+// 10. 연산자 및 구두점 스캔
+// ============================================
+
+/**
+ * 2글자 연산자 검사
+ * ==, !=, <=, >=, &&, ||, ++, --, ->, =>
+ */
+fn checkTwoCharOp(lexer) {
+  let ch = current(lexer)
+  let next = peek(lexer, 1)
+
+  if (ch == "=" && next == "=") { return "==" }
+  if (ch == "!" && next == "=") { return "!=" }
+  if (ch == "<" && next == "=") { return "<=" }
+  if (ch == ">" && next == "=") { return ">=" }
+  if (ch == "&" && next == "&") { return "&&" }
+  if (ch == "|" && next == "|") { return "||" }
+  if (ch == "+" && next == "+") { return "++" }
+  if (ch == "-" && next == "-") { return "--" }
+  if (ch == "-" && next == ">") { return "->" }
+  if (ch == "=" && next == ">") { return "=>" }
+
+  return ""
+}
+
+/**
+ * 단일 문자 연산자/구두점
+ */
+fn isSingleCharOp(ch) {
+  if (ch == "+") { return 1 }
+  if (ch == "-") { return 1 }
+  if (ch == "*") { return 1 }
+  if (ch == "/") { return 1 }
+  if (ch == "=") { return 1 }
+  if (ch == "!") { return 1 }
+  if (ch == "<") { return 1 }
+  if (ch == ">") { return 1 }
+  if (ch == "&") { return 1 }
+  if (ch == "|") { return 1 }
+  if (ch == "^") { return 1 }
+  if (ch == "%") { return 1 }
+  if (ch == "~") { return 1 }
+  if (ch == ".") { return 1 }
+  if (ch == ",") { return 1 }
+  if (ch == ";") { return 1 }
+  if (ch == ":") { return 1 }
+  if (ch == "?") { return 1 }
+  if (ch == "@") { return 1 }
+  if (ch == "#") { return 1 }
+
+  return 0
+}
+
+/**
+ * 연산자 또는 구두점 스캔
+ */
+fn scanOperator(lexer) {
+  let start_line = lexer.line
+  let start_col = lexer.col
+
+  // 2글자 연산자 먼저 확인
+  let op = checkTwoCharOp(lexer)
+  if (op != "") {
+    advance(lexer)
+    advance(lexer)
+    return makeToken("OP", op, start_line, start_col, 2)
+  }
+
+  // 단일 문자 연산자
+  let ch = current(lexer)
+  if (isSingleCharOp(ch) == 1) {
+    advance(lexer)
+    return makeToken("OP", ch, start_line, start_col, 1)
+  }
+
+  // 괄호 및 중괄호
+  if (ch == "(") {
+    advance(lexer)
+    return makeToken("LPAREN", "(", start_line, start_col, 1)
+  }
+  if (ch == ")") {
+    advance(lexer)
+    return makeToken("RPAREN", ")", start_line, start_col, 1)
+  }
+  if (ch == "{") {
+    advance(lexer)
+    return makeToken("LBRACE", "{", start_line, start_col, 1)
+  }
+  if (ch == "}") {
+    advance(lexer)
+    return makeToken("RBRACE", "}", start_line, start_col, 1)
+  }
+  if (ch == "[") {
+    advance(lexer)
+    return makeToken("LBRACKET", "[", start_line, start_col, 1)
+  }
+  if (ch == "]") {
+    advance(lexer)
+    return makeToken("RBRACKET", "]", start_line, start_col, 1)
+  }
+
+  // 알 수 없는 문자는 스킵
+  advance(lexer)
+  return makeToken("UNKNOWN", ch, start_line, start_col, 1)
+}
+
+// ============================================
+// 11. 메인 토크나이저 함수
+// ============================================
+
+/**
+ * 소스 코드를 토큰 배열로 변환
+ */
+fn tokenize(source) {
+  let lexer = createLexer(source)
+
+  while (lexer.pos < string_length(source)) {
+    skipWhitespace(lexer)
+
+    let ch = current(lexer)
+
+    // 파일 끝
+    if (ch == "") {
+      break
+    }
+
+    // 식별자 또는 키워드
+    if (isAlpha(ch) == 1) {
+      let token = scanIdentifier(lexer)
+      push(lexer.tokens, token)
+      continue
+    }
+
+    // 숫자
+    if (isDigit(ch) == 1) {
+      let token = scanNumber(lexer)
+      push(lexer.tokens, token)
+      continue
+    }
+
+    // 문자열
+    if (ch == "\"") {
+      let token = scanString(lexer)
+      push(lexer.tokens, token)
+      continue
+    }
+
+    // 연산자 및 구두점
+    let token = scanOperator(lexer)
+    push(lexer.tokens, token)
+  }
+
+  // EOF 토큰 추가
+  let eof_token = makeToken("EOF", "", lexer.line, lexer.col, 0)
+  push(lexer.tokens, eof_token)
+
+  return lexer.tokens
+}
+
+// ============================================
+// 12. 토큰 표시 함수 (디버깅)
+// ============================================
+
+/**
+ * 토큰을 문자열로 변환 (디버깅용)
+ */
+fn tokenToString(token) {
+  let result = "["
+  result = result + token.kind
+  result = result + ": \""
+  result = result + token.value
+  result = result + "\" @"
+  result = result + str(token.line)
+  result = result + ":"
+  result = result + str(token.col)
+  result = result + "]"
+
+  return result
+}
+
+/**
+ * 토큰 배열을 출력 (디버깅용)
+ */
+fn printTokens(tokens) {
+  let i = 0
+  while (i < arr_len(tokens)) {
+    let token = arr_get(tokens, i)
+    println(tokenToString(token))
+    i = i + 1
+  }
+}

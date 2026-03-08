@@ -1,0 +1,44 @@
+// MOSS-Style Demo: Zero-Runtime Styling
+// 컴파일 타임에 모든 스타일이 상수 데이터로 변환됨
+
+// 1. 기본 버튼 스타일
+style primary_button {
+    background: #007bff;
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-size: 16px;
+    font-weight: bold;
+    color: white;
+}
+
+// 2. 위험 버튼 (primary_button 상속)
+style danger_button extends primary_button {
+    background: #dc3545;
+}
+
+// 3. 성공 버튼 (primary_button 상속)
+style success_button extends primary_button {
+    background: #28a745;
+}
+
+// 4. 카드 레이아웃
+style card {
+    background: #ffffff;
+    padding: 20px;
+    border-radius: 10px;
+    display: flex;
+    opacity: 1;
+    margin: 10px 0px;
+}
+
+// 5. 다크 테마 카드
+style dark_card extends card {
+    background: #1a1a2e;
+    color: #e0e0e0;
+}
+
+// 6. 사용 예시
+fn main() {
+    let message = "MOSS-Style: Zero-Runtime";
+    print(message);
+}

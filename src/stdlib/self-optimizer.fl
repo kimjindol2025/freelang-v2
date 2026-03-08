@@ -1,0 +1,427 @@
+// self-optimizer.fl - FreeLang IR 최적화 모듈
+// 상수 폴딩, 데드 코드 제거, 미사용 라벨 제거 구현
+// Level 5: Self-Optimizer Pattern
+
+// 1. 이진 연산 상수 폴딩 헬퍼
+// a, b를 연산하고 결과 반환 (폴딩 불가 시 null)
+fn foldBinaryOp(a, b, op) {
+  if (op == "ADD") { return a + b }
+  if (op == "SUB") { return a - b }
+  if (op == "MUL") { return a * b }
+  if (op == "DIV" && b != 0) { return a / b }
+  return 0
+}
+
+// 2. 상수 폴딩 최적화 (Constant Folding)
+// 패턴: PUSH a + PUSH b + (ADD|SUB|MUL|DIV) → PUSH (result)
+//
+// 예:
+//   PUSH 3
+//   PUSH 4
+//   ADD
+// →
+//   PUSH 7
+fn constantFolding(insts) {
+  let result = []
+  let i = 0
+
+  while (i < arr_len(insts)) {
+    // 3개 명령어 패턴 확인
+    if (i + 2 < arr_len(insts)) {
+      let inst1 = arr_get(insts, i)
+      let inst2 = arr_get(insts, i + 1)
+      let inst3 = arr_get(insts, i + 2)
+
+      // PUSH + PUSH + (ADD|SUB|MUL|DIV) 패턴 매칭
+      if (inst1.op == "PUSH" && inst2.op == "PUSH" &&
+          (inst3.op == "ADD" || inst3.op == "SUB" || inst3.op == "MUL" || inst3.op == "DIV")) {
+
+        // 피연산자 추출
+        let a = int(inst1.arg)
+        let b = int(inst2.arg)
+
+        // 상수 폴딩 수행
+        let folded = foldBinaryOp(a, b, inst3.op)
+
+        // 결과 저장
+        let foldedInst = {}
+        map_set(foldedInst, "op", "PUSH")
+        map_set(foldedInst, "arg", str(folded))
+        arr_push(result, foldedInst)
+
+        // 3개 명령어 스킵
+        i = i + 3
+        continue
+      }
+    }
+
+    // 패턴 미매칭: 그대로 복사
+    arr_push(result, arr_get(insts, i))
+    i = i + 1
+  }
+
+  return result
+}
+
+// 3. 데드 코드 제거 (Dead Code Elimination)
+// 패턴: JMP 직후 다음 LABEL 전까지의 코드 제거
+//
+// 예:
+//   PUSH 1
+//   JMP L1
+//   PUSH 2    <- 데드 코드 (도달 불가)
+//   LABEL L1
+// →
+//   PUSH 1
+//   JMP L1
+//   LABEL L1
+fn deadCodeElimination(insts) {
+  let result = []
+  let dead = 0  // 0=정상, 1=데드 코드 영역
+  let i = 0
+
+  while (i < arr_len(insts)) {
+    let inst = arr_get(insts, i)
+
+    if (dead == 1) {
+      // 데드 코드 영역
+      if (inst.op == "LABEL") {
+        // LABEL 발견: 데드 코드 영역 종료
+        dead = 0
+        arr_push(result, inst)
+      }
+      // else: 데드 코드는 버림
+    } else {
+      // 정상 코드 영역
+      arr_push(result, inst)
+
+      // JMP 발견: 다음부터 데드 코드 영역 시작
+      if (inst.op == "JMP") {
+        dead = 1
+      }
+    }
+
+    i = i + 1
+  }
+
+  return result
+}
+
+// 4. 미사용 라벨 제거 (Unused Label Removal)
+// 1패스: JMP 대상 라벨 수집
+// 2패스: 미사용 라벨 제거
+//
+// 예:
+//   LABEL L1   <- 미사용
+//   LABEL L2
+//   JMP L2
+// →
+//   LABEL L2
+//   JMP L2
+fn removeUnusedLabels(insts) {
+  // 1패스: 점프 대상 라벨 수집
+  let used = {}
+  let i = 0
+
+  while (i < arr_len(insts)) {
+    let inst = arr_get(insts, i)
+
+    // 조건부/무조건 점프 명령어 확인
+    if (inst.op == "JMP" || inst.op == "JMP_NOT" || inst.op == "JMP_TRUE") {
+      if (map_has(inst, "arg")) {
+        map_set(used, inst.arg, 1)
+      }
+    }
+
+    i = i + 1
+  }
+
+  // 2패스: 미사용 라벨 제거
+  let result = []
+  let j = 0
+
+  while (j < arr_len(insts)) {
+    let inst = arr_get(insts, j)
+
+    if (inst.op == "LABEL") {
+      // 라벨이 사용되는 경우만 유지
+      if (map_has(used, inst.arg)) {
+        arr_push(result, inst)
+      }
+      // else: 미사용 라벨 제거
+    } else {
+      // 라벨이 아닌 명령어는 모두 유지
+      arr_push(result, inst)
+    }
+
+    j = j + 1
+  }
+
+  return result
+}
+
+// 5. 통합 최적화 함수 (3패스 파이프라인)
+// 순서:
+//   1. 상수 폴딩
+//   2. 데드 코드 제거
+//   3. 미사용 라벨 제거
+fn optimize(insts) {
+  let pass1 = constantFolding(insts)
+  let pass2 = deadCodeElimination(pass1)
+  let pass3 = removeUnusedLabels(pass2)
+  return pass3
+}
+
+// 6. 디버깅 헬퍼: IR 출력
+fn printIR(insts) {
+  let i = 0
+
+  while (i < arr_len(insts)) {
+    let inst = arr_get(insts, i)
+    let s = inst.op
+
+    // arg 필드 있으면 추가
+    if (map_has(inst, "arg")) {
+      s = s + " " + str(inst.arg)
+    }
+
+    println(s)
+    i = i + 1
+  }
+}
+
+// 7. 테스트 1: 상수 폴딩
+fn testConstantFolding() {
+  println("=== Test 1: Constant Folding ===")
+
+  let ir = []
+  let inst1 = {}
+  map_set(inst1, "op", "PUSH")
+  map_set(inst1, "arg", "3")
+  arr_push(ir, inst1)
+
+  let inst2 = {}
+  map_set(inst2, "op", "PUSH")
+  map_set(inst2, "arg", "4")
+  arr_push(ir, inst2)
+
+  let inst3 = {}
+  map_set(inst3, "op", "ADD")
+  arr_push(ir, inst3)
+
+  let inst4 = {}
+  map_set(inst4, "op", "HALT")
+  arr_push(ir, inst4)
+
+  println("Before: " + str(arr_len(ir)) + " instructions")
+  let opt = constantFolding(ir)
+  println("After: " + str(arr_len(opt)) + " instructions")
+  println("Optimized IR:")
+  printIR(opt)
+  println("")
+  return 1
+}
+
+// 8. 테스트 2: 데드 코드 제거
+fn testDeadCodeElimination() {
+  println("=== Test 2: Dead Code Elimination ===")
+
+  let ir = []
+
+  let inst1 = {}
+  map_set(inst1, "op", "PUSH")
+  map_set(inst1, "arg", "1")
+  arr_push(ir, inst1)
+
+  let inst2 = {}
+  map_set(inst2, "op", "JMP")
+  map_set(inst2, "arg", "L1")
+  arr_push(ir, inst2)
+
+  let inst3 = {}
+  map_set(inst3, "op", "PUSH")
+  map_set(inst3, "arg", "2")
+  arr_push(ir, inst3)
+
+  let inst4 = {}
+  map_set(inst4, "op", "LABEL")
+  map_set(inst4, "arg", "L1")
+  arr_push(ir, inst4)
+
+  let inst5 = {}
+  map_set(inst5, "op", "HALT")
+  arr_push(ir, inst5)
+
+  println("Before: " + str(arr_len(ir)) + " instructions")
+  let opt = deadCodeElimination(ir)
+  println("After: " + str(arr_len(opt)) + " instructions")
+  println("Optimized IR:")
+  printIR(opt)
+  println("")
+  return 1
+}
+
+// 9. 테스트 3: 미사용 라벨 제거
+fn testUnusedLabelRemoval() {
+  println("=== Test 3: Unused Label Removal ===")
+
+  let ir = []
+
+  let inst1 = {}
+  map_set(inst1, "op", "LABEL")
+  map_set(inst1, "arg", "L1")
+  arr_push(ir, inst1)
+
+  let inst2 = {}
+  map_set(inst2, "op", "LABEL")
+  map_set(inst2, "arg", "L2")
+  arr_push(ir, inst2)
+
+  let inst3 = {}
+  map_set(inst3, "op", "PUSH")
+  map_set(inst3, "arg", "1")
+  arr_push(ir, inst3)
+
+  let inst4 = {}
+  map_set(inst4, "op", "JMP")
+  map_set(inst4, "arg", "L2")
+  arr_push(ir, inst4)
+
+  let inst5 = {}
+  map_set(inst5, "op", "HALT")
+  arr_push(ir, inst5)
+
+  println("Before: " + str(arr_len(ir)) + " instructions")
+  let opt = removeUnusedLabels(ir)
+  println("After: " + str(arr_len(opt)) + " instructions")
+  println("Optimized IR:")
+  printIR(opt)
+  println("")
+  return 1
+}
+
+// 10. 테스트 4: 전체 파이프라인
+fn testFullPipeline() {
+  println("=== Test 4: Full Optimization Pipeline ===")
+
+  let ir = []
+
+  // PUSH 10 + PUSH 20 + ADD → 최적화: PUSH 30
+  let inst1 = {}
+  map_set(inst1, "op", "PUSH")
+  map_set(inst1, "arg", "10")
+  arr_push(ir, inst1)
+
+  let inst2 = {}
+  map_set(inst2, "op", "PUSH")
+  map_set(inst2, "arg", "20")
+  arr_push(ir, inst2)
+
+  let inst3 = {}
+  map_set(inst3, "op", "ADD")
+  arr_push(ir, inst3)
+
+  // JMP L1 → 데드 코드 시작
+  let inst4 = {}
+  map_set(inst4, "op", "JMP")
+  map_set(inst4, "arg", "L1")
+  arr_push(ir, inst4)
+
+  // PUSH 999는 데드 코드 (제거됨)
+  let inst5 = {}
+  map_set(inst5, "op", "PUSH")
+  map_set(inst5, "arg", "999")
+  arr_push(ir, inst5)
+
+  // LABEL L1 (사용됨)
+  let inst6 = {}
+  map_set(inst6, "op", "LABEL")
+  map_set(inst6, "arg", "L1")
+  arr_push(ir, inst6)
+
+  // LABEL L2 (미사용)
+  let inst7 = {}
+  map_set(inst7, "op", "LABEL")
+  map_set(inst7, "arg", "L2")
+  arr_push(ir, inst7)
+
+  let inst8 = {}
+  map_set(inst8, "op", "HALT")
+  arr_push(ir, inst8)
+
+  println("Original IR: " + str(arr_len(ir)) + " instructions")
+  println("Original:")
+  printIR(ir)
+
+  println("")
+  let optimized = optimize(ir)
+  println("Optimized IR: " + str(arr_len(optimized)) + " instructions")
+  println("Optimized:")
+  printIR(optimized)
+  println("")
+  return 1
+}
+
+// 11. 테스트 5: 복합 상수 폴딩 (여러 폴딩)
+fn testMultipleFoldings() {
+  println("=== Test 5: Multiple Constant Foldings ===")
+
+  let ir = []
+
+  // 첫 번째 폴딩: 2 + 3 = 5
+  let inst1 = {}
+  map_set(inst1, "op", "PUSH")
+  map_set(inst1, "arg", "2")
+  arr_push(ir, inst1)
+
+  let inst2 = {}
+  map_set(inst2, "op", "PUSH")
+  map_set(inst2, "arg", "3")
+  arr_push(ir, inst2)
+
+  let inst3 = {}
+  map_set(inst3, "op", "ADD")
+  arr_push(ir, inst3)
+
+  // 두 번째 폴딩: 5 * 4 = 20
+  let inst4 = {}
+  map_set(inst4, "op", "PUSH")
+  map_set(inst4, "arg", "4")
+  arr_push(ir, inst4)
+
+  let inst5 = {}
+  map_set(inst5, "op", "MUL")
+  arr_push(ir, inst5)
+
+  let inst6 = {}
+  map_set(inst6, "op", "HALT")
+  arr_push(ir, inst6)
+
+  println("Before: " + str(arr_len(ir)) + " instructions")
+  let opt = constantFolding(ir)
+  println("After first pass: " + str(arr_len(opt)) + " instructions")
+  println("Optimized IR:")
+  printIR(opt)
+  println("")
+  return 1
+}
+
+// 12. 메인 함수
+fn main() {
+  println("================================")
+  println("FreeLang Self-Optimizer (Level 5)")
+  println("================================")
+  println("")
+
+  testConstantFolding()
+  testDeadCodeElimination()
+  testUnusedLabelRemoval()
+  testFullPipeline()
+  testMultipleFoldings()
+
+  println("================================")
+  println("✅ Level 5 Self-Optimizer 완료")
+  println("================================")
+
+  return 0
+}

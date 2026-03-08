@@ -1,0 +1,80 @@
+/**
+ * FreeLang Phase 16 - Timer Tests
+ * Tests for set_timeout, set_interval, clear_timeout, clear_interval
+ */
+
+import { set_timeout, set_interval, clear_timeout, clear_interval } from "timer";
+
+fn test_set_timeout() => {
+  let executed = false;
+
+  set_timeout(100, fn() => {
+    executed = true;
+  });
+
+  // Simulate delay
+  let i = 0;
+  while (i < 1000000) {
+    i = i + 1;
+  }
+
+  if (executed) {
+    println("✓ test_set_timeout passed");
+  } else {
+    println("✗ test_set_timeout failed");
+  }
+};
+
+fn test_set_interval() => {
+  let count = 0;
+
+  let timer = set_interval(50, fn() => {
+    count = count + 1;
+  });
+
+  // Simulate delay
+  let i = 0;
+  while (i < 5000000) {
+    i = i + 1;
+  }
+
+  clear_interval(timer);
+
+  if (count >= 2) {
+    println("✓ test_set_interval passed (count=" + count + ")");
+  } else {
+    println("✗ test_set_interval failed (count=" + count + ")");
+  }
+};
+
+fn test_clear_timeout() => {
+  let executed = false;
+
+  let timer = set_timeout(1000, fn() => {
+    executed = true;
+  });
+
+  clear_timeout(timer);
+
+  // Simulate delay (but not long enough for timeout)
+  let i = 0;
+  while (i < 500000) {
+    i = i + 1;
+  }
+
+  if (!executed) {
+    println("✓ test_clear_timeout passed");
+  } else {
+    println("✗ test_clear_timeout failed");
+  }
+};
+
+fn main() => {
+  println("Running timer tests...");
+  test_set_timeout();
+  test_set_interval();
+  test_clear_timeout();
+  println("Tests completed!");
+};
+
+main();

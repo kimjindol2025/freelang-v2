@@ -1,0 +1,611 @@
+/**
+ * FreeLang Lexer - 종합 테스트 스위트
+ *
+ * Phase H: 자체호스팅 Lexer 구현의 모든 기능 검증
+ *
+ * 테스트 카테고리:
+ *   1. 토크나이제이션 (Tokenization)
+ *   2. 문자 인식 (Character Recognition)
+ *   3. 위치 추적 (Position Tracking)
+ *   4. 에러 핸들링 (Error Handling)
+ *   5. 성능 테스트 (Performance)
+ */
+
+// ============================================
+// Helper Functions
+// ============================================
+
+/**
+ * 테스트 결과 출력
+ *
+ * name: 테스트 이름
+ * passed: true if 테스트 통과
+ * details: 상세 정보 (선택사항)
+ */
+fn assert(name: string, passed: bool, details: string) {
+  let status = if passed { "✓ PASS" } else { "✗ FAIL" }
+  println(status + " - " + name)
+  if details != "" && !passed {
+    println("    " + details)
+  }
+}
+
+/**
+ * 토큰 비교 함수
+ *
+ * token: 토큰 객체
+ * expectedKind: 예상 종류
+ * expectedValue: 예상 값
+ * return: true if 일치
+ */
+fn tokenMatches(token: map, expectedKind: string, expectedValue: string) -> bool {
+  return token.kind == expectedKind && token.value == expectedValue
+}
+
+/**
+ * 토큰 배열 부분 비교
+ *
+ * tokens: 토큰 배열
+ * startIdx: 시작 인덱스
+ * expectedKinds: 예상 종류 배열
+ * return: true if 모두 일치
+ */
+fn tokensMatchSequence(tokens: array, startIdx: int, expectedKinds: array) -> bool {
+  for i = 0; i < arr.len(expectedKinds); i = i + 1 {
+    let idx = startIdx + i
+    if idx >= arr.len(tokens) {
+      return false
+    }
+    if tokens[idx].kind != expectedKinds[i] {
+      return false
+    }
+  }
+  return true
+}
+
+// ============================================
+// Test Suite 1: Basic Tokenization
+// ============================================
+
+fn testSuite1_basicTokenization() {
+  println("\n=== Suite 1: Basic Tokenization ===")
+
+  // Test 1.1: Single keyword
+  let tokens1 = tokenize("fn")
+  assert("Single keyword 'fn'",
+         arr.len(tokens1) == 2 && tokenMatches(tokens1[0], "KEYWORD", "fn"),
+         "")
+
+  // Test 1.2: Single identifier
+  let tokens2 = tokenize("myVar")
+  assert("Single identifier",
+         arr.len(tokens2) == 2 && tokenMatches(tokens2[0], "IDENT", "myVar"),
+         "")
+
+  // Test 1.3: Single number
+  let tokens3 = tokenize("42")
+  assert("Single integer",
+         arr.len(tokens3) == 2 && tokenMatches(tokens3[0], "NUMBER", "42"),
+         "")
+
+  // Test 1.4: Float number
+  let tokens4 = tokenize("3.14")
+  assert("Float number",
+         arr.len(tokens4) == 2 && tokenMatches(tokens4[0], "NUMBER", "3.14"),
+         "")
+
+  // Test 1.5: Double-quoted string
+  let tokens5 = tokenize("\"hello\"")
+  assert("Double-quoted string",
+         arr.len(tokens5) == 2 && tokenMatches(tokens5[0], "STRING", "\"hello\""),
+         "")
+
+  // Test 1.6: Single-quoted string
+  let tokens6 = tokenize("'world'")
+  assert("Single-quoted string",
+         arr.len(tokens6) == 2 && tokenMatches(tokens6[0], "STRING", "'world'"),
+         "")
+
+  // Test 1.7: Simple operator
+  let tokens7 = tokenize("+")
+  assert("Plus operator",
+         arr.len(tokens7) == 2 && tokenMatches(tokens7[0], "OP", "+"),
+         "")
+
+  // Test 1.8: Double-char operator
+  let tokens8 = tokenize("==")
+  assert("Equality operator '=='",
+         arr.len(tokens8) == 2 && tokenMatches(tokens8[0], "OP", "=="),
+         "")
+
+  // Test 1.9: Punctuation
+  let tokens9 = tokenize(";")
+  assert("Semicolon punctuation",
+         arr.len(tokens9) == 2 && tokenMatches(tokens9[0], "PUNCT", ";"),
+         "")
+
+  // Test 1.10: EOF token
+  let tokens10 = tokenize("x")
+  let lastToken = tokens10[arr.len(tokens10) - 1]
+  assert("EOF token at end",
+         tokenMatches(lastToken, "EOF", ""),
+         "Last token should be EOF")
+}
+
+// ============================================
+// Test Suite 2: Character Recognition
+// ============================================
+
+fn testSuite2_characterRecognition() {
+  println("\n=== Suite 2: Character Recognition ===")
+
+  // Test 2.1: Alphanumeric identifiers
+  let tokens1 = tokenize("var123 _private __dunder__")
+  assert("Alphanumeric identifiers",
+         tokenMatches(tokens1[0], "IDENT", "var123") &&
+         tokenMatches(tokens1[1], "IDENT", "_private") &&
+         tokenMatches(tokens1[2], "IDENT", "__dunder__"),
+         "")
+
+  // Test 2.2: All keyword types
+  let keywords = "fn let return if else while for break continue true false null"
+  let keywordArray = str.split(keywords, " ")
+  let tokens2 = tokenize(keywords)
+  let keywordTokens = filterTokens(tokens2, "KEYWORD")
+  assert("All keyword recognition",
+         arr.len(keywordTokens) == arr.len(keywordArray),
+         "Expected " + str(arr.len(keywordArray)) + " keywords, got " + str(arr.len(keywordTokens)))
+
+  // Test 2.3: Numeric variations
+  let tokens3 = tokenize("0 42 3.14 999.999")
+  let numbers = filterTokens(tokens3, "NUMBER")
+  assert("Numeric variations",
+         arr.len(numbers) == 4,
+         "Expected 4 numbers, got " + str(arr.len(numbers)))
+
+  // Test 2.4: String with escape
+  let tokens4 = tokenize("\"hello\\\"world\"")
+  assert("String with escape sequence",
+         tokenMatches(tokens4[0], "STRING", "\"hello\\\"world\""),
+         "")
+
+  // Test 2.5: All arithmetic operators
+  let tokens5 = tokenize("+ - * / %")
+  let ops = filterTokens(tokens5, "OP")
+  assert("Arithmetic operators",
+         arr.len(ops) == 5,
+         "Expected 5 operators, got " + str(arr.len(ops)))
+
+  // Test 2.6: All comparison operators
+  let tokens6 = tokenize("== != < > <= >=")
+  let compOps = filterTokens(tokens6, "OP")
+  assert("Comparison operators",
+         arr.len(compOps) == 6,
+         "Expected 6 comparison operators")
+
+  // Test 2.7: Logical operators
+  let tokens7 = tokenize("&& ||")
+  let logicOps = filterTokens(tokens7, "OP")
+  assert("Logical operators",
+         arr.len(logicOps) == 2,
+         "")
+
+  // Test 2.8: All punctuation
+  let tokens8 = tokenize("(){}[];:,.")
+  let puncts = filterTokens(tokens8, "PUNCT")
+  assert("All punctuation marks",
+         arr.len(puncts) == 9,
+         "Expected 9 punctuation marks")
+
+  // Test 2.9: Increments/Decrements
+  let tokens9 = tokenize("++ -- += -= *= /=")
+  let compoundOps = filterTokens(tokens9, "OP")
+  assert("Compound assignment operators",
+         arr.len(compoundOps) >= 6,
+         "")
+
+  // Test 2.10: Mixed whitespace
+  let tokens10 = tokenize("a  \t  b \n c")
+  let idents = filterTokens(tokens10, "IDENT")
+  assert("Whitespace handling",
+         arr.len(idents) == 3,
+         "Expected 3 identifiers after whitespace skip")
+}
+
+// ============================================
+// Test Suite 3: Position Tracking
+// ============================================
+
+fn testSuite3_positionTracking() {
+  println("\n=== Suite 3: Position Tracking ===")
+
+  // Test 3.1: First token position
+  let tokens1 = tokenize("fn")
+  assert("First token at line 1, col 1",
+         tokens1[0].line == 1 && tokens1[0].col == 1,
+         "")
+
+  // Test 3.2: Token lengths
+  let tokens2 = tokenize("hello 42")
+  assert("Token length tracking",
+         tokens2[0].length == 5 && tokens2[1].length == 2,
+         "")
+
+  // Test 3.3: Line number increment
+  let code3 = "a
+b
+c"
+  let tokens3 = tokenize(code3)
+  let cToken = null
+  for token in tokens3 {
+    if token.value == "c" {
+      cToken = token
+    }
+  }
+  assert("Line number tracking",
+         cToken != null && cToken.line == 3,
+         "Token 'c' should be on line 3")
+
+  // Test 3.4: Column reset on newline
+  let code4 = "first
+second"
+  let tokens4 = tokenize(code4)
+  let secondToken = null
+  for token in tokens4 {
+    if token.value == "second" {
+      secondToken = token
+    }
+  }
+  assert("Column reset after newline",
+         secondToken != null && secondToken.col == 1,
+         "Token after newline should start at col 1")
+
+  // Test 3.5: Multiple tokens on same line
+  let tokens5 = tokenize("a b c d")
+  let pass = tokens5[0].col == 1 && tokens5[1].col == 3 &&
+             tokens5[2].col == 5 && tokens5[3].col == 7
+  assert("Multiple tokens column positions",
+         pass,
+         "")
+
+  // Test 3.6: Complex code position tracking
+  let code6 = "fn add(a, b) {
+  return a + b
+}"
+  let tokens6 = tokenize(code6)
+  let returnToken = null
+  for token in tokens6 {
+    if token.value == "return" {
+      returnToken = token
+    }
+  }
+  assert("Return keyword on line 2",
+         returnToken != null && returnToken.line == 2,
+         "")
+
+  // Test 3.7: Token count with location
+  let tokens7 = tokenize("x = 5")
+  assert("Three tokens with positions tracked",
+         arr.len(tokens7) == 4,  // x, =, 5, EOF
+         "Expected 4 tokens (including EOF)")
+
+  // Test 3.8: Position preservation
+  let tokens8 = tokenize("let x = 10")
+  let positions_valid = true
+  for token in tokens8 {
+    if token.line == 0 || token.col == 0 {
+      positions_valid = false
+    }
+  }
+  assert("All tokens have valid positions",
+         positions_valid,
+         "All tokens should have line >= 1, col >= 1")
+}
+
+// ============================================
+// Test Suite 4: Comments
+// ============================================
+
+fn testSuite4_comments() {
+  println("\n=== Suite 4: Comments ===")
+
+  // Test 4.1: Line comment
+  let tokens1 = tokenize("x // comment")
+  let comments1 = filterTokens(tokens1, "COMMENT")
+  assert("Line comment recognition",
+         arr.len(comments1) == 1,
+         "")
+
+  // Test 4.2: Block comment
+  let tokens2 = tokenize("x /* comment */ y")
+  let comments2 = filterTokens(tokens2, "COMMENT")
+  assert("Block comment recognition",
+         arr.len(comments2) == 1,
+         "")
+
+  // Test 4.3: Multiple comments
+  let tokens3 = tokenize("a // c1
+b // c2")
+  let comments3 = filterTokens(tokens3, "COMMENT")
+  assert("Multiple line comments",
+         arr.len(comments3) == 2,
+         "")
+
+  // Test 4.4: Nested-like block comment
+  let tokens4 = tokenize("/* outer /* inner */ outer */")
+  let comments4 = filterTokens(tokens4, "COMMENT")
+  assert("Block comment with /* inside",
+         arr.len(comments4) >= 1,
+         "")
+
+  // Test 4.5: Comment doesn't tokenize content
+  let tokens5 = tokenize("/* fn let */ x")
+  let keywords5 = filterTokens(tokens5, "KEYWORD")
+  assert("Keywords in comment are ignored",
+         arr.len(keywords5) == 0,
+         "")
+}
+
+// ============================================
+// Test Suite 5: Complex Expressions
+// ============================================
+
+fn testSuite5_complexExpressions() {
+  println("\n=== Suite 5: Complex Expressions ===")
+
+  // Test 5.1: Function definition
+  let tokens1 = tokenize("fn add(a, b) { return a + b }")
+  assert("Function definition tokenization",
+         isValidTokenization(tokens1),
+         "")
+
+  // Test 5.2: If-else statement
+  let tokens2 = tokenize("if x > 0 { y = 1 } else { y = -1 }")
+  let ifCount = arr.len(filterTokens(tokens2, "KEYWORD"))
+  assert("If-else statement",
+         ifCount >= 3,  // if, else, return (or assignment)
+         "")
+
+  // Test 5.3: Loop statement
+  let tokens3 = tokenize("for i = 0; i < 10; i++ { print(i) }")
+  let loopOps = filterTokens(tokens3, "OP")
+  assert("Loop statement operators",
+         arr.len(loopOps) >= 3,
+         "")
+
+  // Test 5.4: Array literal
+  let tokens4 = tokenize("[1, 2, 3, 4, 5]")
+  let punctCount = arr.len(filterTokens(tokens4, "PUNCT"))
+  assert("Array literal tokenization",
+         punctCount >= 4,  // [, , , , ,, ]
+         "")
+
+  // Test 5.5: Object/map literal
+  let tokens5 = tokenize("{x: 1, y: 2}")
+  let mapOps = filterTokens(tokens5, "PUNCT")
+  assert("Map literal tokenization",
+         arr.len(mapOps) >= 3,
+         "")
+
+  // Test 5.6: Chained method calls
+  let tokens6 = tokenize("obj.method().another()")
+  let dotCount = arr.len(filterTokens(tokens6, "PUNCT"))
+  assert("Chained calls with dots",
+         dotCount >= 2,
+         "")
+
+  // Test 5.7: Complex arithmetic
+  let tokens7 = tokenize("(a + b) * (c - d) / (e + f)")
+  let parens = arr.len(filterTokens(tokens7, "PUNCT"))
+  assert("Complex arithmetic expression",
+         parens == 6,  // 3 pairs of ()
+         "Expected 6 parentheses")
+
+  // Test 5.8: String concatenation
+  let tokens8 = tokenize("\"hello\" + \"world\"")
+  let strings = arr.len(filterTokens(tokens8, "STRING"))
+  assert("String concatenation",
+         strings == 2,
+         "")
+
+  // Test 5.9: Lambda expression
+  let tokens9 = tokenize("fn(x) { return x * 2 }")
+  let lambdaKw = filterTokens(tokens9, "KEYWORD")
+  assert("Lambda/anonymous function",
+         arr.len(lambdaKw) >= 2,  // fn, return
+         "")
+
+  // Test 5.10: Match statement
+  let tokens10 = tokenize("match x { 1 => a, 2 => b }")
+  let matchKw = filterTokens(tokens10, "KEYWORD")
+  assert("Match expression",
+         arr.len(matchKw) >= 1,  // match keyword
+         "")
+}
+
+// ============================================
+// Test Suite 6: Edge Cases
+// ============================================
+
+fn testSuite6_edgeCases() {
+  println("\n=== Suite 6: Edge Cases ===")
+
+  // Test 6.1: Empty input
+  let tokens1 = tokenize("")
+  assert("Empty input",
+         arr.len(tokens1) == 1 && tokens1[0].kind == "EOF",
+         "Empty input should only have EOF")
+
+  // Test 6.2: Only whitespace
+  let tokens2 = tokenize("   \n  \t  ")
+  assert("Whitespace-only input",
+         arr.len(tokens2) == 1,
+         "Whitespace should be skipped completely")
+
+  // Test 6.3: Very long identifier
+  let longId = "a"
+  for i = 0; i < 100; i = i + 1 {
+    longId = longId + "b"
+  }
+  let tokens3 = tokenize(longId)
+  assert("Very long identifier",
+         tokenMatches(tokens3[0], "IDENT", longId),
+         "")
+
+  // Test 6.4: Very large number
+  let largeNum = "9999999999999999999"
+  let tokens4 = tokenize(largeNum)
+  assert("Very large number",
+         tokenMatches(tokens4[0], "NUMBER", largeNum),
+         "")
+
+  // Test 6.5: String with newline
+  let tokens5 = tokenize("\"line1
+line2\"")
+  assert("String spanning lines",
+         arr.len(filterTokens(tokens5, "STRING")) == 1,
+         "")
+
+  // Test 6.6: Adjacent operators
+  let tokens6 = tokenize("a+++b")  // a ++ + b
+  let ops = filterTokens(tokens6, "OP")
+  assert("Adjacent operators parsed",
+         arr.len(ops) >= 2,
+         "")
+
+  // Test 6.7: Unicode handling
+  let tokens7 = tokenize("café")
+  assert("Unicode identifier",
+         arr.len(tokens7) >= 1,
+         "")
+
+  // Test 6.8: Special float formats
+  let tokens8 = tokenize("0.0 .5 5.")
+  assert("Float edge cases",
+         isValidTokenization(tokens8),
+         "")
+
+  // Test 6.9: Unknown characters
+  let tokens9 = tokenize("@#$")
+  let unknown = filterTokens(tokens9, "UNKNOWN")
+  assert("Unknown characters handled",
+         arr.len(unknown) > 0,
+         "")
+
+  // Test 6.10: Mixed case keywords
+  let tokens10 = tokenize("FN Let RETURN")  // Should be identifiers, not keywords
+  let idents = filterTokens(tokens10, "IDENT")
+  assert("Keywords are case-sensitive",
+         arr.len(idents) == 3,
+         "Mixed case should be identifiers")
+}
+
+// ============================================
+// Test Suite 7: Statistics and Utilities
+// ============================================
+
+fn testSuite7_statistics() {
+  println("\n=== Suite 7: Statistics & Utilities ===")
+
+  let code = "fn fib(n) { if n <= 1 { return n } return fib(n-1) + fib(n-2) }"
+  let tokens = tokenize(code)
+
+  // Test 7.1: Token counting
+  let counts = countTokens(tokens)
+  let hasKeywords = map.has(counts, "KEYWORD")
+  assert("Token count statistics",
+         hasKeywords && counts["KEYWORD"] > 0,
+         "")
+
+  // Test 7.2: Filter by kind
+  let identifiers = filterTokens(tokens, "IDENT")
+  assert("Filter tokens by kind",
+         arr.len(identifiers) > 0,
+         "")
+
+  // Test 7.3: Token sequence
+  let sequence = tokenSequence(tokens)
+  assert("Token sequence generation",
+         str.len(sequence) > 0 && !str.includes(sequence, "EOF"),
+         "Sequence should not include EOF")
+
+  // Test 7.4: Validation
+  assert("Tokenization validation",
+         isValidTokenization(tokens),
+         "Valid code should pass validation")
+
+  // Test 7.5: Invalid token - missing EOF
+  let incompleteTokens = arr.slice(tokens, 0, arr.len(tokens) - 1)
+  assert("Validation detects missing EOF",
+         !isValidTokenization(incompleteTokens),
+         "")
+}
+
+// ============================================
+// Test Suite 8: Performance
+// ============================================
+
+fn testSuite8_performance() {
+  println("\n=== Suite 8: Performance ===")
+
+  // Test 8.1: Simple tokenization speed
+  let simpleCode = "let x = 42"
+  let tokens1 = tokenize(simpleCode)
+  assert("Simple tokenization",
+         isValidTokenization(tokens1),
+         "")
+
+  // Test 8.2: Medium complexity
+  let mediumCode = "fn factorial(n) { if n <= 1 { return 1 } return n * factorial(n - 1) }"
+  let tokens2 = tokenize(mediumCode)
+  assert("Medium complexity tokenization",
+         isValidTokenization(tokens2),
+         "")
+
+  // Test 8.3: Large code block
+  let largeCode = "fn main() { let sum = 0; for i = 1; i <= 100; i++ { sum = sum + i } return sum }"
+  let tokens3 = tokenize(largeCode)
+  assert("Large code block tokenization",
+         isValidTokenization(tokens3),
+         "")
+
+  // Test 8.4: Many tokens
+  let manyTokens = "a + b + c + d + e + f + g + h + i + j + k + l + m + n + o + p"
+  let tokens4 = tokenize(manyTokens)
+  assert("Many tokens processed",
+         arr.len(tokens4) > 20,
+         "")
+
+  // Test 8.5: Deep nesting
+  let deepCode = "((((((((((x)))))))))) + ((((y))))"
+  let tokens5 = tokenize(deepCode)
+  assert("Deep nesting handled",
+         isValidTokenization(tokens5),
+         "")
+}
+
+// ============================================
+// Main Test Runner
+// ============================================
+
+fn runAllTests() {
+  println("====================================")
+  println("FreeLang Lexer - Comprehensive Test Suite")
+  println("====================================")
+
+  testSuite1_basicTokenization()
+  testSuite2_characterRecognition()
+  testSuite3_positionTracking()
+  testSuite4_comments()
+  testSuite5_complexExpressions()
+  testSuite6_edgeCases()
+  testSuite7_statistics()
+  testSuite8_performance()
+
+  println("\n====================================")
+  println("Test execution completed!")
+  println("====================================")
+}
+
+// Run tests
+runAllTests()

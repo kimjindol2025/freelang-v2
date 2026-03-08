@@ -1,0 +1,164 @@
+/**
+ * freelang-http-server.free - HTTP 서버 표준 라이브러리
+ * 라우팅, 비동기 요청 처리
+ */
+
+// HTTP 요청 객체
+struct Request {
+  method: string,
+  url: string,
+  path: string,
+  query: map,
+  headers: map,
+  body: string
+}
+
+// HTTP 응답 객체
+struct Response {
+  status: int,
+  headers: map,
+  body: string
+}
+
+// HTTP 라우트 핸들러 타입
+type RouteHandler = fn(Request) -> Response
+
+// HTTP 서버 객체
+struct Server {
+  routes: map,
+  middlewares: array,
+  port: int,
+  isListening: bool
+}
+
+// 서버 생성
+fn createServer() -> Server {
+  return {
+    routes: {},
+    middlewares: [],
+    port: 0,
+    isListening: false
+  }
+}
+
+// GET 라우트 등록
+fn get(s: Server, path: string, handler: RouteHandler) -> void {
+  let key = "GET " + path
+  s.routes[key] = handler
+}
+
+// POST 라우트 등록
+fn post(s: Server, path: string, handler: RouteHandler) -> void {
+  let key = "POST " + path
+  s.routes[key] = handler
+}
+
+// PUT 라우트 등록
+fn put(s: Server, path: string, handler: RouteHandler) -> void {
+  let key = "PUT " + path
+  s.routes[key] = handler
+}
+
+// DELETE 라우트 등록
+fn delete(s: Server, path: string, handler: RouteHandler) -> void {
+  let key = "DELETE " + path
+  s.routes[key] = handler
+}
+
+// 범용 라우트 등록
+fn on(s: Server, method: string, path: string, handler: RouteHandler) -> void {
+  let key = method + " " + path
+  s.routes[key] = handler
+}
+
+// 미들웨어 등록
+fn use(s: Server, middleware: fn(Request) -> Request) -> void {
+  s.middlewares.push(middleware)
+}
+
+// 서버 시작
+fn listen(s: Server, port: int) -> void {
+  s.port = port
+  s.isListening = true
+
+  vm.http.startServer(port, fn(req: Request) -> void {
+    // 미들웨어 실행
+    let processedReq = req
+    let i = 0
+    while i < s.middlewares.length {
+      processedReq = s.middlewares[i](processedReq)
+      i = i + 1
+    }
+
+    // 라우트 찾기
+    let key = processedReq.method + " " + processedReq.path
+    let handler = s.routes[key]
+
+    if handler != null {
+      // 핸들러 실행
+      let response = handler(processedReq)
+      vm.http.sendResponse(processedReq, response.status, response.headers, response.body)
+    } else {
+      // 404 Not Found
+      let response: Response = { status: 404, headers: {}, body: "Not Found" }
+      vm.http.sendResponse(processedReq, response.status, response.headers, response.body)
+    }
+  })
+
+  println("Server listening on port", port)
+}
+
+// 서버 종료
+fn close(s: Server) -> void {
+  s.isListening = false
+  vm.http.stopServer()
+}
+
+// 간편 함수: 정적 파일 서빙
+fn serveStatic(s: Server, path: string, filePath: string) -> void {
+  get(s, path, fn(req: Request) -> Response {
+    let content = vm.fs.readFile(filePath)
+    return { status: 200, headers: { "Content-Type": "text/plain" }, body: content }
+  })
+}
+
+// 간편 함수: JSON 응답
+fn respondJson(status: int, data: any) -> Response {
+  let jsonBody = stringifyJson(data)
+  return { status: status, headers: { "Content-Type": "application/json" }, body: jsonBody }
+}
+
+// 간편 함수: 텍스트 응답
+fn respondText(status: int, text: string) -> Response {
+  return { status: status, headers: { "Content-Type": "text/plain" }, body: text }
+}
+
+// 간편 함수: HTML 응답
+fn respondHtml(status: int, html: string) -> Response {
+  return { status: status, headers: { "Content-Type": "text/html" }, body: html }
+}
+
+// 간편 함수: 리다이렉트
+fn redirect(path: string) -> Response {
+  return { status: 302, headers: { "Location": path }, body: "" }
+}
+
+export {
+  Request,
+  Response,
+  Server,
+  createServer,
+  get,
+  post,
+  put,
+  delete,
+  on,
+  use,
+  listen,
+  close,
+  serveStatic,
+  respondJson,
+  respondText,
+  respondHtml,
+  redirect
+}

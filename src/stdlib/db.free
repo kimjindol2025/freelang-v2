@@ -1,0 +1,103 @@
+/**
+ * db.free - 데이터베이스 표준 라이브러리
+ * Key-Value DB, SQL 쿼리 지원
+ */
+
+// DB 연결 객체
+struct DBConnection {
+  conn: any,
+  type: string
+}
+
+// 데이터베이스 연결
+fn connect(connectionString: string) -> DBConnection {
+  let conn = vm.db.connect(connectionString)
+  return { conn: conn, type: "default" }
+}
+
+// Key-Value DB: 값 조회
+fn get(db: DBConnection, key: string) -> any {
+  return vm.db.get(db.conn, key)
+}
+
+// Key-Value DB: 값 저장
+fn set(db: DBConnection, key: string, value: any) -> void {
+  vm.db.set(db.conn, key, value)
+}
+
+// Key-Value DB: 값 삭제
+fn delete(db: DBConnection, key: string) -> void {
+  vm.db.delete(db.conn, key)
+}
+
+// Key-Value DB: 존재 여부 확인
+fn exists(db: DBConnection, key: string) -> bool {
+  return vm.db.exists(db.conn, key)
+}
+
+// SQL 쿼리 실행 (SELECT)
+fn query(db: DBConnection, sql: string) -> array {
+  return vm.db.query(db.conn, sql)
+}
+
+// SQL 쿼리 실행 (INSERT/UPDATE/DELETE)
+fn execute(db: DBConnection, sql: string) -> int {
+  return vm.db.execute(db.conn, sql)
+}
+
+// 트랜잭션 시작
+fn beginTransaction(db: DBConnection) -> void {
+  vm.db.beginTransaction(db.conn)
+}
+
+// 트랜잭션 커밋
+fn commit(db: DBConnection) -> void {
+  vm.db.commit(db.conn)
+}
+
+// 트랜잭션 롤백
+fn rollback(db: DBConnection) -> void {
+  vm.db.rollback(db.conn)
+}
+
+// DB 연결 종료
+fn close(db: DBConnection) -> void {
+  vm.db.close(db.conn)
+}
+
+// 비동기 쿼리 (Promise 반환)
+fn queryAsync(db: DBConnection, sql: string) -> Promise<array> {
+  return Promise(fn(resolve: fn(array) -> void, reject: fn(string) -> void) -> void {
+    scheduleDelayed(fn() -> void {
+      let result = vm.db.query(db.conn, sql)
+      resolve(result)
+    }, 0)
+  })
+}
+
+// 비동기 실행
+fn executeAsync(db: DBConnection, sql: string) -> Promise<int> {
+  return Promise(fn(resolve: fn(int) -> void, reject: fn(string) -> void) -> void {
+    scheduleDelayed(fn() -> void {
+      let result = vm.db.execute(db.conn, sql)
+      resolve(result)
+    }, 0)
+  })
+}
+
+export {
+  DBConnection,
+  connect,
+  get,
+  set,
+  delete,
+  exists,
+  query,
+  execute,
+  beginTransaction,
+  commit,
+  rollback,
+  close,
+  queryAsync,
+  executeAsync
+}

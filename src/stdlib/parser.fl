@@ -1,0 +1,724 @@
+/**
+ * FreeLang Parser Library (Phase A)
+ *
+ * 자체호스팅 Parser 구현 - FreeLang으로 작성된 파서
+ *
+ * 기능:
+ *   - 재귀 하강 파싱 (Recursive Descent)
+ *   - ASTNode 구조체 기반 트리 생성
+ *   - 라인/컬럼 정보 포함 에러 핸들링
+ *   - Expression, Statement, Module 레벨 파싱
+ *
+ * 목표: FreeLang 토큰을 AST로 변환
+ *
+ * 예시:
+ *   let tokens = tokenize("fn add(a, b) { return a + b }")
+ *   let p = createParser(tokens)
+ *   let ast = parseModule(p)
+ *   println(ast.functions[0].name)  // "add"
+ */
+
+// ============================================
+// 1. 데이터 구조 정의 (Map 기반)
+// ============================================
+
+/**
+ * 추상 구문 트리 노드 (ASTNode)
+ *
+ * FreeLang은 map 기반으로 동작하므로 struct 대신 map literal 사용
+ *
+ * type: 노드 타입 ("BinaryOp", "Call", "Identifier", "Literal" 등)
+ * nodeVal: 노드 값 (연산자, 함수명, 리터럴 값 등)
+ * children: 자식 노드 배열 (포인터 대신 배열 사용)
+ * line: 토큰이 시작된 줄번호
+ * col: 토큰이 시작된 열번호
+ *
+ * 사용 예시:
+ *   let node = { type: "Literal", nodeVal: "42", children: [], line: 1, col: 1 }
+ */
+
+/**
+ * 파서 상태 (ParserState)
+ *
+ * tokens: Token 배열 (lexer 출력)
+ * pos: 현재 위치
+ * errors: ParseError 배열
+ *
+ * 사용 예시:
+ *   let p = { tokens: tokens, pos: 0, errors: [] }
+ */
+
+/**
+ * 파싱 에러 (ParseError)
+ *
+ * msg: 에러 메시지
+ * line: 에러 발생 줄
+ * col: 에러 발생 열
+ *
+ * 사용 예시:
+ *   let err = { msg: "Unexpected token", line: 1, col: 5 }
+ */
+
+// ============================================
+// 2. 헬퍼 함수
+// ============================================
+
+/**
+ * 파서 초기화
+ */
+fn createParser(tokens) {
+  return {
+    tokens: tokens,
+    pos: 0,
+    errors: []
+  }
+}
+
+/**
+ * 현재 토큰 조회
+ */
+fn currentToken(p) {
+  if p.pos >= arr.len(p.tokens) {
+    let lastToken = p.tokens[arr.len(p.tokens) - 1]
+    return {
+      ok: true,
+      token: {
+        kind: "EOF",
+        value: "",
+        line: lastToken.line,
+        col: lastToken.col + lastToken.length,
+        length: 0
+      }
+    }
+  }
+  return {
+    ok: true,
+    token: p.tokens[p.pos]
+  }
+}
+
+/**
+ * n개 앞의 토큰 미리보기
+ */
+fn peekToken(p, n) {
+  let peekPos = p.pos + n
+  if peekPos >= arr.len(p.tokens) {
+    let lastToken = p.tokens[arr.len(p.tokens) - 1]
+    return {
+      ok: true,
+      token: {
+        kind: "EOF",
+        value: "",
+        line: lastToken.line,
+        col: lastToken.col + lastToken.length,
+        length: 0
+      }
+    }
+  }
+  return {
+    ok: true,
+    token: p.tokens[peekPos]
+  }
+}
+
+/**
+ * 다음 토큰으로 이동
+ */
+fn advance(p) {
+  return {
+    tokens: p.tokens,
+    pos: p.pos + 1,
+    errors: p.errors
+  }
+}
+
+/**
+ * 현재 토큰 종류 확인
+ */
+fn checkKind(p, kind) {
+  let curr = currentToken(p)
+  return curr.token.kind == kind
+}
+
+/**
+ * 특정 토큰 종류와 일치하면 소비하고 새 state 반환
+ */
+fn matchKind(p, kind) {
+  if checkKind(p, kind) {
+    return {
+      ok: true,
+      parser: advance(p),
+      token: currentToken(p).token
+    }
+  }
+  return {
+    ok: false,
+    parser: p,
+    token: null
+  }
+}
+
+/**
+ * 특정 토큰을 기대 (없으면 에러)
+ */
+fn expectKind(p, kind, msg) {
+  let curr = currentToken(p)
+  let t = curr.token
+
+  if t.kind != kind {
+    let err = {
+      msg: msg,
+      line: t.line,
+      col: t.col
+    }
+    let newErrors = p.errors
+    arr.push(newErrors, err)
+
+    return {
+      ok: false,
+      parser: {
+        tokens: p.tokens,
+        pos: p.pos,
+        errors: newErrors
+      },
+      token: null,
+      error: err
+    }
+  }
+
+  return {
+    ok: true,
+    parser: advance(p),
+    token: t
+  }
+}
+
+// ============================================
+// 3. AST 노드 생성 헬퍼
+// ============================================
+
+/**
+ * ASTNode 생성
+ */
+fn makeNode(type, nodeVal, children, line, col) {
+  return {
+    type: type,
+    nodeVal: nodeVal,
+    children: children,
+    line: line,
+    col: col
+  }
+}
+
+/**
+ * ParseError 생성
+ */
+fn parseError(line, col, msg) {
+  return {
+    msg: msg,
+    line: line,
+    col: col
+  }
+}
+
+/**
+ * 이진 연산자 노드 생성
+ */
+fn makeBinaryNode(op, left, right, line, col) {
+  return makeNode("BinaryOp", op, [left, right], line, col)
+}
+
+/**
+ * 함수 호출 노드 생성
+ */
+fn makeCallNode(func, args, line, col) {
+  let children = [func]
+  for i in args {
+    arr.push(children, i)
+  }
+  return makeNode("Call", "", children, line, col)
+}
+
+/**
+ * 리터럴 노드 생성
+ */
+fn makeLiteralNode(value, line, col) {
+  return makeNode("Literal", value, [], line, col)
+}
+
+/**
+ * 식별자 노드 생성
+ */
+fn makeIdentNode(name, line, col) {
+  return makeNode("Identifier", name, [], line, col)
+}
+
+// ============================================
+// 4. 우선순위 관련 함수
+// ============================================
+
+/**
+ * 연산자 우선순위 반환 (클수록 높음)
+ */
+fn getOperatorPrecedence(op) {
+  if op == "||" {
+    return 1
+  }
+  if op == "&&" {
+    return 2
+  }
+  if op == "==" || op == "!=" || op == "<" || op == ">" || op == "<=" || op == ">=" {
+    return 3
+  }
+  if op == "+" || op == "-" {
+    return 4
+  }
+  if op == "*" || op == "/" || op == "%" {
+    return 5
+  }
+  if op == "^" {
+    return 6
+  }
+  return 0
+}
+
+/**
+ * 우선순위 연산자 여부 확인
+ */
+fn isBinaryOp(op) {
+  return getOperatorPrecedence(op) > 0
+}
+
+// ============================================
+// 5. Expression 파서 (재귀 하강)
+// ============================================
+
+/**
+ * 1차 식 파싱 (리터럴, 식별자, 괄호식)
+ *
+ * 이 함수는 파싱 트리의 가장 깊은 레벨을 처리합니다.
+ */
+fn parsePrimary(p) {
+  let curr = currentToken(p)
+  let t = curr.token
+
+  if t.kind == "NUMBER" {
+    return {
+      ok: true,
+      parser: advance(p),
+      node: makeLiteralNode(t.value, t.line, t.col)
+    }
+  }
+
+  if t.kind == "STRING" {
+    return {
+      ok: true,
+      parser: advance(p),
+      node: makeLiteralNode(t.value, t.line, t.col)
+    }
+  }
+
+  if t.kind == "IDENT" {
+    return {
+      ok: true,
+      parser: advance(p),
+      node: makeIdentNode(t.value, t.line, t.col)
+    }
+  }
+
+  if t.kind == "LPAREN" {
+    let p1 = advance(p)
+    let exprResult = parseExpression(p1)
+
+    if !exprResult.ok {
+      return exprResult
+    }
+
+    let rpRes = expectKind(exprResult.parser, "RPAREN", "Expected ')' after expression")
+    if !rpRes.ok {
+      return rpRes
+    }
+
+    return {
+      ok: true,
+      parser: rpRes.parser,
+      node: exprResult.node
+    }
+  }
+
+  // 에러: 예상치 못한 토큰
+  let err = parseError(t.line, t.col, "Unexpected token: " + t.value)
+  arr.push(p.errors, err)
+
+  return {
+    ok: false,
+    parser: p,
+    error: err
+  }
+}
+
+/**
+ * 이진 연산 우측 연쇄 (재귀!)
+ *
+ * 우선순위 등반으로 연산자 우선순위 처리
+ */
+fn parseBinaryRight(p, left, minPrec) {
+  let curr = currentToken(p)
+  let t = curr.token
+  let prec = getOperatorPrecedence(t.value)
+
+  if prec == 0 || prec < minPrec {
+    return {
+      ok: true,
+      parser: p,
+      node: left
+    }
+  }
+
+  // 연산자 소비
+  let p1 = advance(p)
+
+  // 우측 식 파싱
+  let rightRes = parsePrimary(p1)
+  if !rightRes.ok {
+    return rightRes
+  }
+
+  let p2 = rightRes.parser
+  let right = rightRes.node
+
+  // 다음 연산자 확인 (재귀 호출!)
+  let nextCurr = currentToken(p2)
+  let nextT = nextCurr.token
+  let nextPrec = getOperatorPrecedence(nextT.value)
+
+  if nextPrec > prec {
+    // 우측 우선순위가 더 높음 → 우측부터 파싱
+    let nextRes = parseBinaryRight(p2, right, prec + 1)
+    if !nextRes.ok {
+      return nextRes
+    }
+
+    let p3 = nextRes.parser
+    let rightNode = nextRes.node
+
+    let binNode = makeBinaryNode(t.value, left, rightNode, t.line, t.col)
+
+    // 계속 연쇄
+    return parseBinaryRight(p3, binNode, minPrec)
+  }
+
+  // 좌결합 (left-associative)
+  let binNode = makeBinaryNode(t.value, left, right, t.line, t.col)
+
+  // 재귀: 같은 우선순위로 계속 진행
+  return parseBinaryRight(p2, binNode, minPrec)
+}
+
+/**
+ * 식 파싱 진입점
+ */
+fn parseExpression(p) {
+  let primRes = parsePrimary(p)
+  if !primRes.ok {
+    return primRes
+  }
+
+  let p1 = primRes.parser
+  let left = primRes.node
+
+  return parseBinaryRight(p1, left, 0)
+}
+
+// ============================================
+// 6. Statement 파서
+// ============================================
+
+/**
+ * let 선언 파싱
+ */
+fn parseLetDecl(p) {
+  // let 키워드 소비
+  let p1 = advance(p)
+
+  // 변수명 기대
+  let idRes = expectKind(p1, "IDENT", "Expected variable name after 'let'")
+  if !idRes.ok {
+    return idRes
+  }
+
+  let p2 = idRes.parser
+  let idToken = idRes.token
+
+  // = 기대
+  let eqRes = expectKind(p2, "ASSIGN", "Expected '=' after variable name")
+  if !eqRes.ok {
+    return eqRes
+  }
+
+  let p3 = eqRes.parser
+
+  // 초기값 식 파싱
+  let exprRes = parseExpression(p3)
+  if !exprRes.ok {
+    return exprRes
+  }
+
+  return {
+    ok: true,
+    parser: exprRes.parser,
+    node: makeNode("LetDecl", idToken.value, [exprRes.node], idToken.line, idToken.col)
+  }
+}
+
+/**
+ * return 문 파싱
+ */
+fn parseReturnStmt(p) {
+  let returnToken = currentToken(p).token
+  let p1 = advance(p)
+
+  // 세미콜론이면 return;
+  if checkKind(p1, "SEMICOLON") {
+    return {
+      ok: true,
+      parser: advance(p1),
+      node: makeNode("Return", "", [], returnToken.line, returnToken.col)
+    }
+  }
+
+  // 식 파싱
+  let exprRes = parseExpression(p1)
+  if !exprRes.ok {
+    return exprRes
+  }
+
+  return {
+    ok: true,
+    parser: exprRes.parser,
+    node: makeNode("Return", "", [exprRes.node], returnToken.line, returnToken.col)
+  }
+}
+
+/**
+ * 문장 블록 파싱
+ */
+fn parseBlock(p) {
+  // { 기대
+  let lbRes = expectKind(p, "LBRACE", "Expected '{'")
+  if !lbRes.ok {
+    return lbRes
+  }
+
+  let p1 = lbRes.parser
+  let stmts = []
+
+  // } 까지 반복
+  while !checkKind(p1, "RBRACE") && !checkKind(p1, "EOF") {
+    let stmtRes = parseStatement(p1)
+    if !stmtRes.ok {
+      return stmtRes
+    }
+
+    arr.push(stmts, stmtRes.node)
+    p1 = stmtRes.parser
+  }
+
+  // } 소비
+  let rbRes = expectKind(p1, "RBRACE", "Expected '}'")
+  if !rbRes.ok {
+    return rbRes
+  }
+
+  return {
+    ok: true,
+    parser: rbRes.parser,
+    node: makeNode("Block", "", stmts, lbRes.token.line, lbRes.token.col)
+  }
+}
+
+/**
+ * 문장 파싱 (디스패처)
+ */
+fn parseStatement(p) {
+  let curr = currentToken(p).token
+
+  if curr.kind == "LET" {
+    return parseLetDecl(p)
+  }
+
+  if curr.kind == "RETURN" {
+    return parseReturnStmt(p)
+  }
+
+  if curr.kind == "LBRACE" {
+    return parseBlock(p)
+  }
+
+  // 기본: 식 문장
+  let exprRes = parseExpression(p)
+  if !exprRes.ok {
+    return exprRes
+  }
+
+  // 세미콜론 선택적
+  if checkKind(exprRes.parser, "SEMICOLON") {
+    return {
+      ok: true,
+      parser: advance(exprRes.parser),
+      node: makeNode("ExprStmt", "", [exprRes.node], curr.line, curr.col)
+    }
+  }
+
+  return {
+    ok: true,
+    parser: exprRes.parser,
+    node: makeNode("ExprStmt", "", [exprRes.node], curr.line, curr.col)
+  }
+}
+
+// ============================================
+// 7. 함수 선언 파싱
+// ============================================
+
+/**
+ * 함수 매개변수 목록 파싱
+ */
+fn parseParams(p) {
+  let params = []
+
+  // ( 기대
+  let lpRes = expectKind(p, "LPAREN", "Expected '(' after function name")
+  if !lpRes.ok {
+    return lpRes
+  }
+
+  let p1 = lpRes.parser
+
+  // ) 까지 파라미터 파싱
+  while !checkKind(p1, "RPAREN") && !checkKind(p1, "EOF") {
+    let pRes = expectKind(p1, "IDENT", "Expected parameter name")
+    if !pRes.ok {
+      return pRes
+    }
+
+    let paramName = pRes.token.value
+    arr.push(params, {
+      name: paramName,
+      type: "any"
+    })
+
+    p1 = pRes.parser
+
+    // 쉼표 선택적
+    if checkKind(p1, "COMMA") {
+      p1 = advance(p1)
+    }
+  }
+
+  // ) 소비
+  let rpRes = expectKind(p1, "RPAREN", "Expected ')'")
+  if !rpRes.ok {
+    return rpRes
+  }
+
+  return {
+    ok: true,
+    parser: rpRes.parser,
+    params: params
+  }
+}
+
+/**
+ * 함수 선언 파싱
+ */
+fn parseFnDecl(p) {
+  let fnToken = currentToken(p).token
+  let p1 = advance(p)
+
+  // 함수명 기대
+  let nameRes = expectKind(p1, "IDENT", "Expected function name")
+  if !nameRes.ok {
+    return nameRes
+  }
+
+  let p2 = nameRes.parser
+  let fnName = nameRes.token.value
+
+  // 매개변수 파싱
+  let paramRes = parseParams(p2)
+  if !paramRes.ok {
+    return paramRes
+  }
+
+  let p3 = paramRes.parser
+  let params = paramRes.params
+
+  // 함수 본체 파싱
+  let blockRes = parseBlock(p3)
+  if !blockRes.ok {
+    return blockRes
+  }
+
+  let p4 = blockRes.parser
+  let body = blockRes.node
+
+  return {
+    ok: true,
+    parser: p4,
+    node: makeNode("FnDecl", fnName, [body], fnToken.line, fnToken.col)
+  }
+}
+
+// ============================================
+// 8. 모듈 파싱
+// ============================================
+
+/**
+ * 모듈 전체 파싱
+ */
+fn parseModule(p) {
+  let functions = []
+  let variables = []
+
+  while !checkKind(p, "EOF") {
+    let curr = currentToken(p).token
+
+    if curr.kind == "FN" {
+      let fnRes = parseFnDecl(p)
+      if !fnRes.ok {
+        return fnRes
+      }
+
+      arr.push(functions, fnRes.node)
+      p = fnRes.parser
+    } else if curr.kind == "LET" {
+      let letRes = parseLetDecl(p)
+      if !letRes.ok {
+        return letRes
+      }
+
+      arr.push(variables, letRes.node)
+      p = letRes.parser
+
+      // 세미콜론 소비
+      if checkKind(p, "SEMICOLON") {
+        p = advance(p)
+      }
+    } else {
+      // 알 수 없는 토큰 → 스킵
+      p = advance(p)
+    }
+  }
+
+  return {
+    ok: true,
+    parser: p,
+    ast: {
+      type: "Module",
+      functions: functions,
+      variables: variables,
+      errors: p.errors
+    }
+  }
+}

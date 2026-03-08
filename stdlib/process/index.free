@@ -1,0 +1,114 @@
+/**
+ * FreeLang Process Module (Phase 16 Week 4)
+ * Process spawning and management
+ * Full implementation in Phase 18 Week 9-10
+ */
+
+// Callback registry (timer.c pattern)
+let callback_registry = [];
+let next_callback_id = 0;
+
+fn register_callback(fn) => {
+  let id = next_callback_id;
+  next_callback_id = next_callback_id + 1;
+  callback_registry[id] = fn;
+  return id;
+};
+
+fn unregister_callback(id) => {
+  callback_registry[id] = null;
+};
+
+// ────────────────────────────────────────
+// Process Spawning (Week 9)
+// ────────────────────────────────────────
+
+/**
+ * Spawn a child process
+ * @param command - command to execute
+ * @param args - array of arguments
+ * @param options - spawn options (stdio, env, cwd)
+ * @returns Promise that resolves to process handle
+ *
+ * TODO (Phase 18 Week 9):
+ * - Implement uv_spawn() call
+ * - Setup stdin/stdout/stderr pipes
+ * - Return process handle
+ * - Example usage:
+ *   let proc = await spawn("ls", ["-la", "/tmp"])
+ *   let output = await proc.output()
+ *   let exitCode = await proc.wait()
+ */
+export async fn spawn(command, args, options) => {
+  throw "Process.spawn() not implemented (Week 9 Phase 18)";
+};
+
+/**
+ * Execute command and return output
+ * @param command - command to execute
+ * @param args - array of arguments
+ * @returns Promise that resolves to { stdout, stderr, exitCode }
+ *
+ * TODO (Phase 18 Week 9):
+ * - Spawn process
+ * - Capture stdout + stderr
+ * - Wait for exit
+ * - Return combined output
+ * - Example usage:
+ *   let result = await exec("node", ["--version"])
+ *   println("Node: " + result.stdout)
+ */
+export async fn exec(command, args) => {
+  throw "Process.exec() not implemented (Week 9 Phase 18)";
+};
+
+// ────────────────────────────────────────
+// Process Stream Operations (Week 9)
+// ────────────────────────────────────────
+
+/**
+ * Process class (returned by spawn)
+ * TODO (Week 9):
+ * - pid: process ID
+ * - stdout: readable stream
+ * - stderr: readable stream
+ * - stdin: writable stream
+ * - Methods: kill(), wait(), waitFor()
+ */
+
+// ────────────────────────────────────────
+// Process Pool Management (Week 10)
+// ────────────────────────────────────────
+
+/**
+ * List running processes
+ * @returns Promise that resolves to array of process info
+ *
+ * TODO (Phase 18 Week 10):
+ * - Return array of running processes
+ * - Each with: { pid, command, memory, cpu, uptime }
+ */
+export async fn listProcesses() => {
+  throw "Process.listProcesses() not implemented (Week 10 Phase 18)";
+};
+
+/**
+ * Get process info
+ * @param pid - process ID
+ * @returns Promise that resolves to process info
+ *
+ * TODO (Week 10):
+ * - Get CPU usage, memory, status
+ */
+export async fn getProcessInfo(pid) => {
+  throw "Process.getProcessInfo() not implemented (Week 10 Phase 18)";
+};
+
+// ────────────────────────────────────────
+// Process Signals (Week 9)
+// ────────────────────────────────────────
+
+export let SIGTERM = 15;  // Termination signal
+export let SIGKILL = 9;   // Kill signal
+export let SIGINT = 2;    // Interrupt signal
+export let SIGHUP = 1;    // Hangup signal

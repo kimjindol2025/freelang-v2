@@ -1,0 +1,119 @@
+/**
+ * FreeLang Mini-Jest Test Framework 예제
+ *
+ * 다양한 테스트 패턴 시연
+ */
+
+import test from "stdlib/test"
+
+// ===== 테스트 함수들 =====
+
+// 기본 산술 테스트
+fn test_addition() -> bool {
+  return test.expect(test.int_val(1 + 1), test.int_val(2))
+}
+
+fn test_subtraction() -> bool {
+  return test.expect(test.int_val(5 - 3), test.int_val(2))
+}
+
+fn test_multiplication() -> bool {
+  return test.expect(test.int_val(3 * 4), test.int_val(12))
+}
+
+// 문자열 테스트
+fn test_string_concat() -> bool {
+  return test.expect(test.str_val("Hello " + "FreeLang"), test.str_val("Hello FreeLang"))
+}
+
+fn test_string_contains() -> bool {
+  return test.expect_contains("FreeLang v2 Test Framework", "Test")
+}
+
+// 불린 테스트
+fn test_boolean_true() -> bool {
+  return test.expect_true(true)
+}
+
+fn test_boolean_false() -> bool {
+  return test.expect_false(false)
+}
+
+// Null 테스트
+fn test_null_value() -> bool {
+  let null_val = test.null_val()
+  return test.expect_null(null_val)
+}
+
+fn test_not_null_value() -> bool {
+  let value = test.int_val(42)
+  return test.expect_not_null(value)
+}
+
+// 배열 테스트
+fn test_array_equality() -> bool {
+  let arr1 = test.int_array([1, 2, 3])
+  let arr2 = test.int_array([1, 2, 3])
+  return test.expect_array(arr1, arr2)
+}
+
+fn test_array_length() -> bool {
+  let arr = test.int_array([1, 2, 3, 4, 5])
+  return test.expect_length(arr, 5)
+}
+
+// 복합 테스트
+fn test_complex_logic() -> bool {
+  let a = 10
+  let b = 20
+  let result = a + b == 30
+  return test.expect_true(result)
+}
+
+// 실패 테스트 (의도적)
+fn test_intentional_failure() -> bool {
+  return test.expect(test.int_val(5), test.int_val(10))
+}
+
+// ===== 메인 실행 =====
+
+fn main() {
+  // 테스트 스위트 생성
+  let suite = test.init_suite("FreeLang Mini-Jest Framework")
+
+  // 산술 테스트
+  test.add_test(&mut suite, "Addition (1 + 1 = 2)", test_addition)
+  test.add_test(&mut suite, "Subtraction (5 - 3 = 2)", test_subtraction)
+  test.add_test(&mut suite, "Multiplication (3 * 4 = 12)", test_multiplication)
+
+  // 문자열 테스트
+  test.add_test(&mut suite, "String Concatenation", test_string_concat)
+  test.add_test(&mut suite, "String Contains", test_string_contains)
+
+  // 불린 테스트
+  test.add_test(&mut suite, "Boolean True", test_boolean_true)
+  test.add_test(&mut suite, "Boolean False", test_boolean_false)
+
+  // Null 테스트
+  test.add_test(&mut suite, "Null Value", test_null_value)
+  test.add_test(&mut suite, "Not Null Value", test_not_null_value)
+
+  // 배열 테스트
+  test.add_test(&mut suite, "Array Equality", test_array_equality)
+  test.add_test(&mut suite, "Array Length Check", test_array_length)
+
+  // 복합 테스트
+  test.add_test(&mut suite, "Complex Logic (10 + 20 = 30)", test_complex_logic)
+
+  // 실패 테스트
+  test.add_test(&mut suite, "Intentional Failure (5 != 10)", test_intentional_failure)
+
+  // 모든 테스트 실행
+  println("🚀 테스트 실행 시작...\n")
+  test.run_tests(&mut suite)
+
+  // 상세 결과 출력
+  test.print_detailed(&suite)
+
+  println("✨ 테스트 프레임워크 데모 완료!")
+}

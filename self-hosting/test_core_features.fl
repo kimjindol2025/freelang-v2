@@ -1,0 +1,88 @@
+// FreeLang v2 핵심 기능 테스트 (구현된 기능만 사용)
+
+fn add(a: i32, b: i32) -> i32 {
+  return a + b
+}
+
+fn test_arithmetic() -> void {
+  var x: i32 = 10
+  var y: i32 = 20
+  var result: i32 = x + y
+  println("✅ Arithmetic: " + str(result))
+}
+
+fn test_functions() -> void {
+  var result: i32 = add(5, 7)
+  println("✅ Function call: " + str(result))
+}
+
+fn test_loops() -> void {
+  var i: i32 = 0
+  var sum: i32 = 0
+
+  while i < 5 {
+    sum = sum + i
+    i = i + 1
+  }
+
+  println("✅ While loop: " + str(sum))
+}
+
+fn test_conditionals() -> void {
+  var x: i32 = 10
+  var result: string = "FAIL"
+
+  if x > 5 {
+    result = "PASS"
+  }
+
+  println("✅ If statement: " + result)
+}
+
+fn test_arrays() -> void {
+  var arr: any = []
+  push(arr, 1)
+  push(arr, 2)
+  push(arr, 3)
+
+  println("✅ Arrays: length=" + str(length(arr)))
+}
+
+fn test_break_continue() -> void {
+  var i: i32 = 0
+  var count: i32 = 0
+
+  while i < 10 {
+    i = i + 1
+
+    if i == 3 {
+      continue
+    }
+
+    if i == 7 {
+      break
+    }
+
+    count = count + 1
+  }
+
+  println("✅ Break/Continue: count=" + str(count))
+}
+
+fn main(): void {
+  println("=====================================")
+  println("  FreeLang v2 Core Features Test")
+  println("=====================================")
+  println("")
+
+  test_arithmetic()
+  test_functions()
+  test_loops()
+  test_conditionals()
+  test_arrays()
+  test_break_continue()
+
+  println("")
+  println("✅ All Core Features Working!")
+  println("=====================================")
+}

@@ -1,0 +1,9 @@
+{
+  "name": "string-helpers",
+  "version": "1.0.0",
+  "description": "String manipulation and formatting utilities",
+  "main": "./src/index.fl",
+  "dependencies": {},
+  "author": "FreeLang Examples",
+  "license": "MIT"
+}

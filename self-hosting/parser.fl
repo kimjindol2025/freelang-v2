@@ -1,0 +1,395 @@
+// FreeLang Self-Hosting: Parser Phase
+// 토큰을 AST(Abstract Syntax Tree)로 변환
+// 사용: var ast = parseProgram(tokens)
+
+// === AST Node Types ===
+
+struct ASTNode {
+  kind: string,
+  value: any
+}
+
+struct Program {
+  stmts: any
+}
+
+struct VarDecl {
+  name: string,
+  init: any
+}
+
+struct FnDecl {
+  name: string,
+  params: any,
+  body: any
+}
+
+struct WhileStmt {
+  condition: any,
+  body: any
+}
+
+struct IfStmt {
+  condition: any,
+  then_body: any,
+  else_body: any
+}
+
+struct BinaryOp {
+  left: any,
+  op: string,
+  right: any
+}
+
+struct CallExpr {
+  callee: string,
+  args: any
+}
+
+struct Literal {
+  type: string,
+  value: any
+}
+
+// === Parser State ===
+
+struct ParserState {
+  tokens: any,
+  pos: i32
+}
+
+// === Helper Functions ===
+
+fn createParser(tokens: any) -> any {
+  var state: ParserState = ParserState { tokens: tokens, pos: 0 }
+  return state
+}
+
+fn current_token(parser: any) -> any {
+  if parser.pos >= length(parser.tokens) {
+    var tokens_arr: any = parser.tokens
+    return tokens_arr[length(tokens_arr) - 1]
+  }
+  var tokens_arr: any = parser.tokens
+  return tokens_arr[parser.pos]
+}
+
+fn peek_token(parser: any, offset: i32) -> any {
+  var next_pos: i32 = parser.pos + offset
+  var tokens_arr: any = parser.tokens
+  if next_pos >= length(tokens_arr) {
+    return tokens_arr[length(tokens_arr) - 1]
+  }
+  return tokens_arr[next_pos]
+}
+
+fn advance(parser: any) -> void {
+  parser.pos = parser.pos + 1
+}
+
+fn is_at_end(parser: any) -> bool {
+  var tokens_arr: any = parser.tokens
+  var tok: any = current_token(parser)
+  return tok.type == "EOF"
+}
+
+// === Statement Parsing ===
+
+fn parseProgram(tokens: any) -> any {
+  var parser: any = createParser(tokens)
+  var stmts: any = []
+
+  while !is_at_end(parser) {
+    var tok: any = current_token(parser)
+
+    if tok.type == "VAR" {
+      var stmt: any = parseVarDecl(parser)
+      push(stmts, stmt)
+    } else if tok.type == "FN" {
+      var stmt: any = parseFnDecl(parser)
+      push(stmts, stmt)
+    } else if tok.type == "WHILE" {
+      var stmt: any = parseWhileStmt(parser)
+      push(stmts, stmt)
+    } else if tok.type == "IF" {
+      var stmt: any = parseIfStmt(parser)
+      push(stmts, stmt)
+    } else if tok.type == "RBRACE" || tok.type == "EOF" {
+      advance(parser)
+    } else {
+      // 표현식 문
+      var expr: any = parseExpr(parser)
+      advance(parser)
+      push(stmts, expr)
+    }
+  }
+
+  var result: Program = Program { stmts: stmts }
+  return result
+}
+
+fn parseVarDecl(parser: any) -> any {
+  advance(parser)
+  var tok: any = current_token(parser)
+  var name: string = tok.lexeme
+  advance(parser)
+
+  // 타입 어노테이션 건너뛰기 (: Type)
+  var next_tok: any = current_token(parser)
+  if next_tok.type == "COLON" {
+    advance(parser)
+    advance(parser)
+  }
+
+  // = 건너뛰기
+  advance(parser)
+
+  // 초기값 파싱
+  var init: any = parseExpr(parser)
+
+  var decl: VarDecl = VarDecl { name: name, init: init }
+  return decl
+}
+
+fn parseFnDecl(parser: any) -> any {
+  advance(parser)
+  var tok: any = current_token(parser)
+  var name: string = tok.lexeme
+  advance(parser)
+
+  // ( 건너뛰기
+  advance(parser)
+
+  // 매개변수 건너뛰기
+  var params: any = []
+  while current_token(parser).type != "RPAREN" {
+    var param_tok: any = current_token(parser)
+    push(params, param_tok.lexeme)
+    advance(parser)
+
+    if current_token(parser).type == "COLON" {
+      advance(parser)
+      advance(parser)
+    }
+
+    if current_token(parser).type == "COMMA" {
+      advance(parser)
+    }
+  }
+
+  // ) 건너뛰기
+  advance(parser)
+
+  // 반환 타입 건너뛰기 (: Type, -> Type)
+  var ret_tok: any = current_token(parser)
+  if ret_tok.type == "COLON" || ret_tok.type == "MINUS" {
+    advance(parser)
+    if ret_tok.type == "MINUS" {
+      advance(parser)
+    }
+    advance(parser)
+  }
+
+  // { 건너뛰기
+  advance(parser)
+
+  // 함수 본체 파싱
+  var body: any = []
+  while current_token(parser).type != "RBRACE" && !is_at_end(parser) {
+    var stmt: any = parseStmt(parser)
+    if stmt.kind != "empty" {
+      push(body, stmt)
+    }
+  }
+
+  // } 건너뛰기
+  advance(parser)
+
+  var decl: FnDecl = FnDecl { name: name, params: params, body: body }
+  return decl
+}
+
+fn parseWhileStmt(parser: any) -> any {
+  advance(parser)
+
+  // 조건 파싱
+  var condition: any = parseExpr(parser)
+
+  // { 건너뛰기
+  advance(parser)
+
+  // 본체 파싱
+  var body: any = []
+  while current_token(parser).type != "RBRACE" && !is_at_end(parser) {
+    var stmt: any = parseStmt(parser)
+    if stmt.kind != "empty" {
+      push(body, stmt)
+    }
+  }
+
+  // } 건너뛰기
+  advance(parser)
+
+  var while_stmt: WhileStmt = WhileStmt { condition: condition, body: body }
+  return while_stmt
+}
+
+fn parseIfStmt(parser: any) -> any {
+  advance(parser)
+
+  // 조건 파싱
+  var condition: any = parseExpr(parser)
+
+  // { 건너뛰기
+  advance(parser)
+
+  // then 본체 파싱
+  var then_body: any = []
+  while current_token(parser).type != "RBRACE" && !is_at_end(parser) {
+    var stmt: any = parseStmt(parser)
+    if stmt.kind != "empty" {
+      push(then_body, stmt)
+    }
+  }
+
+  // } 건너뛰기
+  advance(parser)
+
+  var else_body: any = []
+
+  // else 확인
+  if current_token(parser).type == "ELSE" {
+    advance(parser)
+    advance(parser)
+
+    while current_token(parser).type != "RBRACE" && !is_at_end(parser) {
+      var stmt: any = parseStmt(parser)
+      if stmt.kind != "empty" {
+        push(else_body, stmt)
+      }
+    }
+
+    advance(parser)
+  }
+
+  var if_stmt: IfStmt = IfStmt { condition: condition, then_body: then_body, else_body: else_body }
+  return if_stmt
+}
+
+fn parseStmt(parser: any) -> any {
+  var tok: any = current_token(parser)
+
+  if tok.type == "VAR" {
+    return parseVarDecl(parser)
+  } else if tok.type == "FN" {
+    return parseFnDecl(parser)
+  } else if tok.type == "WHILE" {
+    return parseWhileStmt(parser)
+  } else if tok.type == "IF" {
+    return parseIfStmt(parser)
+  } else if tok.type == "RBRACE" {
+    return ASTNode { kind: "empty", value: "void" }
+  } else {
+    var expr: any = parseExpr(parser)
+    advance(parser)
+    return expr
+  }
+}
+
+// === Expression Parsing ===
+
+fn parseExpr(parser: any) -> any {
+  return parseBinaryOp(parser, 0)
+}
+
+fn parseBinaryOp(parser: any, precedence: i32) -> any {
+  var left: any = parsePrimary(parser)
+
+  while !is_at_end(parser) {
+    var tok: any = current_token(parser)
+    var op_prec: i32 = getOpPrecedence(tok.type)
+
+    if op_prec <= precedence {
+      break
+    }
+
+    advance(parser)
+    var right: any = parseBinaryOp(parser, op_prec)
+
+    var op_expr: BinaryOp = BinaryOp { left: left, op: tok.lexeme, right: right }
+    left = op_expr
+  }
+
+  return left
+}
+
+fn parsePrimary(parser: any) -> any {
+  var tok: any = current_token(parser)
+
+  // 정수 리터럴
+  if tok.type == "INT" {
+    advance(parser)
+    var lit: Literal = Literal { type: "int", value: tok.lexeme }
+    return lit
+  }
+
+  // 식별자 (함수 호출 또는 변수)
+  if tok.type == "IDENT" || tok.type == "FN" || tok.type == "VAR" {
+    var name: string = tok.lexeme
+    advance(parser)
+
+    // 함수 호출 확인
+    if current_token(parser).type == "LPAREN" {
+      advance(parser)
+      var args: any = []
+
+      while current_token(parser).type != "RPAREN" && !is_at_end(parser) {
+        var arg: any = parseExpr(parser)
+        push(args, arg)
+
+        if current_token(parser).type == "COMMA" {
+          advance(parser)
+        }
+      }
+
+      advance(parser)
+
+      var call: CallExpr = CallExpr { callee: name, args: args }
+      return call
+    }
+
+    var lit: Literal = Literal { type: "ident", value: name }
+    return lit
+  }
+
+  // 괄호식
+  if tok.type == "LPAREN" {
+    advance(parser)
+    var expr: any = parseExpr(parser)
+    advance(parser)
+    return expr
+  }
+
+  // 기본값
+  var lit: Literal = Literal { type: "unknown", value: tok.lexeme }
+  return lit
+}
+
+fn getOpPrecedence(op_type: string) -> i32 {
+  if op_type == "PLUS" || op_type == "MINUS" {
+    return 10
+  } else if op_type == "STAR" || op_type == "SLASH" {
+    return 20
+  } else if op_type == "EQ" {
+    return 5
+  }
+  return 0
+}
+
+// === Main ===
+
+fn main(): void {
+  println("=== Parser Module ===")
+  println("Parser implementation complete")
+  println("Ready to parse tokens")
+}

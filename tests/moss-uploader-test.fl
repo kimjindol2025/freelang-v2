@@ -1,0 +1,39 @@
+// MOSS-Uploader 테스트 - RFC 7578 Multipart 파일 업로드 서버
+// multer 외부 의존성 0% 대체 증명
+// 실행: ./node_modules/.bin/ts-node --transpile-only src/cli/index.ts tests/moss-uploader-test.fl
+
+fn handle_upload() {
+    let req = http_request()
+    let method = map_get(req, "method")
+    let path = map_get(req, "path")
+
+    if (path == "/health") {
+        return "{\"ok\":true,\"service\":\"MOSS-Uploader\",\"version\":\"1.0\",\"deps\":0}"
+    }
+
+    if (path == "/upload") {
+        let files = map_get(req, "files")
+        let fields = map_get(req, "fields")
+        let file_obj = map_get(files, "file")
+        let title = map_get(fields, "title")
+
+        let filename = map_get(file_obj, "filename")
+        let file_size = map_get(file_obj, "size")
+        let file_data = map_get(file_obj, "data")
+        let real_mime = file_magic_check(file_data)
+        let saved_path = upload_save(file_obj, "/tmp/moss-uploads")
+
+        return "{\"ok\":true,\"filename\":\"" + filename + "\",\"path\":\"" + saved_path + "\",\"size\":" + file_size + ",\"mime\":\"" + real_mime + "\",\"title\":\"" + title + "\"}"
+    }
+
+    http_set_status(404)
+    return "{\"ok\":false,\"error\":\"not found\"}"
+}
+
+let upload_dir = "/tmp/moss-uploads"
+dir_create(upload_dir)
+
+let server = http_server_create(7904)
+http_on_request(server, "handle_upload")
+http_listen(server)
+print("MOSS-Uploader: http://localhost:7904 (외부 의존성 0%)")

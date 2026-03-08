@@ -1,0 +1,54 @@
+/**
+ * Example: HTTP Server in FreeLang
+ * Tests stdlib/http after development
+ * Usage: freelang examples/http-server.free
+ */
+
+import http from "./stdlib/http/index.free"
+import json from "./stdlib/json/index.free"
+import process from "./stdlib/process/index.free"
+import async from "./stdlib/async/index.free"
+
+// Simple HTTP Server
+const server = http.createServer(async (req, res) => {
+  console.log(`${req.method} ${req.url}`)
+
+  // Routes
+  if req.url == "/health" {
+    res.status(200).json({
+      status: "ok"
+      uptime: 0  // TODO: Get from process.info()
+      timestamp: Date.now()
+    })
+  }
+  else if req.url == "/api/version" {
+    res.status(200).json({
+      name: "AI DevOps Platform"
+      version: "0.0.1"
+      freelang: "Phase 0"
+    })
+  }
+  else if req.url.startsWith("/api/test") {
+    // Test async operations
+    await async.sleep(100)  // Simulate work
+    res.status(200).json({
+      message: "Async works!"
+      duration_ms: 100
+    })
+  }
+  else {
+    res.status(404).json({
+      error: "Not Found"
+      path: req.url
+    })
+  }
+})
+
+// Start server
+server.listen(8000)
+console.log("✅ HTTP Server started on http://localhost:8000")
+
+// Test with curl:
+// curl http://localhost:8000/health
+// curl http://localhost:8000/api/version
+// curl http://localhost:8000/api/test

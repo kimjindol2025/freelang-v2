@@ -1,0 +1,395 @@
+/**
+ * FreeLang stdlib/test - Mini-Jest Test Framework
+ *
+ * Jest 스타일의 단위 테스트 프레임워크 구현
+ * - Assertion 함수 (expect)
+ * - 테스트 케이스 등록
+ * - 테스트 러너
+ * - 결과 보고
+ *
+ * Example:
+ *   import test from "stdlib/test"
+ *
+ *   suite = test.init_suite()
+ *   test.add_test(&mut suite, "Addition", () => {
+ *     return test.expect(1 + 1, 2)
+ *   })
+ *   test.run_tests(&suite)
+ */
+
+/* ===== Value 타입 정의 ===== */
+
+export enum Value {
+  IntVal(int)
+  StrVal(String)
+  FloatVal(float)
+  BoolVal(bool)
+  ArrayVal(Array<Value>)
+  NullVal()
+}
+
+/* ===== Assertion 함수 ===== */
+
+/**
+ * 두 값이 같은지 검사
+ * @param actual - 실제 값
+ * @param expected - 예상 값
+ * @return true if 값이 같음
+ */
+export fn expect(actual: Value, expected: Value) -> bool {
+  match (actual, expected) {
+    (Value::IntVal(a), Value::IntVal(b)) => return a == b
+    (Value::StrVal(a), Value::StrVal(b)) => return a == b
+    (Value::FloatVal(a), Value::FloatVal(b)) => return a == b
+    (Value::BoolVal(a), Value::BoolVal(b)) => return a == b
+    (Value::NullVal(), Value::NullVal()) => return true
+    _ => return false
+  }
+}
+
+/**
+ * 두 배열이 같은지 검사
+ * @param actual - 실제 배열
+ * @param expected - 예상 배열
+ * @return true if 배열 내용이 같음
+ */
+export fn expect_array(actual: Array<Value>, expected: Array<Value>) -> bool {
+  if actual.length != expected.length {
+    return false
+  }
+
+  let i = 0
+  while i < actual.length {
+    if !expect(actual[i], expected[i]) {
+      return false
+    }
+    i = i + 1
+  }
+
+  return true
+}
+
+/**
+ * 값이 true인지 검사 (toBe)
+ * @param actual - 검사할 불린 값
+ * @return true if 값이 true
+ */
+export fn expect_true(actual: bool) -> bool {
+  return actual == true
+}
+
+/**
+ * 값이 false인지 검사
+ * @param actual - 검사할 불린 값
+ * @return true if 값이 false
+ */
+export fn expect_false(actual: bool) -> bool {
+  return actual == false
+}
+
+/**
+ * 값이 null인지 검사
+ * @param actual - 검사할 값
+ * @return true if 값이 null
+ */
+export fn expect_null(actual: Value) -> bool {
+  match actual {
+    Value::NullVal() => return true
+    _ => return false
+  }
+}
+
+/**
+ * 값이 null이 아닌지 검사
+ * @param actual - 검사할 값
+ * @return true if 값이 null이 아님
+ */
+export fn expect_not_null(actual: Value) -> bool {
+  return !expect_null(actual)
+}
+
+/**
+ * 문자열 포함 검사 (toContain)
+ * @param actual - 검사할 문자열
+ * @param substring - 포함되어야 할 부분 문자열
+ * @return true if 포함됨
+ */
+export fn expect_contains(actual: String, substring: String) -> bool {
+  return actual.contains(substring)
+}
+
+/**
+ * 배열 길이 검사 (toHaveLength)
+ * @param actual - 검사할 배열
+ * @param length - 예상 길이
+ * @return true if 길이가 맞음
+ */
+export fn expect_length(actual: Array<Value>, length: int) -> bool {
+  return actual.length == length
+}
+
+/* ===== TestCase 구조 ===== */
+
+export struct TestCase {
+  name: String
+  fn_ref: fn() -> bool
+  passed: bool
+  error: String
+}
+
+/* ===== TestSuite 구조 ===== */
+
+export struct TestSuite {
+  name: String
+  tests: Array<TestCase>
+  total: int
+  passed: int
+  failed: int
+  start_time: int
+  end_time: int
+}
+
+/* ===== 테스트 스위트 관리 ===== */
+
+/**
+ * 테스트 스위트 초기화
+ * @param name - 스위트 이름
+ * @return 새로운 TestSuite
+ */
+export fn init_suite(name: String) -> TestSuite {
+  TestSuite {
+    name: name,
+    tests: Array<TestCase>(),
+    total: 0,
+    passed: 0,
+    failed: 0,
+    start_time: 0,
+    end_time: 0
+  }
+}
+
+/**
+ * 테스트 케이스 추가
+ * @param suite - 테스트 스위트 (가변)
+ * @param name - 테스트 이름
+ * @param fn_ref - 테스트 함수
+ */
+export fn add_test(suite: &mut TestSuite, name: String, fn_ref: fn() -> bool) {
+  let test_case = TestCase {
+    name: name,
+    fn_ref: fn_ref,
+    passed: false,
+    error: ""
+  }
+
+  suite.tests.push(test_case)
+  suite.total = suite.total + 1
+}
+
+/* ===== 테스트 실행 ===== */
+
+/**
+ * 모든 테스트 실행
+ * @param suite - 테스트 스위트 (가변)
+ * @return 통과한 테스트 개수
+ */
+export fn run_tests(suite: &mut TestSuite) -> int {
+  println("")
+  println("╔════════════════════════════════════════════╗")
+  println("║   🧪 " + suite.name + " Test Suite")
+  println("╚════════════════════════════════════════════╝")
+  println("")
+
+  let i = 0
+  while i < suite.tests.length {
+    let test = suite.tests[i]
+    print("  ▶ " + test.name + " ... ")
+
+    let result = false
+    begin
+      result = test.fn_ref()
+    rescue err
+      result = false
+      suite.tests[i].error = err
+    end
+
+    if result {
+      println("✅ PASS")
+      suite.passed = suite.passed + 1
+      suite.tests[i].passed = true
+    } else {
+      println("❌ FAIL")
+      suite.failed = suite.failed + 1
+      if suite.tests[i].error != "" {
+        println("     └─ Error: " + suite.tests[i].error)
+      }
+    }
+
+    i = i + 1
+  }
+
+  print_summary(suite)
+  return suite.passed
+}
+
+/* ===== 결과 보고 ===== */
+
+/**
+ * 테스트 결과 요약 출력
+ * @param suite - 테스트 스위트
+ */
+fn print_summary(suite: &TestSuite) {
+  println("")
+  println("╔════════════════════════════════════════════╗")
+
+  if suite.failed == 0 {
+    println("║ ✅ 모든 테스트 통과! " + suite.passed + "/" + suite.total)
+  } else {
+    println("║ ⚠️  테스트 결과: " + suite.passed + "/" + suite.total + " 통과")
+  }
+
+  println("║")
+  println("║ 📊 통계:")
+  println("║   - 전체: " + suite.total)
+  println("║   - 통과: " + suite.passed + " ✅")
+  println("║   - 실패: " + suite.failed + " ❌")
+
+  if suite.passed > 0 {
+    let rate = (suite.passed * 100) / suite.total
+    println("║   - 성공률: " + rate + "%")
+  }
+
+  println("╚════════════════════════════════════════════╝")
+  println("")
+}
+
+/**
+ * 개별 테스트 결과 상세 출력
+ * @param suite - 테스트 스위트
+ */
+export fn print_detailed(suite: &TestSuite) {
+  println("")
+  println("╔════════════════════════════════════════════╗")
+  println("║ 📋 상세 테스트 결과")
+  println("╚════════════════════════════════════════════╝")
+  println("")
+
+  let i = 0
+  while i < suite.tests.length {
+    let test = suite.tests[i]
+    let status = if test.passed { "✅ PASS" } else { "❌ FAIL" }
+
+    println(status + " | " + test.name)
+
+    if test.error != "" {
+      println("     └─ " + test.error)
+    }
+
+    i = i + 1
+  }
+
+  println("")
+}
+
+/* ===== 유틸리티 함수 ===== */
+
+/**
+ * Int를 Value로 변환
+ * @param value - 정수값
+ * @return Value enum (IntVal)
+ */
+export fn int_val(value: int) -> Value {
+  Value::IntVal(value)
+}
+
+/**
+ * String을 Value로 변환
+ * @param value - 문자열
+ * @return Value enum (StrVal)
+ */
+export fn str_val(value: String) -> Value {
+  Value::StrVal(value)
+}
+
+/**
+ * Float을 Value로 변환
+ * @param value - 실수값
+ * @return Value enum (FloatVal)
+ */
+export fn float_val(value: float) -> Value {
+  Value::FloatVal(value)
+}
+
+/**
+ * Bool을 Value로 변환
+ * @param value - 불린값
+ * @return Value enum (BoolVal)
+ */
+export fn bool_val(value: bool) -> Value {
+  Value::BoolVal(value)
+}
+
+/**
+ * Null을 Value로 변환
+ * @return Value enum (NullVal)
+ */
+export fn null_val() -> Value {
+  Value::NullVal()
+}
+
+/**
+ * Array<int>를 Array<Value>로 변환
+ * @param arr - 정수 배열
+ * @return Value 배열
+ */
+export fn int_array(arr: Array<int>) -> Array<Value> {
+  let result = Array<Value>()
+  let i = 0
+  while i < arr.length {
+    result.push(Value::IntVal(arr[i]))
+    i = i + 1
+  }
+  return result
+}
+
+/**
+ * Array<String>을 Array<Value>로 변환
+ * @param arr - 문자열 배열
+ * @return Value 배열
+ */
+export fn str_array(arr: Array<String>) -> Array<Value> {
+  let result = Array<Value>()
+  let i = 0
+  while i < arr.length {
+    result.push(Value::StrVal(arr[i]))
+    i = i + 1
+  }
+  return result
+}
+
+/* ===== 테스트 헬퍼 ===== */
+
+/**
+ * 테스트 실행 전 준비 작업
+ * @param message - 설정 메시지
+ */
+export fn setup(message: String) {
+  println("  🔧 Setup: " + message)
+}
+
+/**
+ * 테스트 실행 후 정리 작업
+ * @param message - 정리 메시지
+ */
+export fn teardown(message: String) {
+  println("  🧹 Teardown: " + message)
+}
+
+/**
+ * 테스트 결과 로깅
+ * @param key - 로그 키
+ * @param value - 로그 값
+ */
+export fn log_result(key: String, value: String) {
+  println("     ℹ️  " + key + ": " + value)
+}

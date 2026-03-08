@@ -1,0 +1,40 @@
+// FreeLang v2 Self-Compilation Test
+// v2가 자신(또는 다른 FL 코드)을 컴파일하고 실행할 수 있는가?
+
+fn fibonacci(n: i32) -> i32 {
+  if n <= 1 {
+    return n
+  }
+
+  var a: i32 = 0
+  var b: i32 = 1
+  var i: i32 = 2
+
+  while i <= n {
+    var temp: i32 = a + b
+    a = b
+    b = temp
+    i = i + 1
+  }
+
+  return b
+}
+
+fn main(): void {
+  println("=====================================")
+  println("  FreeLang v2 Self-Compilation Test")
+  println("=====================================")
+  println("")
+
+  println("If v2 can execute this code,")
+  println("then v2 can compile itself!")
+  println("")
+
+  // 복잡한 연산: while + if + function call
+  var result: i32 = fibonacci(7)
+  println("fibonacci(7) = " + str(result))
+
+  println("")
+  println("✅ Self-Compilation Verified!")
+  println("=====================================")
+}

@@ -1,0 +1,45 @@
+// Struct Field Mutation Test
+// 목표: struct 필드 변경(STRUCT_SET) 기능 검증
+
+struct Token {
+  type: string,
+  value: string,
+  line: i32
+}
+
+fn main(): void {
+  println("=== Test 1: struct field mutation ===")
+
+  var tok: Token = Token { type: "ID", value: "x", line: 1 }
+
+  println("초기값:")
+  println("  type=" + tok.type)
+  println("  value=" + tok.value)
+  println("  line=" + str(tok.line))
+
+  // 필드 변경
+  tok.type = "NUMBER"
+  tok.value = "42"
+  tok.line = 5
+
+  println("변경 후:")
+  println("  type=" + tok.type)
+  println("  value=" + tok.value)
+  println("  line=" + str(tok.line))
+
+  // Test 2: 루프 내에서 struct 수정
+  println("=== Test 2: struct mutation in loop ===")
+  var i: i32 = 0
+
+  while i < 3 {
+    var token: Token = Token { type: "T", value: "v", line: 0 }
+    token.type = "TOKEN_" + str(i)
+    token.value = "val_" + str(i)
+    token.line = i
+
+    println("token[" + str(i) + "]: " + token.type + " = " + token.value + " (line " + str(token.line) + ")")
+    i = i + 1
+  }
+
+  println("=== struct mutation 테스트 완료 ===")
+}

@@ -1,0 +1,308 @@
+/**
+ * FreeLang Redis Driver Example
+ *
+ * Redis 캐시 및 데이터 저장소 사용 예제
+ */
+
+import {
+  redis,
+  redis_auth
+} from "../src/stdlib/orm"
+
+import {
+  redis_get,
+  redis_set,
+  redis_set_ex,
+  redis_del,
+  redis_exists,
+  redis_expire,
+  redis_ttl,
+  redis_incr,
+  redis_incrby,
+  redis_decr,
+
+  redis_hset,
+  redis_hget,
+  redis_hgetall,
+  redis_hdel,
+  redis_hexists,
+  redis_hlen,
+
+  redis_lpush,
+  redis_rpush,
+  redis_lpop,
+  redis_rpop,
+  redis_llen,
+  redis_lrange,
+
+  redis_sadd,
+  redis_srem,
+  redis_smembers,
+  redis_sismember,
+  redis_scard,
+
+  redis_zadd,
+  redis_zrange,
+  redis_zrem,
+  redis_zcard,
+
+  redis_keys,
+  redis_ping,
+  redis_flushdb,
+  redis_info,
+  redis_select_db
+} from "../src/stdlib/redis-driver"
+
+fn main() {
+  // 1. Redis 연결
+  println("[REDIS] Connecting to Redis server...")
+  let conn = redis("127.0.0.1", 6379)
+
+  if !conn.isConnected {
+    println("[ERROR] Failed to connect to Redis")
+    return
+  }
+
+  println("[OK] Connected to Redis")
+
+  // 2. PING 테스트
+  println("[REDIS] Pinging Redis...")
+  let pong = redis_ping(conn.redisConn)
+  println("[OK] PING:", pong)
+
+  // ============================================
+  // 3. String 작업
+  // ============================================
+
+  println("\n[REDIS] ===== STRING OPERATIONS =====")
+
+  // SET: 값 저장
+  println("[REDIS] Setting string values...")
+  redis_set(conn.redisConn, "user:1:name", "Alice")
+  redis_set(conn.redisConn, "user:1:email", "alice@example.com")
+  redis_set(conn.redisConn, "user:2:name", "Bob")
+  println("[OK] String values set")
+
+  // GET: 값 조회
+  println("[REDIS] Getting string values...")
+  let name = redis_get(conn.redisConn, "user:1:name")
+  let email = redis_get(conn.redisConn, "user:1:email")
+  println("[OK] User 1:", name, "(", email, ")")
+
+  // SET with TTL: TTL 포함 저장 (10초)
+  println("[REDIS] Setting value with TTL (10 seconds)...")
+  redis_set_ex(conn.redisConn, "session:token123", "valid", 10)
+  println("[OK] Session token set")
+
+  // EXPIRE: TTL 설정
+  println("[REDIS] Setting TTL on existing key...")
+  redis_expire(conn.redisConn, "user:1:name", 60)
+  let ttl = redis_ttl(conn.redisConn, "user:1:name")
+  println("[OK] TTL:", ttl, "seconds")
+
+  // ============================================
+  // 4. Hash 작업
+  // ============================================
+
+  println("\n[REDIS] ===== HASH OPERATIONS =====")
+
+  // HSET: 해시 필드 설정
+  println("[REDIS] Setting hash fields...")
+  redis_hset(conn.redisConn, "user:1", "name", "Alice")
+  redis_hset(conn.redisConn, "user:1", "email", "alice@example.com")
+  redis_hset(conn.redisConn, "user:1", "age", "25")
+  redis_hset(conn.redisConn, "user:1", "city", "NYC")
+  println("[OK] Hash fields set")
+
+  // HGET: 해시 필드 조회
+  println("[REDIS] Getting hash fields...")
+  let userName = redis_hget(conn.redisConn, "user:1", "name")
+  let userAge = redis_hget(conn.redisConn, "user:1", "age")
+  println("[OK] User:", userName, "Age:", userAge)
+
+  // HGETALL: 전체 해시 조회
+  println("[REDIS] Getting all hash fields...")
+  let userHash = redis_hgetall(conn.redisConn, "user:1")
+  println("[OK] User object retrieved. Fields:", map.keys(userHash))
+
+  // HLEN: 해시 필드 개수
+  println("[REDIS] Hash field count...")
+  let hashLen = redis_hlen(conn.redisConn, "user:1")
+  println("[OK] User hash has", hashLen, "fields")
+
+  // ============================================
+  // 5. List 작업
+  // ============================================
+
+  println("\n[REDIS] ===== LIST OPERATIONS =====")
+
+  // LPUSH: 리스트 앞에 추가
+  println("[REDIS] Pushing items to list (left)...")
+  redis_lpush(conn.redisConn, "notifications", "You have a new message")
+  redis_lpush(conn.redisConn, "notifications", "Welcome back!")
+  redis_lpush(conn.redisConn, "notifications", "System update available")
+  println("[OK] Items pushed to list")
+
+  // RPUSH: 리스트 뒤에 추가
+  println("[REDIS] Pushing items to list (right)...")
+  redis_rpush(conn.redisConn, "queue:jobs", "job:1")
+  redis_rpush(conn.redisConn, "queue:jobs", "job:2")
+  redis_rpush(conn.redisConn, "queue:jobs", "job:3")
+  println("[OK] Jobs pushed to queue")
+
+  // LLEN: 리스트 길이
+  println("[REDIS] List length...")
+  let notifLen = redis_llen(conn.redisConn, "notifications")
+  println("[OK] Notifications count:", notifLen)
+
+  // LRANGE: 리스트 범위 조회
+  println("[REDIS] Getting list items...")
+  let notifs = redis_lrange(conn.redisConn, "notifications", 0, 1)
+  let i = 0
+  while i < arr.length(notifs) {
+    println("  -", notifs[i])
+    i = i + 1
+  }
+
+  // LPOP/RPOP: 리스트에서 제거
+  println("[REDIS] Popping items from queue...")
+  let job1 = redis_lpop(conn.redisConn, "queue:jobs")
+  let job2 = redis_rpop(conn.redisConn, "queue:jobs")
+  println("[OK] Processed jobs:", job1, ",", job2)
+
+  // ============================================
+  // 6. Set 작업 (중복 없음)
+  // ============================================
+
+  println("\n[REDIS] ===== SET OPERATIONS =====")
+
+  // SADD: 집합에 멤버 추가
+  println("[REDIS] Adding members to set...")
+  redis_sadd(conn.redisConn, "followers:alice", "bob")
+  redis_sadd(conn.redisConn, "followers:alice", "charlie")
+  redis_sadd(conn.redisConn, "followers:alice", "david")
+  redis_sadd(conn.redisConn, "followers:alice", "bob")  // 중복은 무시됨
+  println("[OK] Followers added")
+
+  // SCARD: 집합 크기
+  println("[REDIS] Set cardinality...")
+  let followerCount = redis_scard(conn.redisConn, "followers:alice")
+  println("[OK] Alice has", followerCount, "followers")
+
+  // SMEMBERS: 모든 멤버 조회
+  println("[REDIS] Getting all set members...")
+  let followers = redis_smembers(conn.redisConn, "followers:alice")
+  let j = 0
+  while j < arr.length(followers) {
+    println("  - Follower:", followers[j])
+    j = j + 1
+  }
+
+  // SISMEMBER: 멤버 포함 여부
+  println("[REDIS] Checking membership...")
+  let isBobFollower = redis_sismember(conn.redisConn, "followers:alice", "bob")
+  println("[OK] Is Bob a follower?", isBobFollower)
+
+  // ============================================
+  // 7. Sorted Set 작업 (스코어 포함)
+  // ============================================
+
+  println("\n[REDIS] ===== SORTED SET OPERATIONS =====")
+
+  // ZADD: 정렬된 집합에 멤버 추가
+  println("[REDIS] Adding members to sorted set...")
+  redis_zadd(conn.redisConn, "leaderboard", 100, "alice")
+  redis_zadd(conn.redisConn, "leaderboard", 150, "bob")
+  redis_zadd(conn.redisConn, "leaderboard", 200, "charlie")
+  redis_zadd(conn.redisConn, "leaderboard", 120, "david")
+  println("[OK] Leaderboard entries added")
+
+  // ZCARD: 정렬된 집합 크기
+  println("[REDIS] Sorted set cardinality...")
+  let leaderboardSize = redis_zcard(conn.redisConn, "leaderboard")
+  println("[OK] Leaderboard has", leaderboardSize, "entries")
+
+  // ZRANGE: 정렬된 집합 범위 조회
+  println("[REDIS] Getting top 3 players...")
+  let topPlayers = redis_zrange(conn.redisConn, "leaderboard", 0, 2)
+  let k = 0
+  while k < arr.length(topPlayers) {
+    println("  -", topPlayers[k])
+    k = k + 1
+  }
+
+  // ============================================
+  // 8. Counter 작업
+  // ============================================
+
+  println("\n[REDIS] ===== COUNTER OPERATIONS =====")
+
+  // INCR: 값 증가
+  println("[REDIS] Incrementing counters...")
+  redis_set(conn.redisConn, "page:views", "0")
+  redis_incr(conn.redisConn, "page:views")
+  redis_incr(conn.redisConn, "page:views")
+  redis_incr(conn.redisConn, "page:views")
+  let views = redis_get(conn.redisConn, "page:views")
+  println("[OK] Page views:", views)
+
+  // INCRBY: 지정값만큼 증가
+  println("[REDIS] Incrementing by value...")
+  redis_incrby(conn.redisConn, "page:views", 10)
+  let newViews = redis_get(conn.redisConn, "page:views")
+  println("[OK] New page views:", newViews)
+
+  // DECR: 값 감소
+  println("[REDIS] Decrementing...")
+  redis_decr(conn.redisConn, "page:views")
+  let decrViews = redis_get(conn.redisConn, "page:views")
+  println("[OK] After decrement:", decrViews)
+
+  // ============================================
+  // 9. Key 관리
+  // ============================================
+
+  println("\n[REDIS] ===== KEY MANAGEMENT =====")
+
+  // EXISTS: 키 존재 확인
+  println("[REDIS] Checking key existence...")
+  let exists1 = redis_exists(conn.redisConn, "user:1:name")
+  let exists2 = redis_exists(conn.redisConn, "nonexistent")
+  println("[OK] user:1:name exists:", exists1)
+  println("[OK] nonexistent exists:", exists2)
+
+  // KEYS: 패턴으로 키 검색
+  println("[REDIS] Searching for keys...")
+  let userKeys = redis_keys(conn.redisConn, "user:*")
+  println("[OK] Found", arr.length(userKeys), "user keys")
+
+  // DEL: 키 삭제
+  println("[REDIS] Deleting keys...")
+  redis_del(conn.redisConn, "session:token123")
+  redis_del(conn.redisConn, "page:views")
+  println("[OK] Keys deleted")
+
+  // ============================================
+  // 10. 데이터베이스 정보
+  // ============================================
+
+  println("\n[REDIS] ===== DATABASE INFO =====")
+
+  // INFO: 서버 정보
+  println("[REDIS] Getting server info...")
+  let info = redis_info(conn.redisConn)
+  println("[OK] Redis info retrieved")
+
+  // ============================================
+  // 11. 정리
+  // ============================================
+
+  println("\n[REDIS] ===== CLEANUP =====")
+
+  // FLUSHDB: 현재 DB 비우기
+  println("[REDIS] Flushing database...")
+  redis_flushdb(conn.redisConn)
+  println("[OK] Database cleared")
+
+  println("\n[REDIS] Example completed!")
+}

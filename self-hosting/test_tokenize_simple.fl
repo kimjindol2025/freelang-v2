@@ -1,0 +1,25 @@
+// Minimal Tokenize Test
+
+struct Token {
+  type: string,
+  lexeme: string,
+  line: i32
+}
+
+fn tokenize(source: string) -> any {
+  var tokens: any = []
+  var pos: i32 = 0
+
+  while pos < 3 {
+    var ch: string = char_at(source, pos)
+    println(ch)
+    pos = pos + 1
+  }
+
+  return tokens
+}
+
+fn main(): void {
+  var result: any = tokenize("hello")
+  println("Done")
+}

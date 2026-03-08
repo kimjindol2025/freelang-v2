@@ -1,0 +1,116 @@
+// Utils Library - General utility functions
+
+export fn map(array, fn) {
+  let result = []
+  let i = 0
+  while i < array.length {
+    result.push(fn(array[i]))
+    i = i + 1
+  }
+  return result
+}
+
+export fn filter(array, predicate) {
+  let result = []
+  let i = 0
+  while i < array.length {
+    if predicate(array[i]) {
+      result.push(array[i])
+    }
+    i = i + 1
+  }
+  return result
+}
+
+export fn reduce(array, fn, initial) {
+  let accumulator = initial
+  let i = 0
+  while i < array.length {
+    accumulator = fn(accumulator, array[i])
+    i = i + 1
+  }
+  return accumulator
+}
+
+export fn reverse(array) {
+  let result = []
+  let i = array.length - 1
+  while i >= 0 {
+    result.push(array[i])
+    i = i - 1
+  }
+  return result
+}
+
+export fn flatten(array) {
+  let result = []
+  let i = 0
+  while i < array.length {
+    if array[i].length {
+      let j = 0
+      while j < array[i].length {
+        result.push(array[i][j])
+        j = j + 1
+      }
+    } else {
+      result.push(array[i])
+    }
+    i = i + 1
+  }
+  return result
+}
+
+export fn unique(array) {
+  let result = []
+  let i = 0
+  while i < array.length {
+    let found = false
+    let j = 0
+    while j < result.length {
+      if result[j] == array[i] {
+        found = true
+      }
+      j = j + 1
+    }
+    if !found {
+      result.push(array[i])
+    }
+    i = i + 1
+  }
+  return result
+}
+
+export fn includes(array, value) {
+  let i = 0
+  while i < array.length {
+    if array[i] == value {
+      return true
+    }
+    i = i + 1
+  }
+  return false
+}
+
+export fn indexOf(array, value) {
+  let i = 0
+  while i < array.length {
+    if array[i] == value {
+      return i
+    }
+    i = i + 1
+  }
+  return -1
+}
+
+export fn join(array, separator) {
+  let result = ""
+  let i = 0
+  while i < array.length {
+    result = result + array[i]
+    if i < array.length - 1 {
+      result = result + separator
+    }
+    i = i + 1
+  }
+  return result
+}

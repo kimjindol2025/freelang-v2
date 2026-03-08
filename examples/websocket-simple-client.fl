@@ -1,0 +1,149 @@
+// ═══════════════════════════════════════════════════════════════════════
+// WebSocket Simple Client - FreeLang Example
+// ═══════════════════════════════════════════════════════════════════════
+// Connects to a WebSocket server and sends/receives messages
+
+fn main() {
+  println("╔════════════════════════════════════════════╗");
+  println("║  WebSocket Client - FreeLang v2           ║");
+  println("╚════════════════════════════════════════════╝");
+
+  let serverUrl = "ws://localhost:8080";
+  let username = "FreeLang-Bot";
+
+  println("");
+  println("Connecting to: " + serverUrl);
+  println("");
+
+  // Create client
+  let client = ws.connect(serverUrl);
+
+  // Register handlers
+  ws.on(client, "open", fn() {
+    println("[OPEN] Connected to server!");
+
+    // Send join message
+    let joinMsg = json.stringify({
+      type: "join",
+      username: username
+    });
+
+    ws.send(client, joinMsg);
+    println("[SEND] Join message sent");
+  });
+
+  ws.on(client, "message", fn(data) {
+    println("[RECV] " + data);
+
+    // Parse and handle different message types
+    try {
+      let msg = json.parse(data);
+
+      match msg.type {
+        "welcome" => {
+          println("  ℹ️ Welcome: " + msg.message);
+        },
+
+        "user_joined" => {
+          println("  👤 " + msg.username + " joined (Total: " + str(msg.userCount) + ")");
+        },
+
+        "message" => {
+          println("  💬 " + msg.from + ": " + msg.text);
+        },
+
+        "user_left" => {
+          println("  👋 " + msg.username + " left (Total: " + str(msg.userCount) + ")");
+        },
+
+        _ => {
+          println("  ? Unknown message type: " + msg.type);
+        }
+      }
+    } catch e {
+      println("  ⚠️ Failed to parse: " + e);
+    }
+  });
+
+  ws.on(client, "close", fn() {
+    println("[CLOSE] Disconnected from server");
+  });
+
+  ws.on(client, "error", fn(error) {
+    println("[ERROR] " + error);
+  });
+
+  // Wait a bit for connection to establish
+  let i = 0;
+  while i < 100 {
+    i = i + 1;
+  }
+
+  // Send a message
+  if ws.isOpen(client) {
+    println("");
+    println("Sending test messages...");
+
+    let msg1 = json.stringify({
+      type: "message",
+      username: username,
+      text: "Hello from FreeLang!"
+    });
+
+    ws.send(client, msg1);
+    println("[SEND] Message 1 sent");
+
+    // Wait a bit
+    let j = 0;
+    while j < 50 {
+      j = j + 1;
+    }
+
+    let msg2 = json.stringify({
+      type: "message",
+      username: username,
+      text: "This is awesome!"
+    });
+
+    ws.send(client, msg2);
+    println("[SEND] Message 2 sent");
+
+    // Wait before closing
+    let k = 0;
+    while k < 100 {
+      k = k + 1;
+    }
+  }
+
+  // Request user list
+  if ws.isOpen(client) {
+    println("");
+    println("Requesting user list...");
+    ws.send(client, json.stringify({ type: "list" }));
+  }
+
+  // Wait a bit
+  let m = 0;
+  while m < 50 {
+    m = m + 1;
+  }
+
+  // Close connection
+  if ws.isOpen(client) {
+    println("");
+    println("Sending leave message...");
+
+    ws.send(client, json.stringify({
+      type: "leave",
+      username: username
+    }));
+
+    ws.close(client);
+    println("[CLOSE] Connection closed");
+  }
+
+  println("");
+  println("Example completed!");
+}
+
+main()

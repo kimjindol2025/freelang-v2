@@ -1,0 +1,269 @@
+/**
+ * FreeLang WebSocket Module (Phase 16 Week 4)
+ * WebSocket server and client using core/websocket.c
+ * Uses Promise Bridge for async/await support
+ */
+
+// Callback registry (timer.c pattern)
+let callback_registry = [];
+let next_callback_id = 0;
+
+// State constants
+export let CONNECTING = 0;
+export let OPEN = 1;
+export let CLOSING = 2;
+export let CLOSED = 3;
+
+// ────────────────────────────────────────
+// Internal Helpers
+// ────────────────────────────────────────
+
+fn register_callback(fn) => {
+  let id = next_callback_id;
+  next_callback_id = next_callback_id + 1;
+  callback_registry[id] = fn;
+  return id;
+};
+
+fn unregister_callback(id) => {
+  callback_registry[id] = null;
+};
+
+// ────────────────────────────────────────
+// WebSocket Server
+// ────────────────────────────────────────
+
+/**
+ * Create WebSocket server
+ * @param port - port number to listen on
+ * @param options - server options { path, perMessageDeflate, ... }
+ * @returns WebSocket server handle
+ */
+export async fn createServer(port, options) => {
+  let opts = options || {};
+  let callback_id = register_callback((event) => event);
+
+  let server_id = fl_ws_server_create(port, callback_id);
+
+  if (server_id < 0) {
+    unregister_callback(callback_id);
+    throw "Failed to create WebSocket server";
+  }
+
+  let server = {
+    id: server_id,
+    port: port,
+    connected: [],
+    listeners: {},
+    _callback_id: callback_id
+  };
+
+  return server;
+};
+
+/**
+ * Start listening on WebSocket server
+ * @param server - server object from createServer
+ * @param callback - connection callback (optional)
+ * @returns Promise that resolves when server starts
+ */
+export async fn listen(server, callback) => {
+  let callback_id = register_callback((event) => {
+    if (event["type"] == "connection") {
+      let ws = {
+        id: event["socket_id"],
+        readyState: OPEN,
+        send: fn(message) => {
+          let send_callback = register_callback((result) => result);
+          fl_ws_send(event["socket_id"], message, send_callback);
+          // Don't await for send - it's fire-and-forget for now
+        },
+        close: fn() => {
+          fl_ws_close(event["socket_id"]);
+        },
+        on: fn(event_type, handler) => {
+          if (event_type == "message") {
+            let msg_callback = register_callback(handler);
+            fl_ws_on_message(event["socket_id"], msg_callback);
+          } else if (event_type == "close") {
+            let close_callback = register_callback(handler);
+            fl_ws_on_close(event["socket_id"], close_callback);
+          } else if (event_type == "error") {
+            let error_callback = register_callback(handler);
+            fl_ws_on_error(event["socket_id"], error_callback);
+          }
+        }
+      };
+
+      if (callback != null) {
+        callback(ws);
+      }
+    }
+  });
+
+  fl_ws_server_listen(server["id"], callback_id);
+};
+
+/**
+ * Close WebSocket server
+ * @param server - server object
+ * @returns Promise that resolves when server closes
+ */
+export async fn closeServer(server) => {
+  let callback_id = register_callback((result) => result);
+  fl_ws_server_close(server["id"], callback_id);
+  await callback_id;
+  unregister_callback(server["_callback_id"]);
+  unregister_callback(callback_id);
+};
+
+/**
+ * Broadcast message to all connected clients
+ * @param server - server object
+ * @param message - message to send
+ */
+export fn broadcast(server, message) => {
+  let i = 0;
+  while (i < len(server["connected"])) {
+    let client = server["connected"][i];
+    client.send(message);
+    i = i + 1;
+  }
+};
+
+// ────────────────────────────────────────
+// WebSocket Client
+// ────────────────────────────────────────
+
+/**
+ * Create WebSocket client connection
+ * @param url - WebSocket URL (ws://host:port or wss://host:port)
+ * @param options - client options { headers, perMessageDeflate, ... }
+ * @returns Promise that resolves to WebSocket client handle
+ */
+export async fn connect(url, options) => {
+  let opts = options || {};
+  let callback_id = register_callback((event) => event);
+
+  let client_id = fl_ws_client_connect(url, callback_id);
+
+  if (client_id < 0) {
+    unregister_callback(callback_id);
+    throw "Failed to connect to WebSocket";
+  }
+
+  let client = {
+    id: client_id,
+    url: url,
+    readyState: CONNECTING,
+    _callback_id: callback_id,
+    _listeners: {}
+  };
+
+  return client;
+};
+
+/**
+ * Send message to WebSocket client
+ * @param client - client object from connect
+ * @param message - message to send
+ * @returns Promise that resolves when message is sent
+ */
+export async fn send(client, message) => {
+  let callback_id = register_callback((result) => result);
+  fl_ws_client_send(client["id"], message, callback_id);
+  await callback_id;
+  unregister_callback(callback_id);
+};
+
+/**
+ * Close WebSocket client connection
+ * @param client - client object
+ * @returns Promise that resolves when connection closes
+ */
+export async fn closeClient(client) => {
+  let callback_id = register_callback((result) => result);
+  fl_ws_client_close(client["id"], callback_id);
+  await callback_id;
+  unregister_callback(client["_callback_id"]);
+  unregister_callback(callback_id);
+};
+
+/**
+ * Register event listener on WebSocket client
+ * @param client - client object
+ * @param event_type - "message", "close", "error", "open"
+ * @param handler - callback function
+ */
+export fn on(client, event_type, handler) => {
+  let callback_id = register_callback(handler);
+
+  if (event_type == "message") {
+    fl_ws_client_on_message(client["id"], callback_id);
+  } else if (event_type == "close") {
+    fl_ws_client_on_close(client["id"], callback_id);
+  } else if (event_type == "error") {
+    fl_ws_client_on_error(client["id"], callback_id);
+  } else if (event_type == "open") {
+    fl_ws_client_on_open(client["id"], callback_id);
+    client["readyState"] = OPEN;
+  }
+
+  if (!client["_listeners"][event_type]) {
+    client["_listeners"][event_type] = [];
+  }
+  client["_listeners"][event_type] = append(client["_listeners"][event_type], callback_id);
+};
+
+/**
+ * Remove event listener from WebSocket client
+ * @param client - client object
+ * @param event_type - "message", "close", "error", "open"
+ * @param handler - handler to remove (optional, removes all if not specified)
+ */
+export fn off(client, event_type, handler) => {
+  if (client["_listeners"][event_type]) {
+    client["_listeners"][event_type] = [];
+  }
+};
+
+// ────────────────────────────────────────
+// WebSocket class (basic)
+// ────────────────────────────────────────
+
+export class WebSocket {
+  let url;
+  let readyState;
+  let id;
+  let _client;
+
+  fn constructor(url, options) => {
+    this.url = url;
+    this.readyState = CONNECTING;
+    this._client = null;
+  };
+
+  fn connect_async() => {
+    this._client = connect(this.url);
+    this.readyState = OPEN;
+  };
+
+  fn send(message) => {
+    if (this._client != null && this.readyState == OPEN) {
+      send(this._client, message);
+    }
+  };
+
+  fn close() => {
+    if (this._client != null) {
+      closeClient(this._client);
+      this.readyState = CLOSED;
+    }
+  };
+
+  fn on(event_type, handler) => {
+    if (this._client != null) {
+      on(this._client, event_type, handler);
+    }
+  };
+};

@@ -1,0 +1,6 @@
+fn test() -> void {
+  var i: i32 = 0
+  while i < 5 {
+    println(str(i))
+  }
+}

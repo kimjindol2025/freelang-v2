@@ -1,0 +1,16 @@
+// Test struct with different field names
+
+struct Token {
+  tok_type: string,
+  tok_lexeme: string,
+  tok_line: i32
+}
+
+fn test(): void {
+  var x: string = "hello"
+  println(x)
+}
+
+fn main(): void {
+  test()
+}

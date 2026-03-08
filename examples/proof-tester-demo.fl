@@ -1,0 +1,101 @@
+/**
+ * Proof-Tester Demo - FreeLang Built-in Test Engine
+ *
+ * 실행: freelang test examples/proof-tester-demo.fl
+ *
+ * @test 어노테이션으로 테스트 함수를 정의하면
+ * Proof-Tester가 자동으로 감지하고 실행합니다.
+ * 프로덕션 빌드에서는 @test 함수가 제외됩니다.
+ */
+
+// ============================================
+// 비즈니스 로직 (프로덕션 코드)
+// ============================================
+
+fn add(a, b) {
+  return a + b
+}
+
+fn multiply(a, b) {
+  return a * b
+}
+
+fn factorial(n) {
+  if (n <= 1) {
+    return 1
+  }
+  return n * factorial(n - 1)
+}
+
+fn is_even(n) {
+  return n % 2 == 0
+}
+
+fn max(a, b) {
+  if (a > b) {
+    return a
+  }
+  return b
+}
+
+fn clamp(value, min_val, max_val) {
+  if (value < min_val) {
+    return min_val
+  }
+  if (value > max_val) {
+    return max_val
+  }
+  return value
+}
+
+// ============================================
+// 테스트 코드 (@test 어노테이션)
+// ============================================
+
+@test
+fn test_add_basic() {
+  assert_eq(add(1, 2), 3, "1 + 2 = 3")
+  assert_eq(add(0, 0), 0, "0 + 0 = 0")
+  assert_eq(add(-1, 1), 0, "-1 + 1 = 0")
+}
+
+@test
+fn test_multiply() {
+  assert_eq(multiply(3, 4), 12, "3 * 4 = 12")
+  assert_eq(multiply(0, 100), 0, "0 * 100 = 0")
+  assert_eq(multiply(-2, 3), -6, "-2 * 3 = -6")
+}
+
+@test
+fn test_factorial() {
+  assert_eq(factorial(0), 1, "0! = 1")
+  assert_eq(factorial(1), 1, "1! = 1")
+  assert_eq(factorial(5), 120, "5! = 120")
+}
+
+@test
+fn test_is_even() {
+  assert_true(is_even(2), "2 is even")
+  assert_true(is_even(0), "0 is even")
+  assert_false(is_even(3), "3 is odd")
+  assert_false(is_even(7), "7 is odd")
+}
+
+@test
+fn test_max() {
+  assert_eq(max(3, 5), 5, "max(3,5) = 5")
+  assert_eq(max(10, 2), 10, "max(10,2) = 10")
+  assert_eq(max(7, 7), 7, "max(7,7) = 7")
+}
+
+@test
+fn test_clamp() {
+  assert_eq(clamp(5, 0, 10), 5, "5 in range [0,10]")
+  assert_eq(clamp(-5, 0, 10), 0, "-5 clamped to 0")
+  assert_eq(clamp(15, 0, 10), 10, "15 clamped to 10")
+}
+
+@test.skip
+fn test_future_feature() {
+  assert_true(false, "This should not run")
+}

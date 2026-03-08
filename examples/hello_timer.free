@@ -1,0 +1,28 @@
+/**
+ * FreeLang Phase 16 - Timer Demonstration
+ * Target: Print "Hello World" every 10 seconds
+ *
+ * Usage:
+ *   npm run build
+ *   ./dist/freec examples/hello_timer.free -o hello_timer
+ *   ./hello_timer
+ */
+
+import { set_interval, loop_run } from "timer";
+
+fn main() => {
+  println("Starting timer test...");
+
+  let count = 0;
+
+  set_interval(10000, fn() => {
+    count = count + 1;
+    println("Hello World! (iteration " + count + ")");
+  });
+
+  println("Event loop running. Press Ctrl+C to exit.");
+  loop_run();
+};
+
+// Entry point
+main();

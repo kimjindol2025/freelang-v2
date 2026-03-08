@@ -1,0 +1,285 @@
+/**
+ * async.free - 비동기 작업 표준 라이브러리
+ * Promise, async/await, 스케줄링 기능 제공
+ */
+
+// Promise-like 구조
+struct Promise<T> {
+  state: string,      // "pending", "resolved", "rejected"
+  value: T,
+  error: string,
+  resolve_fn: fn(T) -> void,
+  reject_fn: fn(string) -> void
+}
+
+// 비동기 작업 큐 항목
+struct AsyncTask {
+  id: int,
+  callback: fn() -> void,
+  delay_ms: uint,
+  created_at: uint64,
+  executed: bool
+}
+
+// 전역 비동기 큐 (최대 64개 작업)
+static ASYNC_QUEUE: array<AsyncTask> = []
+static NEXT_TASK_ID: int = 0
+static EVENT_LOOP_ACTIVE: bool = false
+
+/**
+ * Promise 생성
+ * fn에서 resolve/reject를 호출하여 비동기 작업 수행
+ */
+fn Promise<T>(executor: fn(fn(T) -> void, fn(string) -> void) -> void) -> Promise<T> {
+  let promise: Promise<T> = {
+    state: "pending",
+    value: null,
+    error: "",
+    resolve_fn: fn(val: T) -> void { },
+    reject_fn: fn(err: string) -> void { }
+  }
+
+  // resolve 함수
+  promise.resolve_fn = fn(val: T) -> void {
+    if promise.state == "pending" {
+      promise.state = "resolved"
+      promise.value = val
+    }
+  }
+
+  // reject 함수
+  promise.reject_fn = fn(err: string) -> void {
+    if promise.state == "pending" {
+      promise.state = "rejected"
+      promise.error = err
+    }
+  }
+
+  // executor 콜백 실행
+  executor(promise.resolve_fn, promise.reject_fn)
+
+  return promise
+}
+
+/**
+ * Promise.then() - 성공 콜백 체이닝
+ */
+fn then<T, U>(promise: Promise<T>, callback: fn(T) -> U) -> Promise<U> {
+  let next_promise: Promise<U> = Promise(fn(resolve: fn(U) -> void, reject: fn(string) -> void) -> void {
+    // 상태 확인
+    if promise.state == "resolved" {
+      // 즉시 실행
+      let result = callback(promise.value)
+      resolve(result)
+    } else if promise.state == "rejected" {
+      // 에러 전파
+      reject(promise.error)
+    } else {
+      // pending: 나중에 실행 (스케줄)
+      scheduleDelayed(fn() -> void {
+        let result = callback(promise.value)
+        resolve(result)
+      }, 0)
+    }
+  })
+  return next_promise
+}
+
+/**
+ * Promise.catch() - 에러 콜백
+ */
+fn catch<T>(promise: Promise<T>, callback: fn(string) -> void) -> Promise<T> {
+  let next_promise: Promise<T> = Promise(fn(resolve: fn(T) -> void, reject: fn(string) -> void) -> void {
+    if promise.state == "rejected" {
+      callback(promise.error)
+      reject(promise.error)
+    } else if promise.state == "resolved" {
+      resolve(promise.value)
+    } else {
+      // pending
+      scheduleDelayed(fn() -> void {
+        if promise.state == "rejected" {
+          callback(promise.error)
+        }
+      }, 0)
+    }
+  })
+  return next_promise
+}
+
+/**
+ * 비동기 함수 시뮬레이션
+ * async fn foo() { ... } = fn foo() -> Promise<T> { ... }
+ */
+fn async_fn<T>(callback: fn() -> T) -> Promise<T> {
+  return Promise(fn(resolve: fn(T) -> void, reject: fn(string) -> void) -> void {
+    // 비동기 큐에 추가하여 즉시 실행 (delay=0)
+    scheduleDelayed(fn() -> void {
+      let result = callback()
+      resolve(result)
+    }, 0)
+  })
+}
+
+/**
+ * 지정된 밀리초 후 콜백 실행
+ */
+fn scheduleDelayed(callback: fn() -> void, delay_ms: uint) -> int {
+  let task: AsyncTask = {
+    id: NEXT_TASK_ID,
+    callback: callback,
+    delay_ms: delay_ms,
+    created_at: now(),
+    executed: false
+  }
+
+  ASYNC_QUEUE.push(task)
+  NEXT_TASK_ID = NEXT_TASK_ID + 1
+
+  return task.id
+}
+
+/**
+ * 시간 반환 (밀리초)
+ * 실제로는 vm_now_ms() 호출
+ */
+fn now() -> uint64 {
+  // C VM의 실시간 시간 (밀리초)
+  // 플레이홀더: 실제 구현은 C에서
+  return 0
+}
+
+/**
+ * 이벤트 루프 실행
+ * 모든 비동기 작업이 완료될 때까지 반복
+ */
+fn eventLoop() -> void {
+  if EVENT_LOOP_ACTIVE == false {
+    EVENT_LOOP_ACTIVE = true
+
+    while EVENT_LOOP_ACTIVE {
+      let current_time = now()
+      let remaining_tasks = 0
+
+      // 모든 작업 순회
+      let i = 0
+      while i < ASYNC_QUEUE.length {
+        let task = ASYNC_QUEUE[i]
+
+        // 지연 시간이 경과했으면 실행
+        if task.executed == false {
+          let elapsed = current_time - task.created_at
+
+          if elapsed >= task.delay_ms {
+            // 콜백 실행
+            task.callback()
+            task.executed = true
+          }
+        }
+
+        if task.executed == false {
+          remaining_tasks = remaining_tasks + 1
+        }
+
+        i = i + 1
+      }
+
+      // 모든 작업이 실행되면 종료
+      if remaining_tasks == 0 {
+        EVENT_LOOP_ACTIVE = false
+      }
+    }
+  }
+}
+
+/**
+ * Promise.all() - 모든 Promise 대기
+ */
+fn all<T>(promises: array<Promise<T>>) -> Promise<array<T>> {
+  return Promise(fn(resolve: fn(array<T>) -> void, reject: fn(string) -> void) -> void {
+    let results: array<T> = []
+    let completed = 0
+
+    let i = 0
+    while i < promises.length {
+      let p = promises[i]
+
+      if p.state == "resolved" {
+        results.push(p.value)
+        completed = completed + 1
+      } else if p.state == "rejected" {
+        reject(p.error)
+        return
+      }
+
+      i = i + 1
+    }
+
+    // 모두 완료되었으면 반환
+    if completed == promises.length {
+      resolve(results)
+    } else {
+      // 아직 pending 중인 것이 있으면 나중에 체크
+      scheduleDelayed(fn() -> void {
+        resolve(results)
+      }, 100)
+    }
+  })
+}
+
+/**
+ * Promise.race() - 먼저 완료된 Promise 반환
+ */
+fn race<T>(promises: array<Promise<T>>) -> Promise<T> {
+  return Promise(fn(resolve: fn(T) -> void, reject: fn(string) -> void) -> void {
+    let i = 0
+    while i < promises.length {
+      let p = promises[i]
+
+      if p.state == "resolved" {
+        resolve(p.value)
+        return
+      } else if p.state == "rejected" {
+        reject(p.error)
+        return
+      }
+
+      i = i + 1
+    }
+  })
+}
+
+/**
+ * 타임아웃 Promise
+ */
+fn timeout<T>(ms: uint, value: T) -> Promise<T> {
+  return Promise(fn(resolve: fn(T) -> void, reject: fn(string) -> void) -> void {
+    scheduleDelayed(fn() -> void {
+      resolve(value)
+    }, ms)
+  })
+}
+
+/**
+ * 콜백 기반 함수를 Promise로 변환 (Promisify)
+ */
+fn promisify<T>(callback_fn: fn(fn(T) -> void) -> void) -> Promise<T> {
+  return Promise(fn(resolve: fn(T) -> void, reject: fn(string) -> void) -> void {
+    callback_fn(resolve)
+  })
+}
+
+export {
+  Promise,
+  AsyncTask,
+  scheduleDelayed,
+  eventLoop,
+  then,
+  catch,
+  async_fn,
+  all,
+  race,
+  timeout,
+  promisify,
+  now
+}

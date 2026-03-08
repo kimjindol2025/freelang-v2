@@ -1,0 +1,168 @@
+// FreeLang Observability - Metrics Analyzer
+// 성능 메트릭 수집 및 분석
+
+module observability.metrics {
+    
+    import observability { ExecutionTrace, PerformanceMetric }
+    
+    // 성능 분석 엔진
+    class MetricsAnalyzer {
+        traces: ExecutionTrace[] = [],
+        
+        fn addTrace(trace: ExecutionTrace) -> void {
+            traces.append(trace)
+        },
+        
+        fn getMetrics() -> Map<string, PerformanceMetric> {
+            let metrics: Map<string, PerformanceMetric> = {}
+            
+            for trace in traces {
+                let fnName = trace.functionName
+                if (!(fnName in metrics)) {
+                    metrics[fnName] = {
+                        functionName: fnName,
+                        callCount: 0,
+                        totalTimeMs: 0,
+                        avgTimeMs: 0,
+                        minTimeMs: 999999,
+                        maxTimeMs: 0,
+                        errorCount: 0
+                    }
+                }
+                
+                let metric = metrics[fnName]
+                metric.callCount += 1
+                metric.totalTimeMs += trace.executionTimeMs
+                metric.avgTimeMs = metric.totalTimeMs / metric.callCount
+                metric.minTimeMs = min(metric.minTimeMs, trace.executionTimeMs)
+                metric.maxTimeMs = max(metric.maxTimeMs, trace.executionTimeMs)
+                
+                if (trace.status == "error") {
+                    metric.errorCount += 1
+                }
+            }
+            
+            return metrics
+        },
+        
+        fn getBottlenecks(topN: number = 10) -> PerformanceMetric[] {
+            let metrics = getMetrics()
+            let sorted = metrics.values()
+                .sort((a, b) => b.totalTimeMs - a.totalTimeMs)
+                .slice(0, topN)
+            
+            return sorted
+        },
+        
+        fn getErrorRate() -> Map<string, number> {
+            let metrics = getMetrics()
+            let errorRates: Map<string, number> = {}
+            
+            for fn, metric in metrics {
+                if (metric.callCount > 0) {
+                    errorRates[fn] = (metric.errorCount / metric.callCount) * 100
+                }
+            }
+            
+            return errorRates
+        },
+        
+        fn getSlowFunctions(thresholdMs: number = 1000) -> PerformanceMetric[] {
+            let metrics = getMetrics()
+            let slow: PerformanceMetric[] = []
+            
+            for fn, metric in metrics {
+                if (metric.avgTimeMs > thresholdMs) {
+                    slow.append(metric)
+                }
+            }
+            
+            return slow.sort((a, b) => b.avgTimeMs - a.avgTimeMs)
+        },
+        
+        fn getMemoryProfile() -> Map<string, number> {
+            let profile: Map<string, number> = {}
+            
+            for trace in traces {
+                if (!(trace.functionName in profile)) {
+                    profile[trace.functionName] = 0
+                }
+                profile[trace.functionName] += trace.memoryUsedMb
+            }
+            
+            return profile
+        },
+        
+        fn generateReport() -> string {
+            let report = "╔════════════════════════════════════════════╗\n"
+            report += "║    FreeLang Observability Report           ║\n"
+            report += "╚════════════════════════════════════════════╝\n\n"
+            
+            report += "📊 총 실행 추적: " + traces.length + "\n"
+            
+            let metrics = getMetrics()
+            report += "📈 추적된 함수: " + metrics.keys().length + "\n\n"
+            
+            report += "🔥 병목 지점 (상위 5):\n"
+            let bottlenecks = getBottlenecks(5)
+            for bottleneck in bottlenecks {
+                report += "  - " + bottleneck.functionName + ": "
+                report += bottleneck.avgTimeMs.toFixed(2) + "ms avg, "
+                report += bottleneck.callCount + " calls\n"
+            }
+            
+            report += "\n❌ 오류율:\n"
+            let errorRates = getErrorRate()
+            for fn, rate in errorRates {
+                if (rate > 0) {
+                    report += "  - " + fn + ": " + rate.toFixed(2) + "%\n"
+                }
+            }
+            
+            report += "\n💾 메모리 사용:\n"
+            let memProfile = getMemoryProfile()
+            for fn, memory in memProfile {
+                report += "  - " + fn + ": " + memory.toFixed(2) + " MB\n"
+            }
+            
+            return report
+        }
+    }
+
+    // 실시간 모니터링
+    class RealtimeMonitor {
+        analyzer: MetricsAnalyzer,
+        windowSizeMs: number = 60000,  // 1분
+        lastReport: number = 0,
+        
+        fn init(size: number) -> void {
+            analyzer = new MetricsAnalyzer()
+            windowSizeMs = size
+        },
+        
+        fn recordTrace(trace: ExecutionTrace) -> void {
+            analyzer.addTrace(trace)
+            
+            let now = Date.now()
+            if (now - lastReport > windowSizeMs) {
+                printReport()
+                lastReport = now
+            }
+        },
+        
+        fn printReport() -> void {
+            console.log(analyzer.generateReport())
+        }
+    }
+
+    // 글로벌 메트릭 분석기
+    let globalMetricsAnalyzer: MetricsAnalyzer = new MetricsAnalyzer()
+
+    fn recordMetric(trace: ExecutionTrace) -> void {
+        globalMetricsAnalyzer.addTrace(trace)
+    }
+
+    fn getMetricsReport() -> string {
+        return globalMetricsAnalyzer.generateReport()
+    }
+}

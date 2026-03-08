@@ -1,0 +1,24 @@
+fn assert_equal(actual, expected, message) {
+  if (actual == expected) {
+    let _ok = 0
+  } else {
+    print("FAIL:" + message)
+  }
+}
+
+fn clamp(val, min_val, max_val) {
+  if (val < min_val) {
+    return min_val
+  }
+  if (val > max_val) {
+    return max_val
+  }
+  return val
+}
+
+test "clamp 검증" {
+  assert_equal(clamp(5, 0, 10), 5, "범위 내")
+  assert_equal(clamp(-1, 0, 10), 0, "최솟값 미만은 최솟값")
+}
+
+print("done")

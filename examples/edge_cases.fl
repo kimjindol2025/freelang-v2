@@ -1,0 +1,46 @@
+// 엣지 케이스 테스트
+// 함수 내부 함수, 전역 + 로컬 혼합 등
+
+let global_var = 10;
+
+fn outer() {
+  let outer_var = 20;
+
+  fn inner() {
+    let inner_var = 30;
+    return outer_var + inner_var;
+  }
+
+  return inner() + global_var;
+}
+
+fn global_and_local() {
+  let local_var = 5;
+  return global_var + local_var;
+}
+
+fn multiple_returns(x) {
+  if (x < 0) {
+    return -1;
+  }
+  if (x == 0) {
+    return 0;
+  }
+  return 1;
+}
+
+// 테스트
+let r1 = outer();
+println(r1);  // Expected: 30 + 20 + 10 = 60
+
+let r2 = global_and_local();
+println(r2);  // Expected: 15
+
+let r3a = multiple_returns(-5);
+println(r3a);  // Expected: -1
+
+let r3b = multiple_returns(0);
+println(r3b);  // Expected: 0
+
+let r3c = multiple_returns(5);
+println(r3c);  // Expected: 1

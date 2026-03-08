@@ -1,0 +1,162 @@
+/**
+ * index.free - FreeLang 표준 라이브러리 통합
+ * 모든 모듈을 한 곳에서 import 가능
+ */
+
+// 비동기 모듈
+export {
+  Promise,
+  AsyncTask,
+  scheduleDelayed,
+  eventLoop,
+  then,
+  catch,
+  async_fn,
+  all,
+  race,
+  timeout,
+  promisify,
+  now
+} from "./async.free"
+
+// I/O 모듈
+export {
+  print,
+  println,
+  readLine,
+  readInt,
+  toString,
+  parseInt,
+  typeof
+} from "./io.free"
+
+// 네트워크 모듈
+export {
+  HttpResponse,
+  httpGet,
+  httpPost,
+  httpPostJson,
+  connect,
+  write,
+  read,
+  close
+} from "./net.free"
+
+// 데이터 처리 모듈
+export {
+  map,
+  filter,
+  reduce,
+  forEach,
+  find,
+  findIndex,
+  length,
+  includes,
+  parseJson,
+  stringifyJson,
+  keys,
+  values,
+  entries,
+  merge
+} from "./data.free"
+
+// 데이터베이스 모듈
+export {
+  DBConnection,
+  connect,
+  get,
+  set,
+  delete,
+  exists,
+  query,
+  execute,
+  beginTransaction,
+  commit,
+  rollback,
+  close,
+  queryAsync,
+  executeAsync
+} from "./db.free"
+
+// 캐시 모듈
+export {
+  Cache,
+  CacheConfig,
+  createCache,
+  get,
+  set,
+  delete,
+  exists,
+  clear,
+  setTTL,
+  getTTL,
+  size,
+  keys,
+  values,
+  getAsync,
+  setAsync,
+  close
+} from "./cache.free"
+
+// HTTP 서버 모듈
+export {
+  Request,
+  Response,
+  Server,
+  createServer,
+  get,
+  post,
+  put,
+  delete,
+  on,
+  use,
+  listen,
+  close,
+  serveStatic,
+  respondJson,
+  respondText,
+  respondHtml,
+  redirect
+} from "./freelang-http-server.free"
+
+// AI Agent 모듈
+export {
+  Agent,
+  createAgent,
+  remember,
+  recall,
+  forget,
+  getMemory,
+  clearMemory,
+  send,
+  sendAsync,
+  setState,
+  getState,
+  getHistory,
+  clearHistory,
+  printInfo,
+  getLastMessage,
+  getLastResponse,
+  reset
+} from "./kim-agent.free"
+
+// Proof 검증 모듈
+export {
+  Proof,
+  generateProof,
+  generateProofWithEvidence,
+  verifyProof,
+  verifyProofWithEvidence,
+  evaluateAI,
+  evaluateAIAsync,
+  printProof,
+  printVerification,
+  now,
+  saveProof,
+  loadProof,
+  ProofCollection,
+  createProofCollection,
+  addProof,
+  getValidProofs,
+  getProofStats
+} from "./proofkim-ai.free"

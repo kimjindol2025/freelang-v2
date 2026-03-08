@@ -1,0 +1,62 @@
+// Phase 1 Comprehensive Test
+// 목표: while + break + continue 모두 동시 테스트
+
+fn main(): void {
+  // Test 1: Basic while
+  println("=== Test 1: Basic while loop ===")
+  var i: i32 = 0
+
+  while i < 5 {
+    println(str(i))
+    i = i + 1
+  }
+
+  // Test 2: while + continue
+  println("=== Test 2: while + continue ===")
+  var j: i32 = 0
+
+  while j < 6 {
+    j = j + 1
+
+    if j == 3 {
+      continue
+    }
+
+    println(str(j))
+  }
+
+  // Test 3: while + break
+  println("=== Test 3: while + break ===")
+  var k: i32 = 0
+
+  while k < 10 {
+    if k == 5 {
+      break
+    }
+
+    println(str(k))
+    k = k + 1
+  }
+
+  // Test 4: nested while with break/continue
+  println("=== Test 4: nested control flow ===")
+  var outer: i32 = 0
+
+  while outer < 3 {
+    var inner: i32 = 0
+
+    while inner < 3 {
+      if inner == 1 {
+        inner = inner + 1
+        continue
+      }
+
+      println("outer=" + str(outer) + " inner=" + str(inner))
+      inner = inner + 1
+    }
+
+    outer = outer + 1
+  }
+
+  println("=== Phase 1 test complete ===")
+}

@@ -1,0 +1,9 @@
+{
+  "name": "math-lib",
+  "version": "1.0.0",
+  "description": "Basic mathematical functions library",
+  "main": "./src/index.fl",
+  "dependencies": {},
+  "author": "FreeLang Examples",
+  "license": "MIT"
+}

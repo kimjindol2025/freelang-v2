@@ -1,0 +1,372 @@
+/**
+ * FreeLang JWT 인증 예제
+ *
+ * 로그인 → JWT 발급 → 보호된 리소스 접근
+ */
+
+import {
+  createApp,
+  get,
+  post,
+  listen,
+  respondJson,
+  parseJson,
+  getHeader,
+  setStatus
+} from "./stdlib/express-compat"
+
+import {
+  createJWT,
+  verifyJWT,
+  createRefreshToken,
+  refreshAccessToken,
+  authMiddleware,
+  JWTConfig,
+  JWTClaim
+} from "./stdlib/auth-jwt"
+
+// ============================================
+// 설정
+// ============================================
+
+let jwtConfig: JWTConfig = {
+  secret: "your-super-secret-key-change-in-production",
+  algorithm: "HS256",
+  expiresIn: 3600,        // 1시간
+  issuer: "freelang-app",
+  audience: "freelang-users"
+}
+
+// ============================================
+// 메모리 DB (사용자)
+// ============================================
+
+let users = [
+  { id: 1, email: "alice@example.com", password: "password123", name: "Alice", role: "admin" },
+  { id: 2, email: "bob@example.com", password: "password456", name: "Bob", role: "user" }
+]
+
+// Refresh 토큰 저장소 (실제로는 Redis/DB 사용)
+let refreshTokens = []
+
+// ============================================
+// 헬퍼 함수
+// ============================================
+
+// 이메일로 사용자 찾기
+fn findUserByEmail(email: string) -> map {
+  let i = 0
+  while i < arr.length(users) {
+    if users[i].email == email {
+      return users[i]
+    }
+    i = i + 1
+  }
+  return null
+}
+
+// 비밀번호 확인 (간단한 구현)
+fn verifyPassword(password: string, storedPassword: string) -> bool {
+  // 실제로는 bcrypt 사용: crypto.bcrypt_compare()
+  return password == storedPassword
+}
+
+// ============================================
+// 엔드포인트
+// ============================================
+
+fn main() {
+  let app = createApp()
+
+  // ============================================
+  // 공개 엔드포인트 (인증 불필요)
+  // ============================================
+
+  // 로그인
+  post(app, "/auth/login", fn(req, res) {
+    let body = parseJson(req)
+
+    // 사용자 확인
+    let user = findUserByEmail(body.email)
+    if user == null {
+      setStatus(res, 401)
+      respondJson(res, { error: "Invalid email or password" })
+      return
+    }
+
+    // 비밀번호 확인
+    if !verifyPassword(body.password, user.password) {
+      setStatus(res, 401)
+      respondJson(res, { error: "Invalid email or password" })
+      return
+    }
+
+    // JWT 생성
+    let claim: JWTClaim = {
+      sub: str(user.id),
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      iat: 0,
+      exp: 0
+    }
+
+    let token = createJWT(jwtConfig, claim)
+
+    // Refresh 토큰 생성
+    let refreshToken = createRefreshToken(
+      { secret: jwtConfig.secret, expiresIn: 2592000 },  // 30일
+      str(user.id)
+    )
+
+    respondJson(res, {
+      success: true,
+      accessToken: token.token,
+      refreshToken: refreshToken,
+      expiresIn: jwtConfig.expiresIn,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role
+      }
+    })
+  })
+
+  // 토큰 갱신
+  post(app, "/auth/refresh", fn(req, res) {
+    let body = parseJson(req)
+    let refreshToken = body.refreshToken
+
+    if refreshToken == null {
+      setStatus(res, 401)
+      respondJson(res, { error: "No refresh token provided" })
+      return
+    }
+
+    // 새로운 access token 발급
+    let newAccessToken = refreshAccessToken(
+      refreshToken,
+      { secret: jwtConfig.secret, expiresIn: 2592000 }
+    )
+
+    if newAccessToken == null {
+      setStatus(res, 401)
+      respondJson(res, { error: "Invalid or expired refresh token" })
+      return
+    }
+
+    respondJson(res, {
+      success: true,
+      accessToken: newAccessToken,
+      expiresIn: jwtConfig.expiresIn
+    })
+  })
+
+  // 회원가입
+  post(app, "/auth/register", fn(req, res) {
+    let body = parseJson(req)
+
+    // 중복 확인
+    if findUserByEmail(body.email) != null {
+      setStatus(res, 400)
+      respondJson(res, { error: "Email already exists" })
+      return
+    }
+
+    // 새 사용자 생성
+    let newUser = {
+      id: arr.length(users) + 1,
+      email: body.email,
+      password: body.password,  // 실제로는 bcrypt 해시
+      name: body.name,
+      role: "user"
+    }
+
+    arr.push(users, newUser)
+
+    setStatus(res, 201)
+    respondJson(res, {
+      success: true,
+      message: "User created",
+      user: {
+        id: newUser.id,
+        email: newUser.email,
+        name: newUser.name,
+        role: newUser.role
+      }
+    })
+  })
+
+  // ============================================
+  // 보호된 엔드포인트 (인증 필요)
+  // ============================================
+
+  // 현재 사용자 정보 조회
+  get(app, "/api/me", fn(req, res) {
+    // 인증 확인
+    let authHeader = getHeader(req, "Authorization")
+    if authHeader == null {
+      setStatus(res, 401)
+      respondJson(res, { error: "No authorization header" })
+      return
+    }
+
+    let parts = str.split(authHeader, " ")
+    if arr.length(parts) != 2 {
+      setStatus(res, 401)
+      respondJson(res, { error: "Invalid authorization header" })
+      return
+    }
+
+    let token = parts[1]
+    let verified = verifyJWT(token, jwtConfig)
+
+    if !verified.isValid {
+      setStatus(res, 401)
+      respondJson(res, { error: verified.error })
+      return
+    }
+
+    // 사용자 정보 반환
+    respondJson(res, {
+      success: true,
+      user: verified.payload
+    })
+  })
+
+  // 사용자 프로필 수정 (인증 필요)
+  post(app, "/api/profile/update", fn(req, res) {
+    // 토큰 검증
+    let authHeader = getHeader(req, "Authorization")
+    if authHeader == null {
+      setStatus(res, 401)
+      respondJson(res, { error: "Unauthorized" })
+      return
+    }
+
+    let token = str.split(authHeader, " ")[1]
+    let verified = verifyJWT(token, jwtConfig)
+
+    if !verified.isValid {
+      setStatus(res, 401)
+      respondJson(res, { error: "Invalid token" })
+      return
+    }
+
+    // 사용자 프로필 업데이트
+    let body = parseJson(req)
+    let userId = int(verified.payload.sub)
+
+    let i = 0
+    while i < arr.length(users) {
+      if users[i].id == userId {
+        if body.name != null {
+          users[i].name = body.name
+        }
+        respondJson(res, {
+          success: true,
+          message: "Profile updated",
+          user: users[i]
+        })
+        return
+      }
+      i = i + 1
+    }
+
+    setStatus(res, 404)
+    respondJson(res, { error: "User not found" })
+  })
+
+  // 관리자 전용 엔드포인트
+  get(app, "/api/admin/users", fn(req, res) {
+    // 토큰 검증
+    let authHeader = getHeader(req, "Authorization")
+    if authHeader == null {
+      setStatus(res, 401)
+      respondJson(res, { error: "Unauthorized" })
+      return
+    }
+
+    let token = str.split(authHeader, " ")[1]
+    let verified = verifyJWT(token, jwtConfig)
+
+    if !verified.isValid {
+      setStatus(res, 401)
+      respondJson(res, { error: "Invalid token" })
+      return
+    }
+
+    // 역할 확인
+    if verified.payload.role != "admin" {
+      setStatus(res, 403)
+      respondJson(res, { error: "Admin access required" })
+      return
+    }
+
+    // 모든 사용자 반환 (비밀번호 제외)
+    let publicUsers = []
+    let i = 0
+    while i < arr.length(users) {
+      let u = users[i]
+      arr.push(publicUsers, {
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        role: u.role
+      })
+      i = i + 1
+    }
+
+    respondJson(res, {
+      success: true,
+      users: publicUsers
+    })
+  })
+
+  // 로그아웃 (토큰 무효화)
+  post(app, "/auth/logout", fn(req, res) {
+    let body = parseJson(req)
+
+    // 실제로는 토큰을 블랙리스트에 추가
+    // blacklist.push(body.token)
+
+    respondJson(res, {
+      success: true,
+      message: "Logged out successfully"
+    })
+  })
+
+  // ============================================
+  // 서버 시작
+  // ============================================
+
+  listen(app, 3000)
+
+  println("✅ JWT 인증 서버 시작!")
+  println("")
+  println("📝 사용법:")
+  println("")
+  println("1️⃣  로그인")
+  println('   POST /auth/login')
+  println('   { "email": "alice@example.com", "password": "password123" }')
+  println("")
+  println("2️⃣  현재 사용자 정보")
+  println("   GET /api/me")
+  println("   Headers: Authorization: Bearer <accessToken>")
+  println("")
+  println("3️⃣  프로필 수정")
+  println('   POST /api/profile/update')
+  println('   { "name": "Alice Updated" }')
+  println("   Headers: Authorization: Bearer <accessToken>")
+  println("")
+  println("4️⃣  관리자 사용자 조회")
+  println("   GET /api/admin/users")
+  println("   Headers: Authorization: Bearer <adminAccessToken>")
+  println("")
+  println("5️⃣  로그아웃")
+  println('   POST /auth/logout')
+  println('   { "token": "<accessToken>" }')
+}
+
+main()

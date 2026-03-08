@@ -1,0 +1,13 @@
+// 문제 3: use 선언 (모듈 없이도 파싱 가능)
+use helper as Helper
+
+// 문제 2: any 타입
+fn process_data(data: any) -> void {
+  println("✓ Processing data with any type")
+}
+
+// 문제 5: fn(): void 문법
+fn main(): void {
+  println("🚀 All 5 issues fixed!")
+  process_data(123)
+}

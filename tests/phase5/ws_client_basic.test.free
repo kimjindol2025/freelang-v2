@@ -1,0 +1,80 @@
+/**
+ * Phase 5 Integration Test: WebSocket Client
+ * Basic connection and message exchange test
+ */
+
+import {
+  createClient,
+  send,
+  onMessage,
+  onOpen,
+  onClose,
+  onError,
+  close
+} from "../../stdlib/ws/index.free"
+
+fun test_ws_client_basic() => {
+  println("【Test 1】WebSocket Client - Basic Connection")
+
+  let test_passed = false
+  let message_received = false
+
+  try {
+    // Create WebSocket client
+    let ws = createClient("ws://localhost:9001", {})
+    println("  ✓ Client created")
+
+    // Register callbacks
+    onOpen(ws, fun() => {
+      println("  ✓ Connected to server")
+      test_passed = true
+    })
+
+    onMessage(ws, fun(message) => {
+      println("  ✓ Received message: " + message)
+      message_received = true
+    })
+
+    onClose(ws, fun() => {
+      println("  ✓ Connection closed")
+    })
+
+    onError(ws, fun(error) => {
+      println("  ✗ Error: " + error)
+    })
+
+    // Send initial message
+    send(ws, "Hello from FreeLang!")
+    println("  ✓ Message sent")
+
+    // Wait a bit for response
+    // (In real async test, would use Promise)
+    // For now, just log status
+
+    if (test_passed) {
+      println("  ✓ Test 1 PASSED")
+    } else {
+      println("  ✗ Test 1 FAILED - No connection")
+    }
+
+    close(ws)
+    println("  ✓ Client closed")
+
+  } catch (error) {
+    println("  ✗ Test 1 FAILED: " + error)
+  }
+}
+
+fun main() => {
+  println("╔════════════════════════════════════════════════╗")
+  println("║  Phase 5: WebSocket Client Integration Test   ║")
+  println("╚════════════════════════════════════════════════╝\n")
+
+  test_ws_client_basic()
+
+  println("\n╔════════════════════════════════════════════════╗")
+  println("║        Test Complete                           ║")
+  println("╚════════════════════════════════════════════════╝\n")
+}
+
+main()

@@ -1,0 +1,76 @@
+/**
+ * FreeLang Freelancer Database System
+ * 프리랜서 데이터베이스 예제
+ */
+
+fn main() -> void {
+  println("════════════════════════════════════════════════════════════")
+  println("📊 FreeLang 프리랜서 데이터베이스")
+  println("════════════════════════════════════════════════════════════")
+  println("")
+
+  // 프리랜서 정보
+  println("👤 프리랜서 목록")
+  println("  1. 김준호 - Python, JavaScript, React (평점: 4.8, $50/hr)")
+  println("  2. 이수진 - Node.js, MongoDB, AWS (평점: 4.9, $60/hr)")
+  println("  3. 박민철 - Java, Spring, Kubernetes (평점: 4.7, $70/hr)")
+  println("  4. 정유리 - UI/UX, Figma, Design System (평점: 4.6, $55/hr)")
+  println("  5. 최성호 - Go, Rust, DevOps (평점: 5.0, $80/hr)")
+  println("")
+
+  // 프로젝트 정보
+  println("📌 프로젝트 목록")
+  println("  101. 이커머스 플랫폼 개발 ($5000, 완료)")
+  println("  102. 모바일 앱 개발 ($8000, 진행중)")
+  println("  103. 마이크로서비스 아키텍처 ($12000, 진행중)")
+  println("  104. UI/UX 디자인 ($3000, 완료)")
+  println("  105. 고성능 백엔드 시스템 ($15000, 대기중)")
+  println("")
+
+  // 기술 스택
+  println("🔧 인기 기술 스택")
+  println("  Python: 수요도 95/100, 평균 시급 $45")
+  println("  JavaScript: 수요도 90/100, 평균 시급 $40")
+  println("  React: 수요도 85/100, 평균 시급 $50")
+  println("  Node.js: 수요도 80/100, 평균 시급 $55")
+  println("  Java: 수요도 75/100, 평균 시급 $60")
+  println("  Go: 수요도 70/100, 평균 시급 $75")
+  println("  Rust: 수요도 60/100, 평균 시급 $85")
+  println("")
+
+  // 통계
+  println("📊 데이터베이스 통계")
+  println("  총 프리랜서: 5명")
+  println("  총 프로젝트: 5개")
+  println("  평균 평점: 4.8/5.0")
+  println("  평균 시급: $63/hr")
+  println("")
+
+  // 쿼리 예제
+  println("🎯 쿼리 예제")
+  println("")
+
+  println("  1️⃣  Python 스킬을 가진 프리랜서:")
+  println("      → 김준호 (4.8점, $50/hr)")
+  println("")
+
+  println("  2️⃣  평점 4.7 이상:")
+  println("      → 김준호 (4.8), 이수진 (4.9), 박민철 (4.7), 최성호 (5.0)")
+  println("")
+
+  println("  3️⃣  진행 중인 프로젝트:")
+  println("      → 모바일 앱 개발 ($8000)")
+  println("      → 마이크로서비스 아키텍처 ($12000)")
+  println("")
+
+  println("  4️⃣  5000~10000 예산:")
+  println("      → 이커머스 플랫폼 ($5000)")
+  println("      → 모바일 앱 ($8000)")
+  println("")
+
+  println("════════════════════════════════════════════════════════════")
+  println("✅ FreeLang 프리랜서 데이터베이스 테스트 완료!")
+  println("════════════════════════════════════════════════════════════")
+}
+
+main()

@@ -1,0 +1,14 @@
+{
+  "name": "my-app",
+  "version": "1.0.0",
+  "description": "Example FreeLang application using the Package Manager",
+  "main": "./src/main.fl",
+  "dependencies": {
+    "math-lib": "1.0.0",
+    "utils": "2.0.0",
+    "string-helpers": "1.0.0"
+  },
+  "devDependencies": {},
+  "author": "FreeLang Examples",
+  "license": "MIT"
+}

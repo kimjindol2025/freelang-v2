@@ -1,0 +1,34 @@
+// 함수 인자 다양성 테스트
+
+// 0개 인자
+fn test_zero_args() {
+  return 42;
+}
+
+// 1개 인자
+fn inc(x) {
+  return x + 1;
+}
+
+// 3개 인자
+fn sum_three(a, b, c) {
+  return a + b + c;
+}
+
+// 5개 인자
+fn sum_five(a, b, c, d, e) {
+  return a + b + c + d + e;
+}
+
+// 테스트 실행
+let r0 = test_zero_args();
+println(r0);  // Expected: 42
+
+let r1 = inc(10);
+println(r1);  // Expected: 11
+
+let r3 = sum_three(1, 2, 3);
+println(r3);  // Expected: 6
+
+let r5 = sum_five(1, 2, 3, 4, 5);
+println(r5);  // Expected: 15

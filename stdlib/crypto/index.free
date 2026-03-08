@@ -1,0 +1,463 @@
+/**
+ * FreeLang Cryptography Module
+ * Pure FreeLang implementation of:
+ * - Base64 encoding/decoding
+ * - Simple hashing (DJB2, Adler32)
+ * - SHA256 (using bitwise operators)
+ * - HMAC-SHA256
+ *
+ * Note: Advanced crypto (AES, PBKDF2, bcrypt) requires FFI
+ */
+
+// ────────────────────────────────────────
+// Hash Result Type
+// ────────────────────────────────────────
+
+export struct HashResult {
+  algorithm: string
+  inputLength: number
+  output: string
+  isMock: bool
+}
+
+// ────────────────────────────────────────
+// Base64 Encoding/Decoding
+// ────────────────────────────────────────
+
+let BASE64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+let BASE64_URL_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+/**
+ * Encode string to Base64
+ * @param input - string to encode
+ * @returns Base64 encoded string
+ */
+export fn base64Encode(input: string) -> string {
+  intent: "Encode string to Base64"
+  output: string
+  do
+    let result = ""
+    let i = 0
+
+    while i < input.length {
+      let b1 = input.charCodeAt(i)
+      let b2 = if i + 1 < input.length { input.charCodeAt(i + 1) } else { 0 }
+      let b3 = if i + 2 < input.length { input.charCodeAt(i + 2) } else { 0 }
+
+      let idx1 = (b1 >> 2) & 0x3F
+      let idx2 = ((b1 & 0x3) << 4) | ((b2 >> 4) & 0xF)
+      let idx3 = ((b2 & 0xF) << 2) | ((b3 >> 6) & 0x3)
+      let idx4 = b3 & 0x3F
+
+      result = result + BASE64_CHARS[idx1]
+      result = result + BASE64_CHARS[idx2]
+
+      if i + 1 < input.length {
+        result = result + BASE64_CHARS[idx3]
+      } else {
+        result = result + "="
+      }
+
+      if i + 2 < input.length {
+        result = result + BASE64_CHARS[idx4]
+      } else {
+        result = result + "="
+      }
+
+      i = i + 3
+    }
+
+    return result
+}
+
+/**
+ * Decode Base64 string
+ * @param encoded - Base64 encoded string
+ * @returns decoded string
+ */
+export fn base64Decode(encoded: string) -> string {
+  intent: "Decode Base64 string"
+  output: string
+  do
+    let result = ""
+    let i = 0
+
+    while i < encoded.length {
+      let c1 = encoded[i]
+      let c2 = if i + 1 < encoded.length { encoded[i + 1] } else { "=" }
+      let c3 = if i + 2 < encoded.length { encoded[i + 2] } else { "=" }
+      let c4 = if i + 3 < encoded.length { encoded[i + 3] } else { "=" }
+
+      let idx1 = BASE64_CHARS.indexOf(c1)
+      let idx2 = BASE64_CHARS.indexOf(c2)
+      let idx3 = if c3 == "=" { 0 } else { BASE64_CHARS.indexOf(c3) }
+      let idx4 = if c4 == "=" { 0 } else { BASE64_CHARS.indexOf(c4) }
+
+      let b1 = (idx1 << 2) | (idx2 >> 4)
+      result = result + String.fromCharCode(b1)
+
+      if c3 != "=" {
+        let b2 = ((idx2 & 0xF) << 4) | (idx3 >> 2)
+        result = result + String.fromCharCode(b2)
+      }
+
+      if c4 != "=" {
+        let b3 = ((idx3 & 0x3) << 6) | idx4
+        result = result + String.fromCharCode(b3)
+      }
+
+      i = i + 4
+    }
+
+    return result
+}
+
+/**
+ * URL-safe Base64 encoding
+ * @param input - string to encode
+ * @returns URL-safe Base64 encoded string
+ */
+export fn base64UrlEncode(input: string) -> string {
+  intent: "URL-safe Base64 encoding"
+  output: string
+  do
+    let encoded = base64Encode(input)
+    return encoded.replace("+", "-").replace("/", "_").replace("=", "")
+}
+
+/**
+ * Check if string is valid Base64
+ * @param s - string to check
+ * @returns true if valid Base64
+ */
+export fn isBase64(s: string) -> bool {
+  intent: "Check if string is valid Base64"
+  output: bool
+  do
+    if s.length % 4 != 0 {
+      return false
+    }
+
+    let i = 0
+    while i < s.length {
+      let c = s[i]
+      if BASE64_CHARS.indexOf(c) == -1 && c != "=" {
+        return false
+      }
+      i = i + 1
+    }
+
+    return true
+}
+
+// ────────────────────────────────────────
+// Simple Hash Functions
+// ────────────────────────────────────────
+
+/**
+ * DJB2 hash
+ * @param input - string to hash
+ * @returns hash value (unsigned 32-bit)
+ */
+export fn djb2Hash(input: string) -> number {
+  intent: "DJB2 hash function"
+  output: number
+  do
+    let hash = 5381
+    let i = 0
+
+    while i < input.length {
+      let c = input.charCodeAt(i)
+      hash = ((hash << 5) + hash) + c
+      hash = hash & 0xFFFFFFFF
+      i = i + 1
+    }
+
+    if hash < 0 {
+      hash = hash + 0x100000000
+    }
+
+    return hash
+}
+
+/**
+ * Adler32 checksum
+ * @param input - string to checksum
+ * @returns Adler32 checksum
+ */
+export fn adler32(input: string) -> number {
+  intent: "Adler32 checksum"
+  output: number
+  do
+    let MOD = 65521
+    let s1 = 1
+    let s2 = 0
+    let i = 0
+
+    while i < input.length {
+      let c = input.charCodeAt(i)
+      s1 = (s1 + c) % MOD
+      s2 = (s2 + s1) % MOD
+      i = i + 1
+    }
+
+    return (s2 * 65536) + s1
+}
+
+// ────────────────────────────────────────
+// SHA256 Implementation
+// ────────────────────────────────────────
+
+// SHA256 initialization vectors
+let SHA256_H = [
+  0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+  0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+]
+
+// SHA256 constants
+let SHA256_K = [
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
+  0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
+  0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
+  0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+  0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
+  0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3,
+  0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5,
+  0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+  0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+]
+
+/**
+ * SHA256 hash
+ * @param input - string to hash
+ * @returns SHA256 hash as 64-character hex string
+ */
+export fn sha256(input: string) -> string {
+  intent: "SHA256 cryptographic hash"
+  output: string
+  do
+    let hash = sha256Internal(input)
+    let result = ""
+    let i = 0
+
+    while i < hash.length {
+      let h = hash[i]
+      result = result + toHex32(h)
+      i = i + 1
+    }
+
+    return result
+}
+
+fn sha256Internal(input: string) -> array {
+  // Pre-processing
+  let msgLen = input.length
+  let msg = input
+
+  // Append bit 1 (represented as 0x80 in byte form)
+  msg = msg + String.fromCharCode(0x80)
+
+  // Append zeros until msg length ≡ 448 (mod 512)
+  let currentLen = msg.length
+  let targetLen = ((currentLen + 64) / 64) * 64 - 8
+
+  let i = 0
+  while currentLen + i < targetLen {
+    msg = msg + String.fromCharCode(0)
+    i = i + 1
+  }
+
+  // Append original message length in bits as 64-bit big-endian
+  let bitLen = msgLen * 8
+  i = 0
+  while i < 8 {
+    msg = msg + String.fromCharCode((bitLen >> (56 - i * 8)) & 0xFF)
+    i = i + 1
+  }
+
+  // Initialize working variables
+  let h = []
+  i = 0
+  while i < 8 {
+    h.push(SHA256_H[i])
+    i = i + 1
+  }
+
+  // Process message in 512-bit chunks
+  let chunkIdx = 0
+  while chunkIdx < msg.length / 64 {
+    let chunk = msg.slice(chunkIdx * 64, (chunkIdx + 1) * 64)
+    processChunk(h, chunk)
+    chunkIdx = chunkIdx + 1
+  }
+
+  return h
+}
+
+fn processChunk(h: array, chunk: string) {
+  let w = []
+  let i = 0
+
+  // Create message schedule array
+  while i < 64 {
+    if i < 16 {
+      let b0 = chunk.charCodeAt(i * 4)
+      let b1 = chunk.charCodeAt(i * 4 + 1)
+      let b2 = chunk.charCodeAt(i * 4 + 2)
+      let b3 = chunk.charCodeAt(i * 4 + 3)
+
+      let word = ((b0 << 24) | (b1 << 16) | (b2 << 8) | b3) & 0xFFFFFFFF
+      w.push(word)
+    } else {
+      let s0 = rightRotate(w[i - 15], 7) ^ rightRotate(w[i - 15], 18) ^ (w[i - 15] >> 3)
+      let s1 = rightRotate(w[i - 2], 17) ^ rightRotate(w[i - 2], 19) ^ (w[i - 2] >> 10)
+      let word = (w[i - 16] + s0 + w[i - 7] + s1) & 0xFFFFFFFF
+      w.push(word)
+    }
+    i = i + 1
+  }
+
+  // Initialize working variables
+  let a = h[0]
+  let b = h[1]
+  let c = h[2]
+  let d = h[3]
+  let e = h[4]
+  let f = h[5]
+  let g = h[6]
+  let h_ = h[7]
+
+  // Compression function
+  i = 0
+  while i < 64 {
+    let S1 = rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25)
+    let ch = (e & f) ^ ((~e) & g)
+    let temp1 = (h_ + S1 + ch + SHA256_K[i] + w[i]) & 0xFFFFFFFF
+    let S0 = rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)
+    let maj = (a & b) ^ (a & c) ^ (b & c)
+    let temp2 = (S0 + maj) & 0xFFFFFFFF
+
+    h_ = g
+    g = f
+    f = e
+    e = (d + temp1) & 0xFFFFFFFF
+    d = c
+    c = b
+    b = a
+    a = (temp1 + temp2) & 0xFFFFFFFF
+
+    i = i + 1
+  }
+
+  // Add compressed chunk to current hash
+  h[0] = (h[0] + a) & 0xFFFFFFFF
+  h[1] = (h[1] + b) & 0xFFFFFFFF
+  h[2] = (h[2] + c) & 0xFFFFFFFF
+  h[3] = (h[3] + d) & 0xFFFFFFFF
+  h[4] = (h[4] + e) & 0xFFFFFFFF
+  h[5] = (h[5] + f) & 0xFFFFFFFF
+  h[6] = (h[6] + g) & 0xFFFFFFFF
+  h[7] = (h[7] + h_) & 0xFFFFFFFF
+}
+
+/**
+ * HMAC-SHA256
+ * @param message - message to authenticate
+ * @param key - secret key
+ * @returns HMAC-SHA256 as 64-character hex string
+ */
+export fn hmacSha256(message: string, key: string) -> string {
+  intent: "HMAC-SHA256 authentication code"
+  output: string
+  do
+    let blockSize = 64
+
+    // If key is too long, hash it
+    let actualKey = key
+    if key.length > blockSize {
+      actualKey = sha256(key)
+    }
+
+    // Pad key to block size
+    while actualKey.length < blockSize {
+      actualKey = actualKey + String.fromCharCode(0)
+    }
+
+    // Create ipad and opad
+    let ipad = ""
+    let opad = ""
+    let i = 0
+    while i < blockSize {
+      ipad = ipad + String.fromCharCode(actualKey.charCodeAt(i) ^ 0x36)
+      opad = opad + String.fromCharCode(actualKey.charCodeAt(i) ^ 0x5C)
+      i = i + 1
+    }
+
+    // HMAC computation
+    let innerHash = sha256(ipad + message)
+    return sha256(opad + innerHash)
+}
+
+/**
+ * Verify hash
+ * @param input - original input
+ * @param algorithm - algorithm name ("sha256", "djb2", "adler32")
+ * @param expected - expected hash value
+ * @returns true if hash matches
+ */
+export fn verifyHash(input: string, algorithm: string, expected: string) -> bool {
+  intent: "Verify hash value"
+  output: bool
+  do
+    let computed = ""
+
+    if algorithm == "sha256" {
+      computed = sha256(input)
+    } else if algorithm == "djb2" {
+      computed = djb2Hash(input).toString()
+    } else if algorithm == "adler32" {
+      computed = adler32(input).toString()
+    } else {
+      return false
+    }
+
+    return computed == expected
+}
+
+// ────────────────────────────────────────
+// Helper Functions
+// ────────────────────────────────────────
+
+fn rightRotate(n: number, bits: number) -> number {
+  return ((n >> bits) | (n << (32 - bits))) & 0xFFFFFFFF
+}
+
+fn toHex32(n: number) -> string {
+  let result = ""
+  let i = 0
+  while i < 8 {
+    let nibble = (n >> (28 - i * 4)) & 0xF
+    let hexChars = "0123456789abcdef"
+    result = result + hexChars[nibble]
+    i = i + 1
+  }
+  return result
+}
+
+// ────────────────────────────────────────
+// FFI Note
+// ────────────────────────────────────────
+
+// The following functions require FFI support:
+// - aesEncrypt(), aesDecrypt()
+// - pbkdf2(), bcrypt()
+//
+// These are implemented in stdlib/ffi/encryption.c
+// but require FFI system activation (currently WAITING FOR ACTIVATION)

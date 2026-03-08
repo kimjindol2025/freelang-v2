@@ -1,0 +1,16 @@
+// 클로저 테스트
+// Note: lambda 문법 지원 예정
+// let x = 10;
+// let add = fn(n) -> x + n;
+// println(add(5)); // 기대: 15
+
+// makeCounter() 예제
+// let c = makeCounter();
+// println(c()); // 기대: 1
+// println(c()); // 기대: 2
+
+// 임시: 간단한 로직 테스트
+let x = 10;
+let y = 20;
+let z = x + y;
+println(z); // 기대: 30

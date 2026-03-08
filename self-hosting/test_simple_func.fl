@@ -1,0 +1,7 @@
+// 간단한 함수 테스트
+let x = Ok(42);
+println(x);
+
+// 직접 함수 호출 테스트
+let result = typeof(x);
+println(result);

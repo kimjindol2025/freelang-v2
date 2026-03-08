@@ -1,0 +1,116 @@
+{
+  "name": "freelang",
+  "displayName": "FreeLang",
+  "description": "Language support for FreeLang programming language",
+  "version": "0.1.0",
+  "publisher": "kim",
+  "icon": "assets/icon.png",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kimjindol2025/freelang.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kimjindol2025/freelang/issues"
+  },
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Formatters"
+  ],
+  "activationEvents": [
+    "onLanguage:freelang"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "freelang",
+        "aliases": [
+          "FreeLang",
+          "freelang"
+        ],
+        "extensions": [
+          ".fl"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "freelang",
+        "scopeName": "source.freelang",
+        "path": "./syntaxes/freelang.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "freelang",
+        "path": "./snippets/freelang.json"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "editor.action.formatDocument",
+        "key": "shift+alt+f",
+        "when": "editorLanguageId == freelang"
+      }
+    ],
+    "configuration": {
+      "title": "FreeLang",
+      "properties": {
+        "freelang.trace.server": {
+          "scope": "window",
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server."
+        },
+        "freelang.maxProblems": {
+          "scope": "resource",
+          "type": "number",
+          "default": 100,
+          "description": "Controls the maximum number of problems produced by the server."
+        },
+        "freelang.typeCheckMode": {
+          "scope": "resource",
+          "type": "string",
+          "enum": [
+            "strict",
+            "standard",
+            "lenient"
+          ],
+          "default": "standard",
+          "description": "Type checking mode for FreeLang files."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run esbuild-base -- --minify",
+    "esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --platform=node --target=node14",
+    "esbuild": "npm run esbuild-base -- --sourcemap",
+    "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
+    "test": "node ./out/test/runTest.js",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^16.11.0",
+    "@types/vscode": "^1.60.0",
+    "@vscode/test-electron": "^1.6.2",
+    "typescript": "^4.4.3",
+    "esbuild": "^0.13.3"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^7.0.0"
+  }
+}

@@ -1,0 +1,419 @@
+/**
+ * FreeLang stdlib/web - WebResource Module
+ * HTML/CSS/JS 통합 웹 리소스 관리 및 렌더링
+ *
+ * Example:
+ *   import web from "stdlib/web"
+ *
+ *   // WebResource 생성
+ *   web_resource = web.create_resource(
+ *     "<h1>Hello FreeLang</h1>",
+ *     "h1 { color: red; }",
+ *     "console.log('Hi FreeLang')"
+ *   )
+ *
+ *   // WebResource 저장소 생성
+ *   vm_web = web.init_web()
+ *
+ *   // 리소스 등록
+ *   web.add_resource(&mut vm_web, "/", web_resource)
+ *   web.add_resource(&mut vm_web, "/about", about_resource)
+ *
+ *   // 요청 처리
+ *   html = web.handle_request(&vm_web, "/")
+ *   println(html)
+ */
+
+/* ===== WebResource 구조체 ===== */
+
+export struct WebResource {
+  html: String
+  css: String
+  js: String
+  content_type: String
+}
+
+export struct VMWeb {
+  resources: Map<String, WebResource>
+  default_resource: WebResource
+  mime_types: Map<String, String>
+}
+
+/* ===== 초기화 함수 ===== */
+
+/**
+ * WebResource 생성
+ * @param html - HTML 마크업
+ * @param css - CSS 스타일시트
+ * @param js - JavaScript 코드
+ * @return WebResource 구조체
+ */
+export fn create_resource(html: String, css: String, js: String) -> WebResource {
+  WebResource {
+    html: html,
+    css: css,
+    js: js,
+    content_type: "text/html"
+  }
+}
+
+/**
+ * 비어있는 WebResource 생성
+ * @return 빈 WebResource
+ */
+export fn create_empty_resource() -> WebResource {
+  WebResource {
+    html: "",
+    css: "",
+    js: "",
+    content_type: "text/html"
+  }
+}
+
+/**
+ * VMWeb 초기화
+ * @return 빈 VMWeb 인스턴스
+ */
+export fn init_web() -> VMWeb {
+  let default_res = WebResource {
+    html: "<h1>404 Not Found</h1>",
+    css: "h1 { color: #ff0000; }",
+    js: "console.error('404: Resource not found')",
+    content_type: "text/html"
+  }
+
+  VMWeb {
+    resources: Map<String, WebResource>(),
+    default_resource: default_res,
+    mime_types: init_mime_types()
+  }
+}
+
+/**
+ * MIME 타입 맵 초기화
+ * @return MIME 타입 맵
+ */
+fn init_mime_types() -> Map<String, String> {
+  let types = Map<String, String>()
+  types[".html"] = "text/html"
+  types[".css"] = "text/css"
+  types[".js"] = "text/javascript"
+  types[".json"] = "application/json"
+  types[".txt"] = "text/plain"
+  types[".xml"] = "application/xml"
+  types[".png"] = "image/png"
+  types[".jpg"] = "image/jpeg"
+  types[".gif"] = "image/gif"
+  types[".svg"] = "image/svg+xml"
+  types
+}
+
+/* ===== 리소스 관리 함수 ===== */
+
+/**
+ * WebResource를 리소스 맵에 등록
+ * @param vm - VMWeb 인스턴스 (가변)
+ * @param path - URL 경로 (예: "/", "/about")
+ * @param resource - WebResource 구조체
+ */
+export fn add_resource(vm: &mut VMWeb, path: String, resource: WebResource) {
+  vm.resources[path] = resource
+}
+
+/**
+ * HTML과 CSS, JS를 분리하여 리소스 등록
+ * @param vm - VMWeb 인스턴스 (가변)
+ * @param path - URL 경로
+ * @param html - HTML 마크업
+ * @param css - CSS 스타일
+ * @param js - JavaScript 코드
+ */
+export fn add_resource_parts(vm: &mut VMWeb, path: String, html: String, css: String, js: String) {
+  let resource = create_resource(html, css, js)
+  add_resource(vm, path, resource)
+}
+
+/**
+ * 리소스 조회
+ * @param vm - VMWeb 인스턴스
+ * @param path - URL 경로
+ * @return WebResource (없으면 404 리소스)
+ */
+export fn get_resource(vm: &VMWeb, path: String) -> WebResource {
+  if vm.resources.contains(path) {
+    return vm.resources[path]
+  }
+  vm.default_resource
+}
+
+/**
+ * 리소스 존재 여부 확인
+ * @param vm - VMWeb 인스턴스
+ * @param path - URL 경로
+ * @return true if 리소스 존재
+ */
+export fn has_resource(vm: &VMWeb, path: String) -> bool {
+  vm.resources.contains(path)
+}
+
+/**
+ * 리소스 삭제
+ * @param vm - VMWeb 인스턴스 (가변)
+ * @param path - URL 경로
+ */
+export fn remove_resource(vm: &mut VMWeb, path: String) {
+  if vm.resources.contains(path) {
+    vm.resources.remove(path)
+  }
+}
+
+/**
+ * 모든 리소스 경로 조회
+ * @param vm - VMWeb 인스턴스
+ * @return String 배열 (경로 목록)
+ */
+export fn list_resources(vm: &VMWeb) -> Array<String> {
+  vm.resources.keys()
+}
+
+/* ===== HTTP 응답 렌더링 함수 ===== */
+
+/**
+ * URL 요청에 대해 HTML 응답 생성 (HTML + CSS + JS 통합)
+ * @param vm - VMWeb 인스턴스
+ * @param path - URL 경로
+ * @return 통합된 HTML 응답 문자열
+ */
+export fn handle_request(vm: &VMWeb, path: String) -> String {
+  let resource = get_resource(vm, path)
+  render_html(resource)
+}
+
+/**
+ * WebResource를 HTML로 렌더링 (HTML + CSS + JS 통합)
+ * @param resource - WebResource 구조체
+ * @return 통합된 HTML 문자열
+ */
+export fn render_html(resource: WebResource) -> String {
+  let html = ""
+
+  // HTTP 헤더
+  html = html + "HTTP/1.1 200 OK\r\n"
+  html = html + "Content-Type: text/html; charset=utf-8\r\n"
+  html = html + "Connection: close\r\n"
+  html = html + "\r\n"
+
+  // HTML 시작
+  html = html + "<!DOCTYPE html>\n"
+  html = html + "<html>\n"
+  html = html + "<head>\n"
+  html = html + "<meta charset=\"UTF-8\">\n"
+  html = html + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
+  html = html + "<title>FreeLang Web Resource</title>\n"
+
+  // CSS 스타일 통합
+  if resource.css != "" {
+    html = html + "<style>\n"
+    html = html + resource.css
+    html = html + "\n</style>\n"
+  }
+
+  html = html + "</head>\n"
+  html = html + "<body>\n"
+
+  // HTML 콘텐츠
+  html = html + resource.html
+  html = html + "\n"
+
+  // JavaScript 스크립트 통합
+  if resource.js != "" {
+    html = html + "<script>\n"
+    html = html + resource.js
+    html = html + "\n</script>\n"
+  }
+
+  html = html + "</body>\n"
+  html = html + "</html>"
+
+  html
+}
+
+/**
+ * WebResource를 바이트 배열로 변환 (TCP 전송용)
+ * @param resource - WebResource 구조체
+ * @return ASCII 바이트 배열
+ */
+export fn to_bytes(resource: WebResource) -> Array<int> {
+  let html = render_html(resource)
+  let bytes = Array<int>()
+
+  let i = 0
+  while i < html.length {
+    bytes.push(html[i].ord)
+    i = i + 1
+  }
+
+  bytes
+}
+
+/**
+ * 경로 정규화 (슬래시 처리)
+ * @param path - URL 경로
+ * @return 정규화된 경로
+ */
+export fn normalize_path(path: String) -> String {
+  // 빈 경로는 "/"로 처리
+  if path == "" {
+    return "/"
+  }
+
+  // 쿼리 스트링 제거 (?, #)
+  let idx = path.find("?")
+  if idx != -1 {
+    return path.substring(0, idx)
+  }
+
+  path
+}
+
+/* ===== 문자열 빌더 유틸리티 ===== */
+
+/**
+ * HTML 엘리먼트 생성 헬퍼
+ * @param tag - HTML 태그 이름
+ * @param content - 콘텐츠
+ * @param attrs - 속성 (선택사항)
+ * @return HTML 엘리먼트 문자열
+ */
+export fn create_element(tag: String, content: String, attrs: String) -> String {
+  let element = "<" + tag
+  if attrs != "" {
+    element = element + " " + attrs
+  }
+  element = element + ">" + content + "</" + tag + ">"
+  element
+}
+
+/**
+ * HTML 테이블 생성
+ * @param rows - 행 데이터 (2D Array)
+ * @param headers - 헤더 (Array)
+ * @return HTML 테이블 문자열
+ */
+export fn create_table(headers: Array<String>, rows: Array<Array<String>>) -> String {
+  let table = "<table>\n"
+
+  // 헤더
+  table = table + "<thead>\n<tr>\n"
+  let h = 0
+  while h < headers.length {
+    table = table + "<th>" + headers[h] + "</th>\n"
+    h = h + 1
+  }
+  table = table + "</tr>\n</thead>\n"
+
+  // 바디
+  table = table + "<tbody>\n"
+  let r = 0
+  while r < rows.length {
+    table = table + "<tr>\n"
+    let c = 0
+    while c < rows[r].length {
+      table = table + "<td>" + rows[r][c] + "</td>\n"
+      c = c + 1
+    }
+    table = table + "</tr>\n"
+    r = r + 1
+  }
+  table = table + "</tbody>\n"
+  table = table + "</table>"
+
+  table
+}
+
+/**
+ * 기본 CSS 스타일 가져오기
+ * @param style_name - 스타일 이름 ("default", "dark", "light")
+ * @return CSS 문자열
+ */
+export fn get_default_css(style_name: String) -> String {
+  let css = ""
+
+  if style_name == "default" || style_name == "" {
+    css = css + "body { font-family: Arial, sans-serif; margin: 20px; }\n"
+    css = css + "h1 { color: #333; }\n"
+    css = css + "table { border-collapse: collapse; width: 100%; }\n"
+    css = css + "table, th, td { border: 1px solid #ddd; }\n"
+    css = css + "th, td { padding: 10px; text-align: left; }\n"
+    css = css + "th { background-color: #f2f2f2; }\n"
+  } else if style_name == "dark" {
+    css = css + "body { font-family: Arial, sans-serif; margin: 20px; background-color: #222; color: #fff; }\n"
+    css = css + "h1 { color: #4CAF50; }\n"
+    css = css + "table { border-collapse: collapse; width: 100%; }\n"
+    css = css + "table, th, td { border: 1px solid #666; }\n"
+    css = css + "th, td { padding: 10px; text-align: left; }\n"
+    css = css + "th { background-color: #4CAF50; color: #222; }\n"
+  } else if style_name == "light" {
+    css = css + "body { font-family: Arial, sans-serif; margin: 20px; background-color: #f9f9f9; }\n"
+    css = css + "h1 { color: #2196F3; }\n"
+    css = css + "table { border-collapse: collapse; width: 100%; }\n"
+    css = css + "table, th, td { border: 1px solid #ddd; }\n"
+    css = css + "th, td { padding: 10px; text-align: left; }\n"
+    css = css + "th { background-color: #2196F3; color: white; }\n"
+  }
+
+  css
+}
+
+/* ===== 상태 조회 함수 ===== */
+
+/**
+ * VMWeb 상태 정보 조회
+ * @param vm - VMWeb 인스턴스
+ * @return String (상태 정보)
+ */
+export fn get_status(vm: &VMWeb) -> String {
+  let status = "VMWeb Status:\n"
+  status = status + "- Total Resources: " + vm.resources.size().to_string() + "\n"
+  status = status + "- Registered Paths:\n"
+
+  let paths = list_resources(vm)
+  let i = 0
+  while i < paths.length {
+    status = status + "  - " + paths[i] + "\n"
+    i = i + 1
+  }
+
+  status
+}
+
+/* ===== 고급 기능 ===== */
+
+/**
+ * 다중 리소스 등록 (한 번에 여러 리소스 등록)
+ * @param vm - VMWeb 인스턴스 (가변)
+ * @param resources_map - {path: {html, css, js}} 형태의 맵
+ */
+export fn add_resources_batch(vm: &mut VMWeb, resources_map: Map<String, Map<String, String>>) {
+  let paths = resources_map.keys()
+  let i = 0
+  while i < paths.length {
+    let path = paths[i]
+    let data = resources_map[path]
+    let html = data.get("html", "")
+    let css = data.get("css", "")
+    let js = data.get("js", "")
+    add_resource_parts(vm, path, html, css, js)
+    i = i + 1
+  }
+}
+
+/**
+ * SPA (Single Page Application) 모드 설정
+ * 모든 경로를 하나의 리소스로 라우팅
+ * @param vm - VMWeb 인스턴스 (가변)
+ * @param resource - 기본 리소스
+ */
+export fn set_spa_mode(vm: &mut VMWeb, resource: WebResource) {
+  vm.default_resource = resource
+}

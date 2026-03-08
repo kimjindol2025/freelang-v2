@@ -1,0 +1,34 @@
+// FreeLang Stream FFI Test
+// Tests: fl_stream_readable_create, write, on_data
+
+import { fl_stream_readable_create, fl_stream_writable_write, fl_stream_on_data } from "stream"
+
+fun test_stream_basic() {
+  println("=== Stream Basic Test ===")
+
+  // 스트림 생성
+  let stream = fl_stream_readable_create()
+  println("✓ Stream created")
+
+  // 데이터 쓰기
+  let result = fl_stream_writable_write(stream, "Hello, Stream!")
+  println("✓ Wrote to stream: " + result)
+
+  // 메시지 수신 콜백
+  let received_count = 0
+  fl_stream_on_data(stream, fun(chunk) {
+    println("✓ Received chunk: " + chunk)
+    received_count = received_count + 1
+  })
+
+  // 타이머로 이벤트 루프 처리
+  setTimeout(fun() {
+    println("✓ Test complete. Received: " + received_count)
+  }, 500)
+}
+
+fun main() {
+  test_stream_basic()
+}
+
+main()

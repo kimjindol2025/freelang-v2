@@ -1,0 +1,74 @@
+/**
+ * io.free - 입출력 표준 라이브러리
+ * print, println, readLine, readInt 지원
+ */
+
+// 콘솔 출력
+fn print(value: any) -> void {
+  vm.io.write(toString(value))
+}
+
+// 줄 바꿈 포함 출력
+fn println(value: any) -> void {
+  vm.io.write(toString(value))
+  vm.io.write("\n")
+}
+
+// 사용자 입력 (문자열)
+fn readLine() -> string {
+  return vm.io.readLine()
+}
+
+// 사용자 입력 (정수)
+fn readInt() -> int {
+  let line = vm.io.readLine()
+  return parseInt(line)
+}
+
+// 값을 문자열로 변환
+fn toString(value: any) -> string {
+  if typeof(value) == "string" {
+    return value
+  } else if typeof(value) == "number" {
+    return value.toString()
+  } else if typeof(value) == "boolean" {
+    if value == true {
+      return "true"
+    } else {
+      return "false"
+    }
+  } else {
+    return "[object]"
+  }
+}
+
+// 문자열을 정수로 변환
+fn parseInt(str: string) -> int {
+  // 간단한 구현: 첫 숫자 부분만 추출
+  let result = 0
+  let i = 0
+  while i < str.length {
+    let ch = str[i]
+    if ch >= "0" && ch <= "9" {
+      result = result * 10 + (ch - "0")
+    }
+    i = i + 1
+  }
+  return result
+}
+
+// 타입 확인
+fn typeof(value: any) -> string {
+  // vm.typeof() 호출 또는 직접 구현
+  return vm.typeof(value)
+}
+
+export {
+  print,
+  println,
+  readLine,
+  readInt,
+  toString,
+  parseInt,
+  typeof
+}

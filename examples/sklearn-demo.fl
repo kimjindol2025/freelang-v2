@@ -1,0 +1,542 @@
+/**
+ * FreeLang scikit-learn Phase 7 - Integrated ML Demo
+ *
+ * 머신러닝 통합 워크플로우 데모
+ * - 데이터 생성 및 분할
+ * - 표준화 및 정규화
+ * - 선형 회귀 (Linear Regression)
+ * - 로지스틱 회귀 (Logistic Regression)
+ * - K-Means 클러스터링
+ * - KNN 분류
+ * - 성능 평가
+ */
+
+// ============================================
+// Phase 1: 유틸리티 함수
+// ============================================
+
+// 난수 행렬 생성 (n_samples x n_features)
+fn generate_sample_data(n_samples: int, n_features: int) {
+  let data = []
+  let i = 0
+  while i < n_samples {
+    let row = []
+    let j = 0
+    while j < n_features {
+      row = arr_push(row, math.random() * 10.0)
+      j = j + 1
+    }
+    data = arr_push(data, row)
+    i = i + 1
+  }
+  return data
+}
+
+// 레이블 생성 (회귀용: 0-10 범위, 분류용: 0-1)
+fn generate_labels(n_samples: int) {
+  let labels = []
+  let i = 0
+  while i < n_samples {
+    labels = arr_push(labels, math.random() * 10.0)
+    i = i + 1
+  }
+  return labels
+}
+
+// 이진 레이블로 변환 (회귀 값을 분류로)
+fn convert_to_binary(labels: arr) {
+  let binary = []
+  let i = 0
+  let mean_val = stats_mean(labels)
+  while i < arr_len(labels) {
+    if labels[i] > mean_val {
+      binary = arr_push(binary, 1)
+    } else {
+      binary = arr_push(binary, 0)
+    }
+    i = i + 1
+  }
+  return binary
+}
+
+// 데이터 분할 (train_test_split)
+fn train_test_split(X: arr, y: arr, test_size: float) {
+  let n = arr_len(X)
+  let split_idx = int(n * (1.0 - test_size))
+
+  let X_train = []
+  let X_test = []
+  let y_train = []
+  let y_test = []
+
+  let i = 0
+  while i < n {
+    if i < split_idx {
+      X_train = arr_push(X_train, X[i])
+      y_train = arr_push(y_train, y[i])
+    } else {
+      X_test = arr_push(X_test, X[i])
+      y_test = arr_push(y_test, y[i])
+    }
+    i = i + 1
+  }
+
+  return {
+    X_train: X_train,
+    X_test: X_test,
+    y_train: y_train,
+    y_test: y_test
+  }
+}
+
+// 표준화 학습 (Z-score normalization)
+fn scaler_fit(X: arr) {
+  let features = arr_len(X[0])
+  let means = []
+  let stds = []
+
+  let j = 0
+  while j < features {
+    let col = []
+    let i = 0
+    while i < arr_len(X) {
+      col = arr_push(col, X[i][j])
+      i = i + 1
+    }
+    means = arr_push(means, stats_mean(col))
+    stds = arr_push(stds, stats_std_dev(col))
+    j = j + 1
+  }
+
+  return { means: means, stds: stds }
+}
+
+// 표준화 적용
+fn scaler_transform(X: arr, scaler: map) {
+  let means = scaler.means
+  let stds = scaler.stds
+  let X_scaled = []
+
+  let i = 0
+  while i < arr_len(X) {
+    let row = []
+    let j = 0
+    while j < arr_len(X[i]) {
+      let std_val = stds[j]
+      if std_val == 0 {
+        std_val = 1
+      }
+      let scaled_val = (X[i][j] - means[j]) / std_val
+      row = arr_push(row, scaled_val)
+      j = j + 1
+    }
+    X_scaled = arr_push(X_scaled, row)
+    i = i + 1
+  }
+
+  return X_scaled
+}
+
+// ============================================
+// Phase 2: 선형 회귀 (Linear Regression)
+// ============================================
+
+// 선형 회귀 학습 (다변수)
+fn linear_fit(X: arr, y: arr) {
+  // 간단한 구현: 첫 번째 피처만 사용
+  let x_vals = []
+  let i = 0
+  while i < arr_len(X) {
+    x_vals = arr_push(x_vals, X[i][0])
+    i = i + 1
+  }
+
+  let result = ml_linear_regression(x_vals, y)
+  return result
+}
+
+// 선형 회귀 예측
+fn linear_predict(X: arr, model: map) {
+  let predictions = []
+  let i = 0
+  while i < arr_len(X) {
+    let pred = ml_predict_linear(X[i][0], model.slope, model.intercept)
+    predictions = arr_push(predictions, pred)
+    i = i + 1
+  }
+  return predictions
+}
+
+// R² 스코어
+fn r2_score(y_true: arr, y_pred: arr) {
+  let n = arr_len(y_true)
+  let mean_y = stats_mean(y_true)
+
+  let ss_tot = 0.0
+  let ss_res = 0.0
+
+  let i = 0
+  while i < n {
+    let diff_total = y_true[i] - mean_y
+    let diff_pred = y_true[i] - y_pred[i]
+    ss_tot = ss_tot + (diff_total * diff_total)
+    ss_res = ss_res + (diff_pred * diff_pred)
+    i = i + 1
+  }
+
+  if ss_tot == 0 {
+    return 0.0
+  }
+
+  return 1.0 - (ss_res / ss_tot)
+}
+
+// ============================================
+// Phase 3: 로지스틱 회귀 (Logistic Regression)
+// ============================================
+
+// Sigmoid 함수
+fn sigmoid(x: float) {
+  return 1.0 / (1.0 + math.exp(-x))
+}
+
+// 로지스틱 회귀 학습 (SGD 간단 구현)
+fn logistic_fit(X: arr, y: arr, learning_rate: float, iterations: int) {
+  let n_features = arr_len(X[0])
+  let weights = []
+  let bias = 0.0
+
+  // 가중치 초기화
+  let j = 0
+  while j < n_features {
+    weights = arr_push(weights, 0.0)
+    j = j + 1
+  }
+
+  // 경사 하강법
+  let iter = 0
+  while iter < iterations {
+    let i = 0
+    while i < arr_len(X) {
+      // 선형 조합
+      let z = bias
+      let k = 0
+      while k < n_features {
+        z = z + (weights[k] * X[i][k])
+        k = k + 1
+      }
+
+      // Sigmoid
+      let pred = sigmoid(z)
+      let error = pred - y[i]
+
+      // 가중치 업데이트
+      let k = 0
+      while k < n_features {
+        let w = weights[k]
+        weights[k] = w - (learning_rate * error * X[i][k])
+        k = k + 1
+      }
+
+      // Bias 업데이트
+      bias = bias - (learning_rate * error)
+
+      i = i + 1
+    }
+    iter = iter + 1
+  }
+
+  return { weights: weights, bias: bias }
+}
+
+// 로지스틱 회귀 예측
+fn logistic_predict(X: arr, model: map) {
+  let predictions = []
+  let weights = model.weights
+  let bias = model.bias
+
+  let i = 0
+  while i < arr_len(X) {
+    let z = bias
+    let j = 0
+    while j < arr_len(X[i]) {
+      z = z + (weights[j] * X[i][j])
+      j = j + 1
+    }
+
+    let prob = sigmoid(z)
+    let pred = 0
+    if prob > 0.5 {
+      pred = 1
+    }
+
+    predictions = arr_push(predictions, pred)
+    i = i + 1
+  }
+
+  return predictions
+}
+
+// ============================================
+// Phase 4: K-Means 클러스터링
+// ============================================
+
+// K-Means 학습
+fn kmeans_fit(X: arr, k: int) {
+  // 초기 중심 설정
+  let centroids = ml_kmeans_init(k, X)
+
+  // 간단한 1회 반복 K-Means
+  let clusters = []
+  let i = 0
+  while i < k {
+    clusters = arr_push(clusters, [])
+    i = i + 1
+  }
+
+  // 각 포인트를 가장 가까운 중심에 할당
+  let i = 0
+  while i < arr_len(X) {
+    let min_dist = 999999.0
+    let closest_centroid = 0
+
+    let j = 0
+    while j < k {
+      let dist = ml_distance_euclidean(X[i], centroids[j])
+      if dist < min_dist {
+        min_dist = dist
+        closest_centroid = j
+      }
+      j = j + 1
+    }
+
+    let cluster = clusters[closest_centroid]
+    cluster = arr_push(cluster, i)
+    clusters[closest_centroid] = cluster
+
+    i = i + 1
+  }
+
+  // Inertia 계산 (클러스터 내 거리의 합)
+  let inertia = 0.0
+  let i = 0
+  while i < k {
+    let cluster = clusters[i]
+    let j = 0
+    while j < arr_len(cluster) {
+      let point_idx = cluster[j]
+      let dist = ml_distance_euclidean(X[point_idx], centroids[i])
+      inertia = inertia + (dist * dist)
+      j = j + 1
+    }
+    i = i + 1
+  }
+
+  return {
+    centroids: centroids,
+    clusters: clusters,
+    inertia: inertia
+  }
+}
+
+// ============================================
+// Phase 5: KNN 분류
+// ============================================
+
+// KNN 학습 (메모리에 저장)
+fn knn_fit(X: arr, y: arr) {
+  return {
+    X_train: X,
+    y_train: y
+  }
+}
+
+// KNN 예측
+fn knn_predict(X: arr, model: map, k: int) {
+  let X_train = model.X_train
+  let y_train = model.y_train
+  let predictions = []
+
+  let i = 0
+  while i < arr_len(X) {
+    // 거리 계산
+    let distances = []
+    let j = 0
+    while j < arr_len(X_train) {
+      let dist = ml_distance_euclidean(X[i], X_train[j])
+      distances = arr_push(distances, { dist: dist, label: y_train[j] })
+      j = j + 1
+    }
+
+    // K개의 가장 가까운 이웃 찾기 (간단한 구현)
+    let k_neighbors = []
+    let n = 0
+    while n < k && n < arr_len(distances) {
+      let min_idx = 0
+      let min_dist = 999999.0
+
+      let j = 0
+      while j < arr_len(distances) {
+        if distances[j].dist < min_dist {
+          min_dist = distances[j].dist
+          min_idx = j
+        }
+        j = j + 1
+      }
+
+      k_neighbors = arr_push(k_neighbors, distances[min_idx].label)
+
+      // 사용한 거리 제거
+      let new_distances = []
+      let j = 0
+      while j < arr_len(distances) {
+        if j != min_idx {
+          new_distances = arr_push(new_distances, distances[j])
+        }
+        j = j + 1
+      }
+      distances = new_distances
+
+      n = n + 1
+    }
+
+    // 최다 레이블 찾기
+    let label_count = {}
+    let j = 0
+    while j < arr_len(k_neighbors) {
+      let label = k_neighbors[j]
+      label_count[str(label)] = (label_count[str(label)] || 0) + 1
+      j = j + 1
+    }
+
+    let best_label = 0
+    let best_count = 0
+    for (let key in label_count) {
+      if label_count[key] > best_count {
+        best_count = label_count[key]
+        best_label = int(key)
+      }
+    }
+
+    predictions = arr_push(predictions, best_label)
+    i = i + 1
+  }
+
+  return predictions
+}
+
+// ============================================
+// Phase 6: 성능 평가
+// ============================================
+
+// 정확도 (Accuracy)
+fn accuracy(y_true: arr, y_pred: arr) {
+  let correct = 0
+  let i = 0
+  while i < arr_len(y_true) {
+    if y_true[i] == y_pred[i] {
+      correct = correct + 1
+    }
+    i = i + 1
+  }
+
+  let total = arr_len(y_true)
+  if total == 0 {
+    return 0.0
+  }
+
+  return float(correct) / float(total)
+}
+
+// ============================================
+// Phase 7: 메인 데모
+// ============================================
+
+fn main() {
+  println("=".repeat(50))
+  println("FreeLang scikit-learn Phase 7 - Integrated ML Demo")
+  println("=".repeat(50))
+  println("")
+
+  // 1. 데이터 생성
+  println("1️⃣  데이터 생성...")
+  let X = generate_sample_data(100, 4)
+  let y = generate_labels(100)
+  println("   - 샘플: 100개, 피처: 4개")
+  println("")
+
+  // 2. 데이터 분할
+  println("2️⃣  데이터 분할 (80/20)...")
+  let split = train_test_split(X, y, 0.2)
+  println("   - 학습 데이터: " + str(arr_len(split.X_train)))
+  println("   - 테스트 데이터: " + str(arr_len(split.X_test)))
+  println("")
+
+  // 3. 표준화
+  println("3️⃣  데이터 표준화 (Z-score)...")
+  let scaler = scaler_fit(split.X_train)
+  let X_train_scaled = scaler_transform(split.X_train, scaler)
+  let X_test_scaled = scaler_transform(split.X_test, scaler)
+  println("   - 표준화 완료")
+  println("")
+
+  // 4. 선형 회귀
+  println("=".repeat(50))
+  println("📊 선형 회귀 (Linear Regression)")
+  println("=".repeat(50))
+  let lr = linear_fit(X_train_scaled, split.y_train)
+  let lr_pred = linear_predict(X_test_scaled, lr)
+  let r2 = r2_score(split.y_test, lr_pred)
+  println("✅ R² Score: " + str(math.round(r2 * 100.0) / 100.0))
+  println("   Slope: " + str(math.round(lr.slope * 100.0) / 100.0))
+  println("   Intercept: " + str(math.round(lr.intercept * 100.0) / 100.0))
+  println("")
+
+  // 5. 로지스틱 회귀
+  println("=".repeat(50))
+  println("🎯 로지스틱 회귀 (Logistic Regression)")
+  println("=".repeat(50))
+  let log_y = convert_to_binary(split.y_train)
+  let log_y_test = convert_to_binary(split.y_test)
+  let logr = logistic_fit(X_train_scaled, log_y, 0.01, 100)
+  let logr_pred = logistic_predict(X_test_scaled, logr)
+  let log_acc = accuracy(log_y_test, logr_pred)
+  println("✅ Accuracy: " + str(math.round(log_acc * 100.0) / 100.0))
+  println("   Weights: " + str(arr_len(logr.weights)) + " features")
+  println("   Bias: " + str(math.round(logr.bias * 100.0) / 100.0))
+  println("")
+
+  // 6. K-Means 클러스터링
+  println("=".repeat(50))
+  println("🔮 K-Means 클러스터링")
+  println("=".repeat(50))
+  let km = kmeans_fit(X_train_scaled, 3)
+  println("✅ K-Means (k=3)")
+  println("   Inertia: " + str(math.round(km.inertia * 100.0) / 100.0))
+  println("   Centroids: " + str(arr_len(km.centroids)))
+  println("")
+
+  // 7. KNN 분류
+  println("=".repeat(50))
+  println("🎲 KNN 분류 (k=5)")
+  println("=".repeat(50))
+  let knn = knn_fit(X_train_scaled, log_y)
+  let knn_pred = knn_predict(X_test_scaled, knn, 5)
+  let knn_acc = accuracy(log_y_test, knn_pred)
+  println("✅ Accuracy: " + str(math.round(knn_acc * 100.0) / 100.0))
+  println("   K: 5")
+  println("   Predictions: " + str(arr_len(knn_pred)))
+  println("")
+
+  // 최종 요약
+  println("=".repeat(50))
+  println("📈 최종 요약")
+  println("=".repeat(50))
+  println("Linear Regression R²: " + str(math.round(r2 * 100.0) / 100.0))
+  println("Logistic Regression Accuracy: " + str(math.round(log_acc * 100.0) / 100.0))
+  println("KNN Accuracy (k=5): " + str(math.round(knn_acc * 100.0) / 100.0))
+  println("")
+  println("✅ 모든 머신러닝 파이프라인 완료!")
+}
+
+main()

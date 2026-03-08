@@ -1,0 +1,202 @@
+/**
+ * proofkim-ai.free - AI 결과 검증 및 Proof 생성 모듈
+ * 증명/검증, AI 결과 평가
+ */
+
+// Proof 객체
+struct Proof {
+  statement: string,
+  result: bool,
+  timestamp: uint64,
+  evidence: map
+}
+
+// Proof 생성
+fn generateProof(statement: string, result: bool) -> Proof {
+  return {
+    statement: statement,
+    result: result,
+    timestamp: now(),
+    evidence: {}
+  }
+}
+
+// Proof 생성 (증거 포함)
+fn generateProofWithEvidence(statement: string, result: bool, evidence: map) -> Proof {
+  return {
+    statement: statement,
+    result: result,
+    timestamp: now(),
+    evidence: evidence
+  }
+}
+
+// Proof 검증
+fn verifyProof(p: Proof) -> bool {
+  // 기본 검증: result 값이 true인지 확인
+  if p.result == true {
+    return true
+  }
+  return false
+}
+
+// Proof 검증 (증거 확인)
+fn verifyProofWithEvidence(p: Proof) -> map {
+  let result = {
+    valid: false,
+    statement: p.statement,
+    timestamp: p.timestamp,
+    hasEvidence: false,
+    evidenceValid: false
+  }
+
+  if p.result == true {
+    result.valid = true
+  }
+
+  if p.evidence != null && keys(p.evidence).length > 0 {
+    result.hasEvidence = true
+    result.evidenceValid = vm.proof.validateEvidence(p.evidence)
+  }
+
+  return result
+}
+
+// AI 평가
+fn evaluateAI(agent: Agent, task: string) -> Proof {
+  let output = send(agent, task)
+
+  // 간단한 검증: 출력이 비어있지 않으면 성공
+  let isValid = length(output) > 0
+
+  let evidence = {
+    agentName: agent.name,
+    taskLength: length(task),
+    outputLength: length(output),
+    hasHistory: length(agent.history) > 0
+  }
+
+  return generateProofWithEvidence("Task: " + task, isValid, evidence)
+}
+
+// AI 비동기 평가
+fn evaluateAIAsync(agent: Agent, task: string) -> Promise<Proof> {
+  return Promise(fn(resolve: fn(Proof) -> void, reject: fn(string) -> void) -> void {
+    scheduleDelayed(fn() -> void {
+      let proof = evaluateAI(agent, task)
+      resolve(proof)
+    }, 0)
+  })
+}
+
+// Proof 출력
+fn printProof(p: Proof) -> void {
+  println("=== Proof ===")
+  println("Statement:", p.statement)
+  println("Result:", p.result)
+  println("Timestamp:", p.timestamp)
+  if p.evidence != null {
+    println("Evidence:", stringifyJson(p.evidence))
+  }
+}
+
+// Proof 검증 결과 출력
+fn printVerification(verification: map) -> void {
+  println("=== Verification Result ===")
+  println("Valid:", verification.valid)
+  println("Statement:", verification.statement)
+  println("Has Evidence:", verification.hasEvidence)
+  println("Evidence Valid:", verification.evidenceValid)
+}
+
+// 현재 타임스탬프 (밀리초)
+fn now() -> uint64 {
+  return vm.time.now()
+}
+
+// Proof 저장
+fn saveProof(p: Proof, filePath: string) -> void {
+  let json = stringifyJson(p)
+  vm.fs.writeFile(filePath, json)
+}
+
+// Proof 로드
+fn loadProof(filePath: string) -> Proof {
+  let json = vm.fs.readFile(filePath)
+  let obj = parseJson(json)
+  return {
+    statement: obj.statement,
+    result: obj.result,
+    timestamp: obj.timestamp,
+    evidence: obj.evidence
+  }
+}
+
+// Proof 목록 생성 및 관리
+struct ProofCollection {
+  proofs: array,
+  count: int
+}
+
+// ProofCollection 생성
+fn createProofCollection() -> ProofCollection {
+  return { proofs: [], count: 0 }
+}
+
+// ProofCollection에 Proof 추가
+fn addProof(pc: ProofCollection, p: Proof) -> void {
+  pc.proofs.push(p)
+  pc.count = pc.count + 1
+}
+
+// ProofCollection에서 유효한 Proof만 필터링
+fn getValidProofs(pc: ProofCollection) -> array {
+  let valid: array = []
+  let i = 0
+  while i < pc.proofs.length {
+    if pc.proofs[i].result == true {
+      valid.push(pc.proofs[i])
+    }
+    i = i + 1
+  }
+  return valid
+}
+
+// ProofCollection 통계
+fn getProofStats(pc: ProofCollection) -> map {
+  let validCount = 0
+  let i = 0
+  while i < pc.proofs.length {
+    if pc.proofs[i].result == true {
+      validCount = validCount + 1
+    }
+    i = i + 1
+  }
+
+  return {
+    totalProofs: pc.count,
+    validProofs: validCount,
+    invalidProofs: pc.count - validCount,
+    validRate: (validCount * 100) / pc.count
+  }
+}
+
+export {
+  Proof,
+  generateProof,
+  generateProofWithEvidence,
+  verifyProof,
+  verifyProofWithEvidence,
+  evaluateAI,
+  evaluateAIAsync,
+  printProof,
+  printVerification,
+  now,
+  saveProof,
+  loadProof,
+  ProofCollection,
+  createProofCollection,
+  addProof,
+  getValidProofs,
+  getProofStats
+}

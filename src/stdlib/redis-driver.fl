@@ -1,0 +1,768 @@
+/**
+ * FreeLang Redis Driver
+ *
+ * Redis 캐시 및 데이터 저장소 연결
+ * - redis_connect: Redis 서버에 연결
+ * - redis_get/set: 키-값 저장소 기본 API
+ * - redis_del: 키 삭제
+ * - redis_expire: TTL 설정
+ * - redis_hset/hget: 해시 자료구조
+ * - redis_lpush/lpop: 리스트 자료구조
+ * - redis_sadd/smembers: 집합 자료구조
+ * - redis_zadd/zrange: 정렬된 집합
+ * - redis_close: 연결 종료
+ *
+ * Phase F 구현 (Redis 드라이버)
+ */
+
+// ============================================
+// Redis 연결 구조체
+// ============================================
+
+struct RedisConnection {
+  host: string,
+  port: int,
+  password: string,
+  db: int,              // 데이터베이스 번호 (0-15)
+  connId: int,          // Native connection ID
+  isConnected: bool,
+  lastError: string,
+  selectedDb: int
+}
+
+// ============================================
+// Redis 연결 풀
+// ============================================
+
+struct RedisConnectionPool {
+  connections: array,   // 사용 가능한 연결 목록
+  activeCount: int,
+  maxConnections: int,
+  host: string,
+  port: int,
+  password: string,
+  db: int
+}
+
+// ============================================
+// Redis 명령 결과
+// ============================================
+
+struct RedisResult {
+  value: any,
+  success: bool,
+  error: string,
+  type: string          // "string", "int", "array", "null"
+}
+
+// ============================================
+// Redis 연결 생성
+// ============================================
+
+fn redis_connect(host: string, port: int) -> RedisConnection {
+  // Native redis.connect 호출
+  let connId = redis.connect(host, port, "")
+
+  if connId < 0 {
+    return {
+      host: host,
+      port: port,
+      password: "",
+      db: 0,
+      connId: -1,
+      isConnected: false,
+      lastError: "Failed to connect to Redis server",
+      selectedDb: 0
+    }
+  }
+
+  return {
+    host: host,
+    port: port,
+    password: "",
+    db: 0,
+    connId: connId,
+    isConnected: true,
+    lastError: "",
+    selectedDb: 0
+  }
+}
+
+// ============================================
+// Redis 인증 연결
+// ============================================
+
+fn redis_connect_auth(host: string, port: int, password: string) -> RedisConnection {
+  // Native redis.connect with password
+  let connId = redis.connect(host, port, password)
+
+  if connId < 0 {
+    return {
+      host: host,
+      port: port,
+      password: password,
+      db: 0,
+      connId: -1,
+      isConnected: false,
+      lastError: "Failed to connect to Redis server (auth failed)",
+      selectedDb: 0
+    }
+  }
+
+  return {
+    host: host,
+    port: port,
+    password: password,
+    db: 0,
+    connId: connId,
+    isConnected: true,
+    lastError: "",
+    selectedDb: 0
+  }
+}
+
+// ============================================
+// Redis 데이터베이스 선택
+// ============================================
+
+fn redis_select_db(conn: RedisConnection, db: int) -> bool {
+  if !conn.isConnected || db < 0 || db > 15 {
+    return false
+  }
+
+  let result = redis.select(conn.connId, db)
+  if result {
+    conn.selectedDb = db
+    conn.db = db
+  }
+
+  return result
+}
+
+// ============================================
+// Redis GET - 문자열 값 조회
+// ============================================
+
+fn redis_get(conn: RedisConnection, key: string) -> string {
+  if !conn.isConnected {
+    return ""
+  }
+
+  let value = redis.get(conn.connId, key)
+  return value != null ? value : ""
+}
+
+// ============================================
+// Redis SET - 문자열 값 저장
+// ============================================
+
+fn redis_set(conn: RedisConnection, key: string, value: string) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  return redis.set(conn.connId, key, value)
+}
+
+// ============================================
+// Redis SET with TTL - TTL을 포함한 저장
+// ============================================
+
+fn redis_set_ex(conn: RedisConnection, key: string, value: string, seconds: int) -> bool {
+  if !conn.isConnected || seconds <= 0 {
+    return false
+  }
+
+  return redis.setex(conn.connId, key, value, seconds)
+}
+
+// ============================================
+// Redis GET and DELETE - 원자적 연산
+// ============================================
+
+fn redis_getdel(conn: RedisConnection, key: string) -> string {
+  if !conn.isConnected {
+    return ""
+  }
+
+  let value = redis.get(conn.connId, key)
+  redis.del(conn.connId, key)
+
+  return value != null ? value : ""
+}
+
+// ============================================
+// Redis EXISTS - 키 존재 확인
+// ============================================
+
+fn redis_exists(conn: RedisConnection, key: string) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  return redis.exists(conn.connId, key)
+}
+
+// ============================================
+// Redis DEL - 키 삭제
+// ============================================
+
+fn redis_del(conn: RedisConnection, key: string) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  return redis.del(conn.connId, key)
+}
+
+// ============================================
+// Redis DEL MULTIPLE - 여러 키 삭제
+// ============================================
+
+fn redis_del_multiple(conn: RedisConnection, keys: array) -> int {
+  if !conn.isConnected || arr.length(keys) == 0 {
+    return 0
+  }
+
+  return redis.del_multiple(conn.connId, keys)
+}
+
+// ============================================
+// Redis EXPIRE - TTL 설정
+// ============================================
+
+fn redis_expire(conn: RedisConnection, key: string, seconds: int) -> bool {
+  if !conn.isConnected || seconds <= 0 {
+    return false
+  }
+
+  return redis.expire(conn.connId, key, seconds)
+}
+
+// ============================================
+// Redis TTL - 남은 시간 조회
+// ============================================
+
+fn redis_ttl(conn: RedisConnection, key: string) -> int {
+  if !conn.isConnected {
+    return -2  // 키 없음
+  }
+
+  return redis.ttl(conn.connId, key)
+}
+
+// ============================================
+// Redis PERSIST - TTL 제거
+// ============================================
+
+fn redis_persist(conn: RedisConnection, key: string) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  return redis.persist(conn.connId, key)
+}
+
+// ============================================
+// Redis INCR - 정수 증가
+// ============================================
+
+fn redis_incr(conn: RedisConnection, key: string) -> int {
+  if !conn.isConnected {
+    return -1
+  }
+
+  return redis.incr(conn.connId, key)
+}
+
+// ============================================
+// Redis INCRBY - 지정값만큼 증가
+// ============================================
+
+fn redis_incrby(conn: RedisConnection, key: string, value: int) -> int {
+  if !conn.isConnected || value < 0 {
+    return -1
+  }
+
+  return redis.incrby(conn.connId, key, value)
+}
+
+// ============================================
+// Redis DECR - 정수 감소
+// ============================================
+
+fn redis_decr(conn: RedisConnection, key: string) -> int {
+  if !conn.isConnected {
+    return -1
+  }
+
+  return redis.decr(conn.connId, key)
+}
+
+// ============================================
+// Redis DECRBY - 지정값만큼 감소
+// ============================================
+
+fn redis_decrby(conn: RedisConnection, key: string, value: int) -> int {
+  if !conn.isConnected || value < 0 {
+    return -1
+  }
+
+  return redis.decrby(conn.connId, key, value)
+}
+
+// ============================================
+// Redis HSET - 해시 필드 설정
+// ============================================
+
+fn redis_hset(conn: RedisConnection, key: string, field: string, value: string) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  return redis.hset(conn.connId, key, field, value)
+}
+
+// ============================================
+// Redis HGET - 해시 필드 조회
+// ============================================
+
+fn redis_hget(conn: RedisConnection, key: string, field: string) -> string {
+  if !conn.isConnected {
+    return ""
+  }
+
+  let value = redis.hget(conn.connId, key, field)
+  return value != null ? value : ""
+}
+
+// ============================================
+// Redis HGETALL - 전체 해시 조회
+// ============================================
+
+fn redis_hgetall(conn: RedisConnection, key: string) -> map {
+  if !conn.isConnected {
+    return {}
+  }
+
+  return redis.hgetall(conn.connId, key)
+}
+
+// ============================================
+// Redis HDEL - 해시 필드 삭제
+// ============================================
+
+fn redis_hdel(conn: RedisConnection, key: string, field: string) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  return redis.hdel(conn.connId, key, field)
+}
+
+// ============================================
+// Redis HEXISTS - 해시 필드 존재 확인
+// ============================================
+
+fn redis_hexists(conn: RedisConnection, key: string, field: string) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  return redis.hexists(conn.connId, key, field)
+}
+
+// ============================================
+// Redis HLEN - 해시 필드 개수
+// ============================================
+
+fn redis_hlen(conn: RedisConnection, key: string) -> int {
+  if !conn.isConnected {
+    return 0
+  }
+
+  return redis.hlen(conn.connId, key)
+}
+
+// ============================================
+// Redis LPUSH - 리스트 앞에 값 추가
+// ============================================
+
+fn redis_lpush(conn: RedisConnection, key: string, value: string) -> int {
+  if !conn.isConnected {
+    return -1
+  }
+
+  return redis.lpush(conn.connId, key, value)
+}
+
+// ============================================
+// Redis RPUSH - 리스트 뒤에 값 추가
+// ============================================
+
+fn redis_rpush(conn: RedisConnection, key: string, value: string) -> int {
+  if !conn.isConnected {
+    return -1
+  }
+
+  return redis.rpush(conn.connId, key, value)
+}
+
+// ============================================
+// Redis LPOP - 리스트 앞에서 값 제거
+// ============================================
+
+fn redis_lpop(conn: RedisConnection, key: string) -> string {
+  if !conn.isConnected {
+    return ""
+  }
+
+  let value = redis.lpop(conn.connId, key)
+  return value != null ? value : ""
+}
+
+// ============================================
+// Redis RPOP - 리스트 뒤에서 값 제거
+// ============================================
+
+fn redis_rpop(conn: RedisConnection, key: string) -> string {
+  if !conn.isConnected {
+    return ""
+  }
+
+  let value = redis.rpop(conn.connId, key)
+  return value != null ? value : ""
+}
+
+// ============================================
+// Redis LLEN - 리스트 길이
+// ============================================
+
+fn redis_llen(conn: RedisConnection, key: string) -> int {
+  if !conn.isConnected {
+    return 0
+  }
+
+  return redis.llen(conn.connId, key)
+}
+
+// ============================================
+// Redis LRANGE - 리스트 범위 조회
+// ============================================
+
+fn redis_lrange(conn: RedisConnection, key: string, start: int, stop: int) -> array {
+  if !conn.isConnected {
+    return []
+  }
+
+  return redis.lrange(conn.connId, key, start, stop)
+}
+
+// ============================================
+// Redis SADD - 집합에 멤버 추가
+// ============================================
+
+fn redis_sadd(conn: RedisConnection, key: string, member: string) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  return redis.sadd(conn.connId, key, member)
+}
+
+// ============================================
+// Redis SREM - 집합에서 멤버 제거
+// ============================================
+
+fn redis_srem(conn: RedisConnection, key: string, member: string) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  return redis.srem(conn.connId, key, member)
+}
+
+// ============================================
+// Redis SMEMBERS - 집합의 모든 멤버
+// ============================================
+
+fn redis_smembers(conn: RedisConnection, key: string) -> array {
+  if !conn.isConnected {
+    return []
+  }
+
+  return redis.smembers(conn.connId, key)
+}
+
+// ============================================
+// Redis SISMEMBER - 집합에 멤버 포함 여부
+// ============================================
+
+fn redis_sismember(conn: RedisConnection, key: string, member: string) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  return redis.sismember(conn.connId, key, member)
+}
+
+// ============================================
+// Redis SCARD - 집합의 멤버 개수
+// ============================================
+
+fn redis_scard(conn: RedisConnection, key: string) -> int {
+  if !conn.isConnected {
+    return 0
+  }
+
+  return redis.scard(conn.connId, key)
+}
+
+// ============================================
+// Redis ZADD - 정렬된 집합에 멤버 추가
+// ============================================
+
+fn redis_zadd(conn: RedisConnection, key: string, score: int, member: string) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  return redis.zadd(conn.connId, key, score, member)
+}
+
+// ============================================
+// Redis ZRANGE - 정렬된 집합 범위 조회
+// ============================================
+
+fn redis_zrange(conn: RedisConnection, key: string, start: int, stop: int) -> array {
+  if !conn.isConnected {
+    return []
+  }
+
+  return redis.zrange(conn.connId, key, start, stop)
+}
+
+// ============================================
+// Redis ZREM - 정렬된 집합에서 멤버 제거
+// ============================================
+
+fn redis_zrem(conn: RedisConnection, key: string, member: string) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  return redis.zrem(conn.connId, key, member)
+}
+
+// ============================================
+// Redis ZCARD - 정렬된 집합의 멤버 개수
+// ============================================
+
+fn redis_zcard(conn: RedisConnection, key: string) -> int {
+  if !conn.isConnected {
+    return 0
+  }
+
+  return redis.zcard(conn.connId, key)
+}
+
+// ============================================
+// Redis FLUSHDB - 현재 데이터베이스 비우기
+// ============================================
+
+fn redis_flushdb(conn: RedisConnection) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  return redis.flushdb(conn.connId)
+}
+
+// ============================================
+// Redis FLUSHALL - 모든 데이터베이스 비우기
+// ============================================
+
+fn redis_flushall(conn: RedisConnection) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  return redis.flushall(conn.connId)
+}
+
+// ============================================
+// Redis KEYS - 패턴 매칭 키 조회
+// ============================================
+
+fn redis_keys(conn: RedisConnection, pattern: string) -> array {
+  if !conn.isConnected {
+    return []
+  }
+
+  return redis.keys(conn.connId, pattern)
+}
+
+// ============================================
+// Redis SCAN - 스캔 커서 (메모리 효율)
+// ============================================
+
+fn redis_scan(conn: RedisConnection, cursor: int) -> map {
+  if !conn.isConnected {
+    return {
+      cursor: -1,
+      keys: []
+    }
+  }
+
+  return redis.scan(conn.connId, cursor)
+}
+
+// ============================================
+// Redis INFO - 서버 정보
+// ============================================
+
+fn redis_info(conn: RedisConnection) -> map {
+  if !conn.isConnected {
+    return {}
+  }
+
+  return redis.info(conn.connId)
+}
+
+// ============================================
+// Redis PING - 연결 확인
+// ============================================
+
+fn redis_ping(conn: RedisConnection) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  return redis.ping(conn.connId)
+}
+
+// ============================================
+// 연결 풀 생성
+// ============================================
+
+fn redis_pool_create(host: string, port: int, maxConnections: int) -> RedisConnectionPool {
+  return {
+    connections: [],
+    activeCount: 0,
+    maxConnections: maxConnections,
+    host: host,
+    port: port,
+    password: "",
+    db: 0
+  }
+}
+
+// ============================================
+// 연결 풀에서 연결 획득
+// ============================================
+
+fn redis_pool_get(pool: RedisConnectionPool) -> RedisConnection {
+  if arr.length(pool.connections) > 0 {
+    let conn = pool.connections[0]
+    pool.connections = arr.slice(pool.connections, 1, arr.length(pool.connections))
+    pool.activeCount = pool.activeCount + 1
+    return conn
+  }
+
+  // 새로운 연결 생성
+  let conn = redis_connect(pool.host, pool.port)
+  pool.activeCount = pool.activeCount + 1
+
+  return conn
+}
+
+// ============================================
+// 연결을 풀에 반환
+// ============================================
+
+fn redis_pool_release(pool: RedisConnectionPool, conn: RedisConnection) -> void {
+  if conn.isConnected {
+    pool.connections = arr.push(pool.connections, conn)
+    pool.activeCount = pool.activeCount - 1
+  }
+}
+
+// ============================================
+// Redis 연결 종료
+// ============================================
+
+fn redis_close(conn: RedisConnection) -> void {
+  if !conn.isConnected {
+    return
+  }
+
+  redis.close(conn.connId)
+  conn.isConnected = false
+}
+
+// ============================================
+// Export
+// ============================================
+
+export {
+  RedisConnection,
+  RedisConnectionPool,
+  RedisResult,
+
+  redis_connect,
+  redis_connect_auth,
+  redis_select_db,
+
+  redis_get,
+  redis_set,
+  redis_set_ex,
+  redis_getdel,
+  redis_exists,
+  redis_del,
+  redis_del_multiple,
+  redis_expire,
+  redis_ttl,
+  redis_persist,
+  redis_incr,
+  redis_incrby,
+  redis_decr,
+  redis_decrby,
+
+  redis_hset,
+  redis_hget,
+  redis_hgetall,
+  redis_hdel,
+  redis_hexists,
+  redis_hlen,
+
+  redis_lpush,
+  redis_rpush,
+  redis_lpop,
+  redis_rpop,
+  redis_llen,
+  redis_lrange,
+
+  redis_sadd,
+  redis_srem,
+  redis_smembers,
+  redis_sismember,
+  redis_scard,
+
+  redis_zadd,
+  redis_zrange,
+  redis_zrem,
+  redis_zcard,
+
+  redis_flushdb,
+  redis_flushall,
+  redis_keys,
+  redis_scan,
+  redis_info,
+  redis_ping,
+
+  redis_pool_create,
+  redis_pool_get,
+  redis_pool_release,
+
+  redis_close
+}

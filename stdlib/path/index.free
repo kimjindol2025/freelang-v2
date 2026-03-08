@@ -1,0 +1,351 @@
+/**
+ * FreeLang Path Module (Phase 16 Week 4)
+ * Pure FreeLang path utilities (no FFI required)
+ * Node.js path module compatible
+ */
+
+// Constants
+export let sep = "/";
+export let delimiter = ":";
+export let win32 = { sep: "\\", delimiter: ";" };
+export let posix = { sep: "/", delimiter: ":" };
+
+// ────────────────────────────────────────
+// Internal Helper Functions
+// ────────────────────────────────────────
+
+fn split_path(path) => {
+  if (path == "" || path == null) {
+    return [];
+  }
+  let parts = [];
+  let current = "";
+  let i = 0;
+  while (i < len(path)) {
+    let char = path[i];
+    if (char == "/" || char == "\\") {
+      if (current != "") {
+        parts = append(parts, current);
+        current = "";
+      }
+    } else {
+      current = current + char;
+    }
+    i = i + 1;
+  }
+  if (current != "") {
+    parts = append(parts, current);
+  }
+  return parts;
+};
+
+fn is_absolute(path) => {
+  if (path == "" || path == null) {
+    return false;
+  }
+  return path[0] == "/" || (len(path) > 2 && path[1] == ":");
+};
+
+fn trim_trailing_slashes(path) => {
+  if (path == "") {
+    return path;
+  }
+  let i = len(path) - 1;
+  while (i >= 0 && (path[i] == "/" || path[i] == "\\")) {
+    i = i - 1;
+  }
+  return substring(path, 0, i + 1);
+};
+
+// ────────────────────────────────────────
+// Public API
+// ────────────────────────────────────────
+
+/**
+ * Normalize a path
+ * @param path - path to normalize
+ * @returns normalized path with ./ and ../ resolved
+ */
+export fn normalize(path) => {
+  if (path == "" || path == null) {
+    return ".";
+  }
+
+  let is_abs = is_absolute(path);
+  let parts = split_path(path);
+  let result = [];
+
+  let i = 0;
+  while (i < len(parts)) {
+    let part = parts[i];
+    if (part == "." || part == "") {
+      // Skip current directory
+    } else if (part == "..") {
+      if (len(result) > 0) {
+        result = slice(result, 0, len(result) - 1);
+      }
+    } else {
+      result = append(result, part);
+    }
+    i = i + 1;
+  }
+
+  let normalized = "";
+  if (is_abs) {
+    normalized = "/";
+  }
+
+  let j = 0;
+  while (j < len(result)) {
+    if (j > 0 || !is_abs) {
+      normalized = normalized + "/";
+    }
+    normalized = normalized + result[j];
+    j = j + 1;
+  }
+
+  if (normalized == "") {
+    normalized = is_abs ? "/" : ".";
+  }
+
+  return normalized;
+};
+
+/**
+ * Join path segments
+ * @param parts - path segments to join
+ * @returns joined path
+ */
+export fn join(...parts) => {
+  let combined = "";
+  let i = 0;
+  while (i < len(parts)) {
+    if (parts[i] != "" && parts[i] != null) {
+      if (combined != "") {
+        combined = combined + "/" + parts[i];
+      } else {
+        combined = parts[i];
+      }
+    }
+    i = i + 1;
+  }
+  return normalize(combined);
+};
+
+/**
+ * Resolve an absolute path
+ * @param from - starting path
+ * @param to - target path (relative or absolute)
+ * @returns resolved absolute path
+ */
+export fn resolve(from, to) => {
+  if (to == "" || to == null) {
+    return normalize(from);
+  }
+  if (is_absolute(to)) {
+    return normalize(to);
+  }
+  return normalize(from + "/" + to);
+};
+
+/**
+ * Get directory name of a path
+ * @param path - file path
+ * @returns directory containing the file
+ */
+export fn dirname(path) => {
+  if (path == "" || path == null) {
+    return ".";
+  }
+
+  let trimmed = trim_trailing_slashes(path);
+  if (trimmed == "") {
+    return "/";
+  }
+
+  let last_sep = -1;
+  let i = len(trimmed) - 1;
+  while (i >= 0) {
+    if (trimmed[i] == "/" || trimmed[i] == "\\") {
+      last_sep = i;
+      break;
+    }
+    i = i - 1;
+  }
+
+  if (last_sep == -1) {
+    return ".";
+  }
+  if (last_sep == 0) {
+    return "/";
+  }
+  return substring(trimmed, 0, last_sep);
+};
+
+/**
+ * Get base name of a path (filename with extension)
+ * @param path - file path
+ * @param ext - optional extension to remove
+ * @returns base name of the file
+ */
+export fn basename(path, ext) => {
+  if (path == "" || path == null) {
+    return "";
+  }
+
+  let trimmed = trim_trailing_slashes(path);
+  let last_sep = -1;
+  let i = len(trimmed) - 1;
+  while (i >= 0) {
+    if (trimmed[i] == "/" || trimmed[i] == "\\") {
+      last_sep = i;
+      break;
+    }
+    i = i - 1;
+  }
+
+  let base = last_sep == -1 ? trimmed : substring(trimmed, last_sep + 1);
+
+  if (ext != "" && ext != null) {
+    if (ends_with(base, ext)) {
+      base = substring(base, 0, len(base) - len(ext));
+    }
+  }
+
+  return base;
+};
+
+/**
+ * Get file extension
+ * @param path - file path
+ * @returns file extension including the dot
+ */
+export fn extname(path) => {
+  if (path == "" || path == null) {
+    return "";
+  }
+
+  let base = basename(path);
+  let last_dot = -1;
+  let i = 0;
+  while (i < len(base)) {
+    if (base[i] == ".") {
+      last_dot = i;
+    }
+    i = i + 1;
+  }
+
+  if (last_dot <= 0) {
+    return "";
+  }
+  return substring(base, last_dot);
+};
+
+/**
+ * Check if path is absolute
+ * @param path - path to check
+ * @returns true if path is absolute
+ */
+export fn isAbsolute(path) => {
+  return is_absolute(path);
+};
+
+/**
+ * Get relative path from one directory to another
+ * @param from - source directory
+ * @param to - target directory or file
+ * @returns relative path from 'from' to 'to'
+ */
+export fn relative(from, to) => {
+  let from_parts = split_path(normalize(from));
+  let to_parts = split_path(normalize(to));
+
+  // Find common prefix
+  let common = 0;
+  let i = 0;
+  while (i < len(from_parts) && i < len(to_parts) && from_parts[i] == to_parts[i]) {
+    common = i + 1;
+    i = i + 1;
+  }
+
+  // Build relative path
+  let result = [];
+  let j = common;
+  while (j < len(from_parts)) {
+    result = append(result, "..");
+    j = j + 1;
+  }
+
+  let k = common;
+  while (k < len(to_parts)) {
+    result = append(result, to_parts[k]);
+    k = k + 1;
+  }
+
+  if (len(result) == 0) {
+    return ".";
+  }
+
+  return join(...result);
+};
+
+/**
+ * Parse a path into components
+ * @param path - path to parse
+ * @returns object with { root, dir, base, ext, name }
+ */
+export fn parse(path) => {
+  if (path == "" || path == null) {
+    return { root: "", dir: "", base: "", ext: "", name: "" };
+  }
+
+  let is_abs = is_absolute(path);
+  let root = is_abs ? "/" : "";
+  let dir = dirname(path);
+  let base = basename(path);
+  let ext = extname(path);
+  let name = basename(path, ext);
+
+  return {
+    root: root,
+    dir: dir,
+    base: base,
+    ext: ext,
+    name: name
+  };
+};
+
+/**
+ * Format a path object into a path string
+ * @param obj - object with root, dir, base, ext, name
+ * @returns formatted path string
+ */
+export fn format(obj) => {
+  let root = obj["root"] || "";
+  let dir = obj["dir"] || "";
+  let base = obj["base"] || "";
+  let name = obj["name"] || "";
+  let ext = obj["ext"] || "";
+
+  if (base != "") {
+    return dir != "" ? dir + "/" + base : base;
+  }
+
+  let basename_str = name + ext;
+  if (basename_str == "") {
+    return dir != "" ? dir : root;
+  }
+
+  return dir != "" ? dir + "/" + basename_str : basename_str;
+};
+
+// ────────────────────────────────────────
+// Helper string functions
+// ────────────────────────────────────────
+
+fn ends_with(str, suffix) => {
+  if (len(str) < len(suffix)) {
+    return false;
+  }
+  return substring(str, len(str) - len(suffix)) == suffix;
+};

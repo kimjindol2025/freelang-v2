@@ -1,0 +1,36 @@
+// Secret-Link 사용 예시
+// 빌드: freelang build --config ./prod.flconf app.fl
+
+// 1. .flconf에서 로드 (빌드 타임 주입)
+secret API_KEY = Config.load("API_KEY");
+secret DB_PASSWORD = Config.load("DB_PASSWORD");
+
+// 2. 리터럴 값 (빌드 타임에 암호화됨)
+secret INTERNAL_TOKEN = "internal-service-token-abc";
+
+// 3. 일반 변수 (공개)
+let app_name = "MyApp";
+let port = 3000;
+
+// 4. secret 변수는 print 불가 (자동 마스킹)
+// print(API_KEY);  // 출력: ***SECRET:API_KEY***
+
+// 5. secret 변수를 함수에서 안전하게 사용
+fn connect_db() {
+  // secret 변수는 내부에서만 접근 가능
+  // 외부로 반환하거나 로그에 남길 수 없음
+  let host = "192.168.45.253";
+  let connected = true;
+  return connected;
+}
+
+// 6. 서비스 연결
+fn start_service() {
+  let db_ok = connect_db();
+  if (db_ok) {
+    print("DB connected");
+  }
+  return 0;
+}
+
+start_service();

@@ -1,0 +1,27 @@
+#!/usr/bin/env node
+
+/**
+ * FreeLang v2.1.0 CLI Entry Point
+ * 
+ * Usage:
+ *   freelang                    # Start interactive REPL
+ *   freelang <file.free>        # Run a script
+ *   freelang --version          # Show version
+ *   freelang --help             # Show help
+ *   freelang --dashboard        # Start real-time dashboard
+ */
+
+const path = require('path');
+const fs = require('fs');
+
+// Get the compiled CLI entry point
+const cliPath = path.join(__dirname, '..', 'dist', 'cli', 'index.js');
+
+if (!fs.existsSync(cliPath)) {
+  console.error('❌ Error: CLI executable not found at ' + cliPath);
+  console.error('Please run: npm install');
+  process.exit(1);
+}
+
+// Execute the CLI
+require(cliPath);

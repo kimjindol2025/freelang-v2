@@ -1,0 +1,77 @@
+/**
+ * net.free - 네트워크 표준 라이브러리
+ * HTTP GET/POST, 비동기 지원
+ */
+
+// HTTP Response 타입
+struct HttpResponse {
+  status: int,
+  headers: map,
+  body: string
+}
+
+// 간단한 HTTP GET 요청
+fn httpGet(url: string) -> Promise<HttpResponse> {
+  return Promise(fn(resolve: fn(HttpResponse) -> void, reject: fn(string) -> void) -> void {
+    // 비동기 작업으로 스케줄
+    scheduleDelayed(fn() -> void {
+      let response = vm.net.httpGet(url)
+      resolve(response)
+    }, 0)
+  })
+}
+
+// 간단한 HTTP POST 요청
+fn httpPost(url: string, body: string) -> Promise<HttpResponse> {
+  return Promise(fn(resolve: fn(HttpResponse) -> void, reject: fn(string) -> void) -> void {
+    // 비동기 작업으로 스케줄
+    scheduleDelayed(fn() -> void {
+      let response = vm.net.httpPost(url, body)
+      resolve(response)
+    }, 0)
+  })
+}
+
+// JSON 헤더를 포함한 POST
+fn httpPostJson(url: string, jsonData: any) -> Promise<HttpResponse> {
+  let jsonStr = stringifyJson(jsonData)
+  let headers = { "Content-Type": "application/json" }
+
+  return Promise(fn(resolve: fn(HttpResponse) -> void, reject: fn(string) -> void) -> void {
+    scheduleDelayed(fn() -> void {
+      let response = vm.net.httpPostWithHeaders(url, jsonStr, headers)
+      resolve(response)
+    }, 0)
+  })
+}
+
+// Socket 연결 (기본 지원)
+fn connect(host: string, port: int) -> any {
+  return vm.net.connect(host, port)
+}
+
+// Socket 쓰기
+fn write(socket: any, data: string) -> void {
+  vm.net.write(socket, data)
+}
+
+// Socket 읽기
+fn read(socket: any) -> string {
+  return vm.net.read(socket)
+}
+
+// Socket 종료
+fn close(socket: any) -> void {
+  vm.net.close(socket)
+}
+
+export {
+  HttpResponse,
+  httpGet,
+  httpPost,
+  httpPostJson,
+  connect,
+  write,
+  read,
+  close
+}

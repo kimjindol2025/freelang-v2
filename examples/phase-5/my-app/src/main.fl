@@ -1,0 +1,53 @@
+// My App - Example FreeLang Application
+// Demonstrates the use of the Package Manager with multiple packages
+
+// Import from packages
+import { add, multiply, power } from "math-lib"
+import { map, filter, reduce } from "utils"
+import { toUpperCase, capitalize, format } from "string-helpers"
+
+// Import from local files
+import { helper } from "./helpers.fl"
+
+fn main() {
+  // Example 1: Using math-lib
+  let sum = add(5, 3)
+  let product = multiply(4, 7)
+  let squared = power(3, 2)
+
+  // Example 2: Using utils
+  let numbers = [1, 2, 3, 4, 5]
+  let doubled = map(numbers, fn(x) -> multiply(x, 2))
+  let evens = filter(numbers, fn(x) -> x % 2 == 0)
+  let total = reduce(numbers, fn(acc, x) -> add(acc, x), 0)
+
+  // Example 3: Using string-helpers
+  let greeting = "hello, world!"
+  let upper = toUpperCase(greeting)
+  let capitalized = capitalize("freelang")
+  let formatted = format("Sum: {0}, Product: {1}, Squared: {2}", [sum, product, squared])
+
+  // Example 4: Using local helper
+  let result = helper("Package Manager")
+
+  return formatted
+}
+
+fn demo() {
+  // Demonstrate complex workflow
+  let values = [10, 20, 30, 40, 50]
+
+  // Calculate statistics
+  let max_value = reduce(values, fn(acc, x) -> if x > acc { x } else { acc }, 0)
+  let min_value = reduce(values, fn(acc, x) -> if x < acc { x } else { acc }, 999999)
+  let sum_value = reduce(values, fn(acc, x) -> add(acc, x), 0)
+  let avg_value = sum_value / values.length
+
+  // Format output
+  let stats = format(
+    "Max: {0}, Min: {1}, Sum: {2}, Avg: {3}",
+    [max_value, min_value, sum_value, avg_value]
+  )
+
+  return stats
+}

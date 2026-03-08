@@ -1,0 +1,9 @@
+{
+  "name": "utils",
+  "version": "2.0.0",
+  "description": "Utility functions for common operations",
+  "main": "./src/index.fl",
+  "dependencies": {},
+  "author": "FreeLang Examples",
+  "license": "MIT"
+}

@@ -1,0 +1,14 @@
+struct Token {
+  type: string,
+  lexeme: string,
+  line: i32
+}
+
+fn test(): void {
+  var x: string = "hello"
+  println(x)
+}
+
+fn main(): void {
+  test()
+}

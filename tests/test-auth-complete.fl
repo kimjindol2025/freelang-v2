@@ -1,0 +1,317 @@
+/**
+ * FreeLang 인증 시스템 통합 테스트
+ *
+ * JWT, OAuth2, Session 동작 검증
+ */
+
+import {
+  createJWT,
+  verifyJWT
+} from "./stdlib/auth-jwt"
+
+import {
+  googleOAuth2Config,
+  githubOAuth2Config,
+  getAuthorizationUrl
+} from "./stdlib/auth-oauth2"
+
+import {
+  createSessionStore,
+  createSession,
+  getSession,
+  refreshSession,
+  destroySession,
+  getSessionStats
+} from "./stdlib/auth-session"
+
+// ============================================
+// 테스트 1: JWT 생성 및 검증
+// ============================================
+
+fn test_jwt_creation() {
+  let secret = "test_secret_key"
+  let claims = {
+    userId: 123,
+    email: "user@example.com",
+    role: "user"
+  }
+
+  let token = createJWT(secret, claims, 3600)
+
+  if token != null && str.length(token) > 0 {
+    println("✅ Test 1: JWT creation - PASS")
+  } else {
+    println("❌ Test 1: JWT creation - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 2: JWT 검증
+// ============================================
+
+fn test_jwt_verification() {
+  let secret = "test_secret_key"
+  let claims = {
+    userId: 123,
+    email: "user@example.com",
+    role: "user"
+  }
+
+  let token = createJWT(secret, claims, 3600)
+  let decoded = verifyJWT(secret, token)
+
+  if decoded != null && decoded.userId == 123 {
+    println("✅ Test 2: JWT verification - PASS")
+  } else {
+    println("❌ Test 2: JWT verification - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 3: JWT 만료 검증
+// ============================================
+
+fn test_jwt_expiration() {
+  let secret = "test_secret_key"
+  let claims = {
+    userId: 123,
+    email: "user@example.com",
+    role: "user"
+  }
+
+  // 이미 만료된 토큰 생성
+  let token = createJWT(secret, claims, 0)
+
+  // 약간의 시간 대기 (실제 테스트에서는 필요)
+  // TODO: sleep(1000)
+
+  let decoded = verifyJWT(secret, token)
+
+  // 만료된 토큰은 null 반환
+  if decoded == null {
+    println("✅ Test 3: JWT expiration - PASS")
+  } else {
+    println("❌ Test 3: JWT expiration - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 4: Session 생성
+// ============================================
+
+fn test_session_creation() {
+  let store = createSessionStore(3600)
+
+  let session = createSession(store, "user123", "user@example.com", "Test User", "user", "google")
+
+  if session != null && session.userId == "user123" {
+    println("✅ Test 4: Session creation - PASS")
+  } else {
+    println("❌ Test 4: Session creation - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 5: Session 조회
+// ============================================
+
+fn test_session_retrieval() {
+  let store = createSessionStore(3600)
+
+  let session = createSession(store, "user123", "user@example.com", "Test User", "user", "google")
+  let retrieved = getSession(store, session.id)
+
+  if retrieved != null && retrieved.userId == "user123" {
+    println("✅ Test 5: Session retrieval - PASS")
+  } else {
+    println("❌ Test 5: Session retrieval - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 6: Session 갱신
+// ============================================
+
+fn test_session_refresh() {
+  let store = createSessionStore(3600)
+
+  let session = createSession(store, "user123", "user@example.com", "Test User", "user", "google")
+  let originalExpiry = session.expiresAt
+
+  // 세션 갱신
+  let refreshed = refreshSession(store, session.id)
+
+  if refreshed != null && refreshed.expiresAt > originalExpiry {
+    println("✅ Test 6: Session refresh - PASS")
+  } else {
+    println("❌ Test 6: Session refresh - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 7: Session 삭제
+// ============================================
+
+fn test_session_destruction() {
+  let store = createSessionStore(3600)
+
+  let session = createSession(store, "user123", "user@example.com", "Test User", "user", "google")
+  let success = destroySession(store, session.id)
+
+  // 삭제된 세션 조회
+  let retrieved = getSession(store, session.id)
+
+  if success && retrieved == null {
+    println("✅ Test 7: Session destruction - PASS")
+  } else {
+    println("❌ Test 7: Session destruction - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 8: Session 통계
+// ============================================
+
+fn test_session_stats() {
+  let store = createSessionStore(3600)
+
+  // 여러 세션 생성
+  createSession(store, "user1", "user1@example.com", "User 1", "user", "google")
+  createSession(store, "user2", "user2@example.com", "User 2", "user", "github")
+  createSession(store, "user3", "user3@example.com", "User 3", "admin", "local")
+
+  let stats = getSessionStats(store)
+
+  if stats.activeSessions == 3 {
+    println("✅ Test 8: Session statistics - PASS")
+  } else {
+    println("❌ Test 8: Session statistics - FAIL (got ", stats.activeSessions, ")")
+  }
+}
+
+// ============================================
+// 테스트 9: OAuth2 Google 설정
+// ============================================
+
+fn test_oauth2_google_config() {
+  let config = googleOAuth2Config("client_id", "client_secret", "http://localhost:3000/callback")
+
+  if config.provider == "google" &&
+     config.clientId == "client_id" &&
+     str.includes(config.authorizationUrl, "google.com") {
+    println("✅ Test 9: OAuth2 Google config - PASS")
+  } else {
+    println("❌ Test 9: OAuth2 Google config - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 10: OAuth2 GitHub 설정
+// ============================================
+
+fn test_oauth2_github_config() {
+  let config = githubOAuth2Config("client_id", "client_secret", "http://localhost:3000/callback")
+
+  if config.provider == "github" &&
+     config.clientId == "client_id" &&
+     str.includes(config.authorizationUrl, "github.com") {
+    println("✅ Test 10: OAuth2 GitHub config - PASS")
+  } else {
+    println("❌ Test 10: OAuth2 GitHub config - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 11: 인증 URL 생성
+// ============================================
+
+fn test_authorization_url_generation() {
+  let config = googleOAuth2Config("client_id", "client_secret", "http://localhost:3000/callback")
+  let url = getAuthorizationUrl(config, "state_12345")
+
+  if str.includes(url, "client_id=client_id") &&
+     str.includes(url, "state=state_12345") &&
+     str.includes(url, "response_type=code") {
+    println("✅ Test 11: Authorization URL generation - PASS")
+  } else {
+    println("❌ Test 11: Authorization URL generation - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 12: 다중 세션 관리
+// ============================================
+
+fn test_multiple_sessions() {
+  let store = createSessionStore(3600)
+
+  let sessions = []
+  let i = 0
+  while i < 5 {
+    let session = createSession(store, "user" + str(i), "user" + str(i) + "@example.com", "User " + str(i), "user", "google")
+    sessions[i] = session
+    i = i + 1
+  }
+
+  let stats = getSessionStats(store)
+
+  if stats.activeSessions >= 5 {
+    println("✅ Test 12: Multiple sessions - PASS")
+  } else {
+    println("❌ Test 12: Multiple sessions - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 13: JWT + Session 통합
+// ============================================
+
+fn test_jwt_session_integration() {
+  let secret = "secret"
+  let store = createSessionStore(3600)
+
+  // JWT 생성
+  let token = createJWT(secret, { userId: "user1", email: "user@example.com" }, 3600)
+
+  // Session 생성
+  let session = createSession(store, "user1", "user@example.com", "User 1", "user", "google")
+
+  // 둘 다 정상 생성됨
+  if token != null && session != null {
+    println("✅ Test 13: JWT + Session integration - PASS")
+  } else {
+    println("❌ Test 13: JWT + Session integration - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 실행
+// ============================================
+
+fn main() {
+  println("========================================")
+  println("FreeLang Complete Auth System Tests")
+  println("========================================")
+  println("")
+
+  test_jwt_creation()
+  test_jwt_verification()
+  test_jwt_expiration()
+  test_session_creation()
+  test_session_retrieval()
+  test_session_refresh()
+  test_session_destruction()
+  test_session_stats()
+  test_oauth2_google_config()
+  test_oauth2_github_config()
+  test_authorization_url_generation()
+  test_multiple_sessions()
+  test_jwt_session_integration()
+
+  println("")
+  println("========================================")
+  println("✅ All Auth Tests Completed!")
+  println("========================================")
+}
+
+main()

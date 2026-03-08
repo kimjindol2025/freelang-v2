@@ -1,0 +1,470 @@
+/**
+ * FreeLang URL Module (Phase 16 Week 4)
+ * Pure FreeLang URL parsing and formatting (no FFI required)
+ * Node.js url module compatible
+ */
+
+// ────────────────────────────────────────
+// Internal Helper Functions
+// ────────────────────────────────────────
+
+fn find_char(str, char) => {
+  let i = 0;
+  while (i < len(str)) {
+    if (str[i] == char) {
+      return i;
+    }
+    i = i + 1;
+  }
+  return -1;
+};
+
+fn find_char_from(str, char, start) => {
+  let i = start;
+  while (i < len(str)) {
+    if (str[i] == char) {
+      return i;
+    }
+    i = i + 1;
+  }
+  return -1;
+};
+
+fn substring_from(str, start) => {
+  if (start >= len(str)) {
+    return "";
+  }
+  return substring(str, start, len(str));
+};
+
+fn is_hex_digit(char) => {
+  return (char >= "0" && char <= "9") ||
+         (char >= "a" && char <= "f") ||
+         (char >= "A" && char <= "F");
+};
+
+fn hex_to_int(hex_str) => {
+  let result = 0;
+  let i = 0;
+  while (i < len(hex_str)) {
+    let char = hex_str[i];
+    let digit = 0;
+    if (char >= "0" && char <= "9") {
+      digit = (char[0] - "0"[0]);
+    } else if (char >= "a" && char <= "f") {
+      digit = (char[0] - "a"[0]) + 10;
+    } else if (char >= "A" && char <= "F") {
+      digit = (char[0] - "A"[0]) + 10;
+    }
+    result = result * 16 + digit;
+    i = i + 1;
+  }
+  return result;
+};
+
+fn int_to_hex(num) => {
+  if (num < 10) {
+    return "0" + str(num);
+  }
+  let digits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"];
+  return digits[num];
+};
+
+// ────────────────────────────────────────
+// Public API
+// ────────────────────────────────────────
+
+/**
+ * Parse a URL string into components
+ * @param url - URL string to parse
+ * @returns object with { protocol, hostname, port, pathname, search, hash, href }
+ */
+export fn parse(url) => {
+  if (url == "" || url == null) {
+    return {
+      protocol: null,
+      hostname: null,
+      port: null,
+      pathname: "/",
+      search: "",
+      hash: "",
+      href: "",
+      host: null
+    };
+  }
+
+  let result = {
+    protocol: null,
+    hostname: null,
+    port: null,
+    pathname: "",
+    search: "",
+    hash: "",
+    href: url,
+    host: null,
+    username: null,
+    password: null,
+    auth: null
+  };
+
+  // Extract hash
+  let hash_idx = find_char(url, "#");
+  let hash_part = "";
+  if (hash_idx != -1) {
+    hash_part = substring_from(url, hash_idx + 1);
+    url = substring(url, 0, hash_idx);
+    result["hash"] = hash_part;
+  }
+
+  // Extract search/query
+  let search_idx = find_char(url, "?");
+  let search_part = "";
+  if (search_idx != -1) {
+    search_part = substring_from(url, search_idx + 1);
+    url = substring(url, 0, search_idx);
+    result["search"] = search_part;
+  }
+
+  // Extract protocol
+  let protocol_idx = find_char(url, ":");
+  if (protocol_idx != -1 && protocol_idx < 10) {
+    // Check if it's a real protocol (not windows drive like C:)
+    let proto = substring(url, 0, protocol_idx);
+    if (find_char(proto, "/") == -1) {
+      result["protocol"] = proto + ":";
+      url = substring_from(url, protocol_idx + 1);
+
+      // Skip // in http://
+      if (len(url) >= 2 && url[0] == "/" && url[1] == "/") {
+        url = substring_from(url, 2);
+      }
+    }
+  }
+
+  // Extract authority (hostname:port and auth)
+  let auth_idx = find_char(url, "@");
+  if (auth_idx != -1) {
+    let auth_part = substring(url, 0, auth_idx);
+    url = substring_from(url, auth_idx + 1);
+
+    // Split username:password
+    let colon_idx = find_char(auth_part, ":");
+    if (colon_idx != -1) {
+      result["username"] = substring(auth_part, 0, colon_idx);
+      result["password"] = substring_from(auth_part, colon_idx + 1);
+      result["auth"] = auth_part;
+    } else {
+      result["username"] = auth_part;
+    }
+  }
+
+  // Extract hostname and port
+  let path_idx = find_char(url, "/");
+  let host_part = path_idx == -1 ? url : substring(url, 0, path_idx);
+  let path_part = path_idx == -1 ? "" : substring_from(url, path_idx);
+
+  if (host_part != "") {
+    let port_idx = find_char(host_part, ":");
+    if (port_idx != -1) {
+      result["hostname"] = substring(host_part, 0, port_idx);
+      let port_str = substring_from(host_part, port_idx + 1);
+      result["port"] = port_str;
+      result["host"] = host_part;
+    } else {
+      result["hostname"] = host_part;
+      result["host"] = host_part;
+    }
+  }
+
+  result["pathname"] = path_part == "" ? "/" : path_part;
+
+  return result;
+};
+
+/**
+ * Format a URL object back into a string
+ * @param obj - URL object with components
+ * @returns formatted URL string
+ */
+export fn format(obj) => {
+  let result = "";
+
+  if (obj["protocol"]) {
+    result = result + obj["protocol"];
+    if (obj["protocol"] != null && obj["protocol"] != "") {
+      result = result + "//";
+    }
+  }
+
+  if (obj["auth"]) {
+    result = result + obj["auth"] + "@";
+  }
+
+  if (obj["hostname"]) {
+    result = result + obj["hostname"];
+  }
+
+  if (obj["port"]) {
+    result = result + ":" + obj["port"];
+  }
+
+  if (obj["pathname"]) {
+    result = result + obj["pathname"];
+  }
+
+  if (obj["search"]) {
+    result = result + obj["search"];
+  }
+
+  if (obj["hash"]) {
+    result = result + "#" + obj["hash"];
+  }
+
+  return result;
+};
+
+/**
+ * Resolve a relative URL
+ * @param base - base URL
+ * @param relative - relative URL
+ * @returns resolved absolute URL
+ */
+export fn resolve(base, relative) => {
+  if (relative == "" || relative == null) {
+    return base;
+  }
+
+  // If relative is absolute, return it
+  if (find_char(relative, ":") != -1) {
+    return relative;
+  }
+
+  let base_obj = parse(base);
+  let relative_obj = parse(relative);
+
+  if (relative[0] == "/") {
+    // Absolute path
+    base_obj["pathname"] = relative_obj["pathname"];
+    base_obj["search"] = relative_obj["search"];
+    base_obj["hash"] = relative_obj["hash"];
+  } else {
+    // Relative path - combine with base
+    let base_path = base_obj["pathname"];
+    let last_slash = find_char_from(base_path, "/", 0);
+    while (last_slash != -1 && find_char_from(base_path, "/", last_slash + 1) != -1) {
+      last_slash = find_char_from(base_path, "/", last_slash + 1);
+    }
+
+    if (last_slash == -1) {
+      base_path = "/";
+    } else {
+      base_path = substring(base_path, 0, last_slash + 1);
+    }
+
+    base_obj["pathname"] = base_path + relative_obj["pathname"];
+    base_obj["search"] = relative_obj["search"];
+    base_obj["hash"] = relative_obj["hash"];
+  }
+
+  return format(base_obj);
+};
+
+/**
+ * Parse query string into object
+ * @param query - query string (without ?)
+ * @returns object with key-value pairs
+ */
+export fn parseQuery(query) => {
+  let result = {};
+
+  if (query == "" || query == null) {
+    return result;
+  }
+
+  let pairs = [];
+  let current = "";
+  let i = 0;
+  while (i < len(query)) {
+    if (query[i] == "&") {
+      if (current != "") {
+        pairs = append(pairs, current);
+      }
+      current = "";
+    } else {
+      current = current + query[i];
+    }
+    i = i + 1;
+  }
+  if (current != "") {
+    pairs = append(pairs, current);
+  }
+
+  let j = 0;
+  while (j < len(pairs)) {
+    let pair = pairs[j];
+    let eq_idx = find_char(pair, "=");
+    if (eq_idx != -1) {
+      let key = substring(pair, 0, eq_idx);
+      let value = substring_from(pair, eq_idx + 1);
+      result[key] = value;
+    } else {
+      result[pair] = "";
+    }
+    j = j + 1;
+  }
+
+  return result;
+};
+
+/**
+ * Format object into query string
+ * @param obj - object with key-value pairs
+ * @returns query string (without ?)
+ */
+export fn formatQuery(obj) => {
+  let pairs = [];
+  let keys = keys(obj);
+  let i = 0;
+  while (i < len(keys)) {
+    let key = keys[i];
+    let value = obj[key];
+    if (value != null) {
+      pairs = append(pairs, key + "=" + str(value));
+    } else {
+      pairs = append(pairs, key);
+    }
+    i = i + 1;
+  }
+
+  let result = "";
+  let j = 0;
+  while (j < len(pairs)) {
+    if (j > 0) {
+      result = result + "&";
+    }
+    result = result + pairs[j];
+    j = j + 1;
+  }
+
+  return result;
+};
+
+/**
+ * Encode string for use in URLs (encodeURIComponent)
+ * @param str - string to encode
+ * @returns encoded string
+ */
+export fn encode(str) => {
+  if (str == "" || str == null) {
+    return "";
+  }
+
+  let result = "";
+  let i = 0;
+  while (i < len(str)) {
+    let char = str[i];
+    let code = char[0];
+
+    // Unreserved characters: A-Z a-z 0-9 - _ . ~
+    if ((code >= 65 && code <= 90) ||    // A-Z
+        (code >= 97 && code <= 122) ||   // a-z
+        (code >= 48 && code <= 57) ||    // 0-9
+        char == "-" || char == "_" || char == "." || char == "~") {
+      result = result + char;
+    } else {
+      // Percent-encode
+      result = result + "%" + int_to_hex(code);
+    }
+    i = i + 1;
+  }
+
+  return result;
+};
+
+/**
+ * Decode percent-encoded string
+ * @param str - encoded string
+ * @returns decoded string
+ */
+export fn decode(str) => {
+  if (str == "" || str == null) {
+    return "";
+  }
+
+  let result = "";
+  let i = 0;
+  while (i < len(str)) {
+    if (str[i] == "%" && i + 2 < len(str)) {
+      let hex = substring(str, i + 1, i + 3);
+      if (is_hex_digit(hex[0]) && is_hex_digit(hex[1])) {
+        let code = hex_to_int(hex);
+        result = result + chr(code);
+        i = i + 3;
+      } else {
+        result = result + str[i];
+        i = i + 1;
+      }
+    } else {
+      result = result + str[i];
+      i = i + 1;
+    }
+  }
+
+  return result;
+};
+
+/**
+ * WHATWG URL class (basic implementation)
+ */
+export class URL {
+  let href;
+  let protocol;
+  let hostname;
+  let port;
+  let pathname;
+  let search;
+  let hash;
+  let origin;
+  let host;
+  let username;
+  let password;
+
+  fn constructor(url_str, base) => {
+    let resolved_url = url_str;
+    if (base != null && base != "") {
+      resolved_url = resolve(base, url_str);
+    }
+
+    let parsed = parse(resolved_url);
+    this.href = resolved_url;
+    this.protocol = parsed["protocol"];
+    this.hostname = parsed["hostname"];
+    this.port = parsed["port"];
+    this.pathname = parsed["pathname"];
+    this.search = parsed["search"];
+    this.hash = parsed["hash"];
+    this.host = parsed["host"];
+    this.username = parsed["username"];
+    this.password = parsed["password"];
+
+    // Build origin
+    this.origin = "";
+    if (this.protocol) {
+      this.origin = this.protocol + "//";
+      if (this.hostname) {
+        this.origin = this.origin + this.hostname;
+        if (this.port) {
+          this.origin = this.origin + ":" + this.port;
+        }
+      }
+    }
+  };
+
+  fn toString() => {
+    return this.href;
+  };
+
+  fn toJSON() => {
+    return this.href;
+  };
+};

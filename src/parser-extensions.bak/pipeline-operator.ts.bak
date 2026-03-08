@@ -1,0 +1,63 @@
+
+// FreeLang Parser Extension - 파이프라인 연산자 (2026-03-06)
+
+/**
+ * 파이프라인 연산자 |>
+ *
+ * 문법:
+ * value |> fn1 |> fn2 |> fn3
+ *
+ * 변환:
+ * fn3(fn2(fn1(value)))
+ */
+
+export interface PipelineExpression extends Expression {
+  type: 'PipelineExpression';
+  value: Expression;
+  operations: FunctionCall[]; // 체이닝된 함수들
+}
+
+export function parsePipelineExpression(parser: Parser, left: Expression): PipelineExpression {
+  const operations = [];
+
+  while (parser.peek().type === 'PIPE_OP') {
+    parser.consume('PIPE_OP'); // |>
+
+    // 다음 함수 호출 또는 식별자 파싱
+    const fn = parsePrimary(parser);
+    operations.push(fn);
+  }
+
+  return {
+    type: 'PipelineExpression',
+    value: left,
+    operations,
+    line: parser.currentToken.line
+  };
+}
+
+// 인터프리터 실행
+export function executePipelineExpression(pipeline: PipelineExpression, ctx: ExecutionContext) {
+  let result = executeExpression(pipeline.value, ctx);
+
+  for (const op of pipeline.operations) {
+    if (op.type === 'FunctionCall') {
+      // 파이프라인으로 전달된 값을 첫 번째 인자로 추가
+      op.arguments.unshift(result);
+      result = executeFunctionCall(op, ctx);
+    } else if (op.type === 'Identifier') {
+      // 단일 함수명인 경우, 호출
+      const fn = ctx.getVariable(op.name);
+      result = callFunction(fn, [result], ctx);
+    }
+  }
+
+  return result;
+}
+
+// 렉서 토큰 추가
+export const PIPE_TOKEN = {
+  type: 'PIPE_OP',
+  pattern: /\|>/,
+  precedence: 2
+};

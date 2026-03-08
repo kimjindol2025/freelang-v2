@@ -1,0 +1,129 @@
+// FreeLang Self-Hosting: Lexer Phase (Fixed)
+// 토큰화 기능
+
+struct Token {
+  type: string,
+  lexeme: string,
+  line: i32
+}
+
+fn isAlpha(ch: string) -> bool {
+  return (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch == "_"
+}
+
+fn isDigit(ch: string) -> bool {
+  return ch >= "0" && ch <= "9"
+}
+
+fn isAlphaNumeric(ch: string) -> bool {
+  return isAlpha(ch) || isDigit(ch)
+}
+
+fn tokenize(source: string) -> any {
+  var tokens: any = []
+  var pos: i32 = 0
+  var line: i32 = 1
+  var len: i32 = length(source)
+
+  while pos < len {
+    var ch: string = char_at(source, pos)
+
+    // 공백 건너뛰기
+    if ch == " " || ch == "\t" || ch == "\r" {
+      pos = pos + 1
+      continue
+    }
+
+    // 개행 처리
+    if ch == "\n" {
+      pos = pos + 1
+      line = line + 1
+      continue
+    }
+
+    // 주석 처리
+    if ch == "/" && pos + 1 < len && char_at(source, pos + 1) == "/" {
+      pos = pos + 2
+      while pos < len && char_at(source, pos) != "\n" {
+        pos = pos + 1
+      }
+      continue
+    }
+
+    // 숫자 토큰
+    if isDigit(ch) {
+      var start: i32 = pos
+      while pos < len && isDigit(char_at(source, pos)) {
+        pos = pos + 1
+      }
+      var lexeme: string = slice(source, start, pos)
+      var token: Token = Token { type: "INT", lexeme: lexeme, line: line }
+      push(tokens, token)
+      continue
+    }
+
+    // 식별자 및 키워드
+    if isAlpha(ch) {
+      var start: i32 = pos
+      while pos < len && isAlphaNumeric(char_at(source, pos)) {
+        pos = pos + 1
+      }
+      var lexeme: string = slice(source, start, pos)
+      var tok_type: string = "IDENT"
+
+      // 키워드 확인
+      if lexeme == "fn" {
+        tok_type = "FN"
+      } else if lexeme == "var" {
+        tok_type = "VAR"
+      } else if lexeme == "while" {
+        tok_type = "WHILE"
+      }
+
+      var token: Token = Token { type: tok_type, lexeme: lexeme, line: line }
+      push(tokens, token)
+      continue
+    }
+
+    // 기호들
+    if ch == "(" {
+      var token: Token = Token { type: "LPAREN", lexeme: "(", line: line }
+      push(tokens, token)
+      pos = pos + 1
+    } else if ch == ")" {
+      var token: Token = Token { type: "RPAREN", lexeme: ")", line: line }
+      push(tokens, token)
+      pos = pos + 1
+    } else if ch == "{" {
+      var token: Token = Token { type: "LBRACE", lexeme: "{", line: line }
+      push(tokens, token)
+      pos = pos + 1
+    } else if ch == "}" {
+      var token: Token = Token { type: "RBRACE", lexeme: "}", line: line }
+      push(tokens, token)
+      pos = pos + 1
+    } else if ch == "=" {
+      var token: Token = Token { type: "EQ", lexeme: "=", line: line }
+      push(tokens, token)
+      pos = pos + 1
+    } else if ch == "+" {
+      var token: Token = Token { type: "PLUS", lexeme: "+", line: line }
+      push(tokens, token)
+      pos = pos + 1
+    } else {
+      pos = pos + 1
+    }
+  }
+
+  var eof: Token = Token { type: "EOF", lexeme: "", line: line }
+  push(tokens, eof)
+  return tokens
+}
+
+fn main(): void {
+  var code: string = "fn main() { var x = 42 }"
+  var result: any = tokenize(code)
+
+  println("=== Tokenizer Output ===")
+  println("Token count: " + str(length(result)))
+}

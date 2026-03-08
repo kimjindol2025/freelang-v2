@@ -1,0 +1,197 @@
+// FreeLang Observability - Database Storage
+// 실행 추적 데이터를 데이터베이스에 저장
+
+module observability.storage {
+    
+    import observability { ExecutionTrace, PerformanceMetric }
+    
+    // 트레이스 저장소 인터페이스
+    interface TraceStorage {
+        fn saveTrace(trace: ExecutionTrace) -> string,
+        fn getTrace(traceId: string) -> ExecutionTrace?,
+        fn getAllTraces() -> ExecutionTrace[],
+        fn deleteTrace(traceId: string) -> bool,
+        fn queryTraces(query: TraceQuery) -> ExecutionTrace[]
+    }
+
+    // 트레이스 쿼리
+    type TraceQuery {
+        functionName?: string,
+        startTime?: number,
+        endTime?: number,
+        minExecutionTime?: number,
+        maxExecutionTime?: number,
+        status?: "success" | "error" | "pending"
+    }
+
+    // JSON 파일 기반 저장소
+    class JSONTraceStorage implements TraceStorage {
+        filePath: string,
+        traces: Map<string, ExecutionTrace> = {},
+        
+        fn init(path: string) -> void {
+            filePath = path
+            loadFromFile()
+        },
+        
+        fn saveTrace(trace: ExecutionTrace) -> string {
+            traces[trace.traceId] = trace
+            saveToFile()
+            return trace.traceId
+        },
+        
+        fn getTrace(traceId: string) -> ExecutionTrace? {
+            return traces.get(traceId)
+        },
+        
+        fn getAllTraces() -> ExecutionTrace[] {
+            return traces.values().toArray()
+        },
+        
+        fn deleteTrace(traceId: string) -> bool {
+            if (traceId in traces) {
+                delete traces[traceId]
+                saveToFile()
+                return true
+            }
+            return false
+        },
+        
+        fn queryTraces(query: TraceQuery) -> ExecutionTrace[] {
+            let results: ExecutionTrace[] = []
+            
+            for trace in getAllTraces() {
+                if (query.functionName && trace.functionName != query.functionName) {
+                    continue
+                }
+                
+                if (query.startTime && trace.timestamp < query.startTime) {
+                    continue
+                }
+                
+                if (query.endTime && trace.timestamp > query.endTime) {
+                    continue
+                }
+                
+                if (query.minExecutionTime && trace.executionTimeMs < query.minExecutionTime) {
+                    continue
+                }
+                
+                if (query.maxExecutionTime && trace.executionTimeMs > query.maxExecutionTime) {
+                    continue
+                }
+                
+                if (query.status && trace.status != query.status) {
+                    continue
+                }
+                
+                results.append(trace)
+            }
+            
+            return results
+        },
+        
+        fn loadFromFile() -> void {
+            try {
+                let content = readFile(filePath)
+                let data = JSON.parse(content)
+                traces = data as Map<string, ExecutionTrace>
+            } catch {
+                traces = {}
+            }
+        },
+        
+        fn saveToFile() -> void {
+            let json = JSON.stringify(traces, null, 2)
+            writeFile(filePath, json)
+        }
+    }
+
+    // SQLite 기반 저장소
+    class SQLiteTraceStorage implements TraceStorage {
+        dbPath: string,
+        db: any,  // SQLite connection
+        
+        fn init(path: string) -> void {
+            dbPath = path
+            initializeDatabase()
+        },
+        
+        fn initializeDatabase() -> void {
+            // SQLite 테이블 생성
+            let sql = `
+                CREATE TABLE IF NOT EXISTS execution_traces (
+                    traceId TEXT PRIMARY KEY,
+                    timestamp INTEGER,
+                    functionName TEXT,
+                    arguments TEXT,
+                    result TEXT,
+                    executionTimeMs REAL,
+                    memoryUsedMb REAL,
+                    stackTrace TEXT,
+                    status TEXT
+                )
+            `
+            // db.exec(sql)
+        },
+        
+        fn saveTrace(trace: ExecutionTrace) -> string {
+            let sql = `
+                INSERT INTO execution_traces 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `
+            // db.run(sql, trace)
+            return trace.traceId
+        },
+        
+        fn getTrace(traceId: string) -> ExecutionTrace? {
+            let sql = `SELECT * FROM execution_traces WHERE traceId = ?`
+            // return db.get(sql, traceId)
+            return null
+        },
+        
+        fn getAllTraces() -> ExecutionTrace[] {
+            let sql = `SELECT * FROM execution_traces ORDER BY timestamp DESC`
+            // return db.all(sql)
+            return []
+        },
+        
+        fn deleteTrace(traceId: string) -> bool {
+            let sql = `DELETE FROM execution_traces WHERE traceId = ?`
+            // db.run(sql, traceId)
+            return true
+        },
+        
+        fn queryTraces(query: TraceQuery) -> ExecutionTrace[] {
+            let sql = "SELECT * FROM execution_traces WHERE 1=1"
+            
+            if (query.functionName) {
+                sql += " AND functionName = '" + query.functionName + "'"
+            }
+            
+            if (query.status) {
+                sql += " AND status = '" + query.status + "'"
+            }
+            
+            sql += " ORDER BY timestamp DESC"
+            
+            // return db.all(sql)
+            return []
+        }
+    }
+
+    // 저장소 팩토리
+    fn createTraceStorage(type: string, path: string) -> TraceStorage {
+        if (type == "json") {
+            let storage = new JSONTraceStorage()
+            storage.init(path)
+            return storage
+        } else if (type == "sqlite") {
+            let storage = new SQLiteTraceStorage()
+            storage.init(path)
+            return storage
+        } else {
+            throw Error("Unknown storage type: " + type)
+        }
+    }
+}

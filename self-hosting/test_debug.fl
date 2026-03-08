@@ -1,0 +1,7 @@
+let ok_val = Ok(5);
+println("ok_val created");
+println(ok_val);
+println("calling isOk...");
+let result = isOk(ok_val);
+println("result:");
+println(result);

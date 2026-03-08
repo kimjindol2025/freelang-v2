@@ -1,0 +1,8 @@
+fn main() {
+  let arr = [1, 2, 3]
+  println("Array: " + str(arr))
+  println("Length: " + str(arr_len(arr)))
+  println("✅ Test passed!")
+}
+
+main()

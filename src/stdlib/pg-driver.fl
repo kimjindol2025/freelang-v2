@@ -1,0 +1,597 @@
+/**
+ * FreeLang PostgreSQL Driver
+ *
+ * PostgreSQL 데이터베이스 연결 및 쿼리 실행
+ * - pg_connect: PostgreSQL 서버에 연결
+ * - pg_query: SELECT 쿼리 실행
+ * - pg_exec: INSERT/UPDATE/DELETE 실행
+ * - pg_one: 첫 행 반환
+ * - pg_begin/commit/rollback: 트랜잭션
+ * - pg_table_exists: 테이블 존재 확인
+ * - pg_create_table: 테이블 생성
+ * - pg_drop_table: 테이블 삭제
+ * - pg_close: 연결 종료
+ *
+ * Phase F 구현 (PostgreSQL 드라이버)
+ */
+
+// ============================================
+// PostgreSQL 연결 구조체
+// ============================================
+
+struct PostgreSQLConnection {
+  host: string,
+  port: int,
+  user: string,
+  password: string,
+  database: string,
+  connId: int,          // Native connection ID
+  isConnected: bool,
+  lastError: string,
+  charset: string,
+  schema: string
+}
+
+// ============================================
+// PostgreSQL 연결 풀 관리
+// ============================================
+
+struct PostgreSQLConnectionPool {
+  connections: array,   // 사용 가능한 연결 목록
+  activeCount: int,
+  maxConnections: int,
+  host: string,
+  port: int,
+  user: string,
+  password: string,
+  database: string,
+  schema: string
+}
+
+// ============================================
+// PostgreSQL 쿼리 결과
+// ============================================
+
+struct PostgreSQLResult {
+  rows: array,
+  rowCount: int,
+  affectedRows: int,
+  error: string,
+  success: bool
+}
+
+// ============================================
+// PostgreSQL 연결 생성
+// ============================================
+
+fn pg_connect(host: string, port: int, user: string, password: string, database: string) -> PostgreSQLConnection {
+  // Native pg.connect 호출
+  let connId = pg.connect(host, port, user, password, database)
+
+  if connId < 0 {
+    return {
+      host: host,
+      port: port,
+      user: user,
+      password: password,
+      database: database,
+      connId: -1,
+      isConnected: false,
+      lastError: "Failed to connect to PostgreSQL server",
+      charset: "UTF8",
+      schema: "public"
+    }
+  }
+
+  return {
+    host: host,
+    port: port,
+    user: user,
+    password: password,
+    database: database,
+    connId: connId,
+    isConnected: true,
+    lastError: "",
+    charset: "UTF8",
+    schema: "public"
+  }
+}
+
+// ============================================
+// PostgreSQL URL로 연결
+// ============================================
+
+fn pg_connect_url(url: string) -> PostgreSQLConnection {
+  // PostgreSQL connection URL 파싱
+  // postgresql://user:password@host:port/database
+  let connId = pg.connect_url(url)
+
+  if connId < 0 {
+    return {
+      host: "",
+      port: 5432,
+      user: "",
+      password: "",
+      database: "",
+      connId: -1,
+      isConnected: false,
+      lastError: "Failed to connect to PostgreSQL server",
+      charset: "UTF8",
+      schema: "public"
+    }
+  }
+
+  return {
+    host: "",
+    port: 5432,
+    user: "",
+    password: "",
+    database: "",
+    connId: connId,
+    isConnected: true,
+    lastError: "",
+    charset: "UTF8",
+    schema: "public"
+  }
+}
+
+// ============================================
+// PostgreSQL 쿼리 실행 (SELECT)
+// ============================================
+
+fn pg_query(conn: PostgreSQLConnection, sql: string, params: array) -> PostgreSQLResult {
+  if !conn.isConnected {
+    return {
+      rows: [],
+      rowCount: 0,
+      affectedRows: 0,
+      error: "Database not connected",
+      success: false
+    }
+  }
+
+  // Native pg.query 호출
+  let result = pg.query(conn.connId, sql, params)
+
+  if result == null {
+    return {
+      rows: [],
+      rowCount: 0,
+      affectedRows: 0,
+      error: "Query execution failed",
+      success: false
+    }
+  }
+
+  return {
+    rows: result.rows != null ? result.rows : [],
+    rowCount: result.rowCount != null ? result.rowCount : 0,
+    affectedRows: 0,
+    error: "",
+    success: true
+  }
+}
+
+// ============================================
+// PostgreSQL 한 행 조회
+// ============================================
+
+fn pg_one(conn: PostgreSQLConnection, sql: string, params: array) -> map {
+  let result = pg_query(conn, sql, params)
+
+  if !result.success || arr.length(result.rows) == 0 {
+    return null
+  }
+
+  return result.rows[0]
+}
+
+// ============================================
+// PostgreSQL 실행 (INSERT/UPDATE/DELETE)
+// ============================================
+
+fn pg_exec(conn: PostgreSQLConnection, sql: string, params: array) -> PostgreSQLResult {
+  if !conn.isConnected {
+    return {
+      rows: [],
+      rowCount: 0,
+      affectedRows: 0,
+      error: "Database not connected",
+      success: false
+    }
+  }
+
+  // Native pg.exec 호출
+  let result = pg.exec(conn.connId, sql, params)
+
+  if result == null {
+    return {
+      rows: [],
+      rowCount: 0,
+      affectedRows: 0,
+      error: "Execution failed",
+      success: false
+    }
+  }
+
+  return {
+    rows: [],
+    rowCount: 0,
+    affectedRows: result.affectedRows != null ? result.affectedRows : 0,
+    error: "",
+    success: true
+  }
+}
+
+// ============================================
+// 모든 행 조회
+// ============================================
+
+fn pg_all(conn: PostgreSQLConnection, sql: string, params: array) -> array {
+  let result = pg_query(conn, sql, params)
+  return result.rows
+}
+
+// ============================================
+// 행 개수 조회
+// ============================================
+
+fn pg_count(conn: PostgreSQLConnection, table: string, where: string, params: array) -> int {
+  let sql = "SELECT COUNT(*) as cnt FROM " + table
+
+  if where != "" {
+    sql = sql + " WHERE " + where
+  }
+
+  let result = pg_one(conn, sql, params)
+
+  if result == null {
+    return 0
+  }
+
+  return result.cnt != null ? result.cnt : 0
+}
+
+// ============================================
+// 스키마 변경
+// ============================================
+
+fn pg_set_schema(conn: PostgreSQLConnection, schema: string) -> bool {
+  conn.schema = schema
+  let sql = "SET search_path TO " + schema
+  let result = pg_exec(conn, sql, [])
+  return result.success
+}
+
+// ============================================
+// 트랜잭션 시작
+// ============================================
+
+fn pg_begin(conn: PostgreSQLConnection) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  let result = pg_exec(conn, "BEGIN", [])
+  return result.success
+}
+
+// ============================================
+// 커밋
+// ============================================
+
+fn pg_commit(conn: PostgreSQLConnection) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  let result = pg_exec(conn, "COMMIT", [])
+  return result.success
+}
+
+// ============================================
+// 롤백
+// ============================================
+
+fn pg_rollback(conn: PostgreSQLConnection) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  let result = pg_exec(conn, "ROLLBACK", [])
+  return result.success
+}
+
+// ============================================
+// 세이브포인트 생성
+// ============================================
+
+fn pg_savepoint(conn: PostgreSQLConnection, name: string) -> bool {
+  let sql = "SAVEPOINT " + name
+  let result = pg_exec(conn, sql, [])
+  return result.success
+}
+
+// ============================================
+// 세이브포인트로 롤백
+// ============================================
+
+fn pg_rollback_to_savepoint(conn: PostgreSQLConnection, name: string) -> bool {
+  let sql = "ROLLBACK TO SAVEPOINT " + name
+  let result = pg_exec(conn, sql, [])
+  return result.success
+}
+
+// ============================================
+// 테이블 존재 확인
+// ============================================
+
+fn pg_table_exists(conn: PostgreSQLConnection, table: string) -> bool {
+  let sql = "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = ?)"
+  let result = pg_one(conn, sql, [table])
+  return result != null
+}
+
+// ============================================
+// 테이블 목록 조회
+// ============================================
+
+fn pg_list_tables(conn: PostgreSQLConnection) -> array {
+  let sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = ?"
+  return pg_all(conn, sql, [conn.schema])
+}
+
+// ============================================
+// 테이블 컬럼 정보 조회
+// ============================================
+
+fn pg_table_columns(conn: PostgreSQLConnection, table: string) -> array {
+  let sql = "SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = ?"
+  return pg_all(conn, sql, [table])
+}
+
+// ============================================
+// 테이블 생성
+// ============================================
+
+fn pg_create_table(conn: PostgreSQLConnection, table: string, schema: string) -> bool {
+  let sql = "CREATE TABLE IF NOT EXISTS " + table + " (" + schema + ")"
+  let result = pg_exec(conn, sql, [])
+  return result.success
+}
+
+// ============================================
+// 테이블 삭제
+// ============================================
+
+fn pg_drop_table(conn: PostgreSQLConnection, table: string) -> bool {
+  let sql = "DROP TABLE IF EXISTS " + table
+  let result = pg_exec(conn, sql, [])
+  return result.success
+}
+
+// ============================================
+// 테이블 잘라내기 (모든 행 삭제)
+// ============================================
+
+fn pg_truncate_table(conn: PostgreSQLConnection, table: string) -> bool {
+  let sql = "TRUNCATE TABLE " + table
+  let result = pg_exec(conn, sql, [])
+  return result.success
+}
+
+// ============================================
+// 인덱스 생성
+// ============================================
+
+fn pg_create_index(conn: PostgreSQLConnection, indexName: string, table: string, column: string) -> bool {
+  let sql = "CREATE INDEX IF NOT EXISTS " + indexName + " ON " + table + " (" + column + ")"
+  let result = pg_exec(conn, sql, [])
+  return result.success
+}
+
+// ============================================
+// 인덱스 삭제
+// ============================================
+
+fn pg_drop_index(conn: PostgreSQLConnection, indexName: string) -> bool {
+  let sql = "DROP INDEX IF EXISTS " + indexName
+  let result = pg_exec(conn, sql, [])
+  return result.success
+}
+
+// ============================================
+// 데이터베이스 정보 조회
+// ============================================
+
+fn pg_info(conn: PostgreSQLConnection) -> map {
+  // 테이블 목록
+  let tables_sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = ?"
+  let tables = pg_all(conn, tables_sql, [conn.schema])
+
+  // 데이터베이스 크기
+  let size_sql = "SELECT pg_database_size(?) as size"
+  let size_result = pg_one(conn, size_sql, [conn.database])
+
+  return {
+    host: conn.host,
+    port: conn.port,
+    database: conn.database,
+    schema: conn.schema,
+    isConnected: conn.isConnected,
+    charset: conn.charset,
+    tables: tables,
+    tableCount: arr.length(tables),
+    size: size_result != null ? size_result.size : 0
+  }
+}
+
+// ============================================
+// 마이그레이션 테이블 초기화
+// ============================================
+
+fn pg_init_migrations(conn: PostgreSQLConnection) -> bool {
+  let sql = "CREATE TABLE IF NOT EXISTS migrations (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    batch INT NOT NULL,
+    executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )"
+
+  let result = pg_exec(conn, sql, [])
+  return result.success
+}
+
+// ============================================
+// 마이그레이션 상태 조회
+// ============================================
+
+fn pg_get_migrations(conn: PostgreSQLConnection) -> array {
+  let sql = "SELECT name, batch, executed_at FROM migrations ORDER BY batch ASC"
+  return pg_all(conn, sql, [])
+}
+
+// ============================================
+// 마이그레이션 기록
+// ============================================
+
+fn pg_record_migration(conn: PostgreSQLConnection, name: string, batch: int) -> bool {
+  let sql = "INSERT INTO migrations (name, batch) VALUES (?, ?)"
+  let result = pg_exec(conn, sql, [name, batch])
+  return result.success
+}
+
+// ============================================
+// 마이그레이션 롤백
+// ============================================
+
+fn pg_rollback_migration(conn: PostgreSQLConnection, name: string) -> bool {
+  let sql = "DELETE FROM migrations WHERE name = ?"
+  let result = pg_exec(conn, sql, [name])
+  return result.success
+}
+
+// ============================================
+// 연결 풀 생성
+// ============================================
+
+fn pg_pool_create(host: string, port: int, user: string, password: string, database: string, maxConnections: int) -> PostgreSQLConnectionPool {
+  return {
+    connections: [],
+    activeCount: 0,
+    maxConnections: maxConnections,
+    host: host,
+    port: port,
+    user: user,
+    password: password,
+    database: database,
+    schema: "public"
+  }
+}
+
+// ============================================
+// 연결 풀에서 연결 획득
+// ============================================
+
+fn pg_pool_get(pool: PostgreSQLConnectionPool) -> PostgreSQLConnection {
+  if arr.length(pool.connections) > 0 {
+    let conn = pool.connections[0]
+    // 첫 번째 연결 제거
+    pool.connections = arr.slice(pool.connections, 1, arr.length(pool.connections))
+    pool.activeCount = pool.activeCount + 1
+    return conn
+  }
+
+  // 새로운 연결 생성
+  let conn = pg_connect(pool.host, pool.port, pool.user, pool.password, pool.database)
+  pool.activeCount = pool.activeCount + 1
+
+  return conn
+}
+
+// ============================================
+// 연결을 풀에 반환
+// ============================================
+
+fn pg_pool_release(pool: PostgreSQLConnectionPool, conn: PostgreSQLConnection) -> void {
+  if conn.isConnected {
+    pool.connections = arr.push(pool.connections, conn)
+    pool.activeCount = pool.activeCount - 1
+  }
+}
+
+// ============================================
+// 연결 종료
+// ============================================
+
+fn pg_close(conn: PostgreSQLConnection) -> void {
+  if !conn.isConnected {
+    return
+  }
+
+  // Native pg.close 호출
+  pg.close(conn.connId)
+  conn.isConnected = false
+}
+
+// ============================================
+// 연결 상태 확인
+// ============================================
+
+fn pg_is_connected(conn: PostgreSQLConnection) -> bool {
+  if !conn.isConnected {
+    return false
+  }
+
+  // 간단한 핑 쿼리
+  let result = pg_query(conn, "SELECT 1", [])
+  return result.success
+}
+
+// ============================================
+// Export
+// ============================================
+
+export {
+  PostgreSQLConnection,
+  PostgreSQLConnectionPool,
+  PostgreSQLResult,
+
+  pg_connect,
+  pg_connect_url,
+  pg_query,
+  pg_one,
+  pg_all,
+  pg_exec,
+  pg_count,
+
+  pg_set_schema,
+
+  pg_begin,
+  pg_commit,
+  pg_rollback,
+  pg_savepoint,
+  pg_rollback_to_savepoint,
+
+  pg_table_exists,
+  pg_list_tables,
+  pg_table_columns,
+  pg_create_table,
+  pg_drop_table,
+  pg_truncate_table,
+  pg_create_index,
+  pg_drop_index,
+  pg_info,
+
+  pg_init_migrations,
+  pg_get_migrations,
+  pg_record_migration,
+  pg_rollback_migration,
+
+  pg_pool_create,
+  pg_pool_get,
+  pg_pool_release,
+
+  pg_close,
+  pg_is_connected
+}

@@ -1,0 +1,7 @@
+var items = [1, 2, 3, 4, 5]
+for x in items {
+  if x == 3 { continue }
+  if x == 4 { break }
+  println(x)
+}
+println("done")

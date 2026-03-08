@@ -1,0 +1,158 @@
+// ═══════════════════════════════════════════════════════════════════════
+// WebSocket Library Test Suite
+// ═══════════════════════════════════════════════════════════════════════
+
+fn testWebSocketAPI() {
+  println("═══════════════════════════════════════════════════");
+  println("  WebSocket API Test Suite");
+  println("═══════════════════════════════════════════════════");
+  println("");
+
+  // Test 1: Server Creation
+  println("Test 1: WebSocket Server Creation");
+  let port = 8765;
+  let server = ws.createServer(port);
+
+  if server {
+    println("  ✓ Server created");
+  } else {
+    println("  ✗ Server creation failed");
+    return;
+  }
+
+  // Test 2: Event Registration
+  println("");
+  println("Test 2: Event Handler Registration");
+
+  let connectionCalled = false;
+  ws.onConnection(server, fn(client) {
+    connectionCalled = true;
+    println("  → Connection handler registered");
+  });
+
+  let messageCalled = false;
+  ws.onMessage(server, fn(client, msg) {
+    messageCalled = true;
+    println("  → Message handler registered");
+  });
+
+  let disconnectionCalled = false;
+  ws.onDisconnection(server, fn(client) {
+    disconnectionCalled = true;
+    println("  → Disconnection handler registered");
+  });
+
+  println("  ✓ Event handlers registered");
+
+  // Test 3: Client Creation
+  println("");
+  println("Test 3: WebSocket Client Creation");
+
+  let client = ws.connect("ws://localhost:8765");
+
+  if client {
+    println("  ✓ Client created");
+  } else {
+    println("  ✗ Client creation failed");
+    return;
+  }
+
+  // Test 4: Connection State
+  println("");
+  println("Test 4: Connection State Management");
+
+  let state = ws.getState(client);
+  println("  Client state: " + state);
+
+  if state == "CONNECTING" || state == "OPEN" {
+    println("  ✓ State valid");
+  } else {
+    println("  ✗ Invalid state");
+  }
+
+  // Test 5: IsOpen/IsClosed checks
+  println("");
+  println("Test 5: Connection Status Checks");
+
+  if ws.isOpen(client) {
+    println("  ✓ Client is open (expected in test)");
+  } else {
+    println("  ℹ Client not open (may be expected)");
+  }
+
+  if !ws.isClosed(client) {
+    println("  ✓ Client is not closed");
+  } else {
+    println("  ✗ Client should not be closed");
+  }
+
+  // Test 6: Message Composition
+  println("");
+  println("Test 6: Message Composition");
+
+  let msg1 = json.stringify({
+    type: "join",
+    username: "TestBot"
+  });
+
+  if strlen(msg1) > 0 {
+    println("  ✓ Message created: " + msg1);
+  } else {
+    println("  ✗ Message creation failed");
+  }
+
+  // Test 7: Message Broadcasting
+  println("");
+  println("Test 7: Server Broadcasting");
+
+  let broadcastMsg = json.stringify({
+    type: "notification",
+    text: "Server test broadcast"
+  });
+
+  let result = ws.broadcast(server, broadcastMsg);
+
+  if result {
+    println("  ✓ Broadcast attempted");
+  } else {
+    println("  ✗ Broadcast failed");
+  }
+
+  // Test 8: Get Clients
+  println("");
+  println("Test 8: Get Connected Clients");
+
+  let clients = ws.getClients(server);
+  let clientCount = arr.length(clients);
+
+  println("  Connected clients: " + str(clientCount));
+  println("  ✓ Client list retrieved");
+
+  // Test 9: Get Client Count
+  println("");
+  println("Test 9: Get Client Count");
+
+  let count = ws.getClientCount(server);
+  println("  Total clients: " + str(count));
+
+  if count == clientCount {
+    println("  ✓ Count matches");
+  } else {
+    println("  ✗ Count mismatch");
+  }
+
+  // Test 10: Server Close
+  println("");
+  println("Test 10: Server Closure");
+
+  ws.close(server);
+  println("  ✓ Server closed");
+
+  // Final Summary
+  println("");
+  println("═══════════════════════════════════════════════════");
+  println("  Test Suite Completed");
+  println("═══════════════════════════════════════════════════");
+}
+
+testWebSocketAPI()

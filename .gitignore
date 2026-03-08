@@ -31,6 +31,10 @@ coverage/
 !stdlib/core/*.c
 !stdlib/core/*.h
 
+# And keep runtime kernel files
+!rt/*.c
+!rt/*.h
+
 # Temporary
 .tmp/
 temp/
@@ -40,41 +44,6 @@ temp/
 .env
 .env.local
 *.bundle
-
-# System & User Files
-.bash_history
-.bashrc
-.zshrc
-.profile
-
-# Credentials & Security
-.git-credentials
-.ssh/
-.claude/.credentials.json
-
-# npm Cache
-.npm/
-.npm-global/
-.npmrc
-
-# Claude Code Files
-.claude/
-!.claude/CLAUDE.md
-!.claude/agents/
-!.claude/rules/
-
-# Backup Files
-backups/
-*.backup
-*.bak
-
-# Logs
-logs/
-*.log
-.npm/_logs/
-
-# OS Files
-.DS_Store
-Thumbs.db
-*.swp
-*~
+test_*.ts
+test_*.js
+test_*.free

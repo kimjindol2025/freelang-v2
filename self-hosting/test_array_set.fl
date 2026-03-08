@@ -1,0 +1,13 @@
+// Array Set Test
+
+fn main(): void {
+  println("=== Test: array assignment ===")
+
+  var arr: [i32] = [1, 2, 3]
+
+  println("초기값: " + str(arr[0]) + " " + str(arr[1]) + " " + str(arr[2]))
+
+  arr[1] = 20
+
+  println("변경 후: " + str(arr[0]) + " " + str(arr[1]) + " " + str(arr[2]))
+}

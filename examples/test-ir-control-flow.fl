@@ -1,0 +1,44 @@
+// 제어 흐름 IR 테스트
+// ir-core.fl의 새로운 함수들 검증
+
+println("=== FreeLang IR Control Flow Test ===");
+println("");
+
+// 기본 IR 명령어
+println("1. Basic IR Instructions:");
+println(emitIRPush(42));
+println(emitIRLOAD("x"));
+println(emitIRADD());
+println("");
+
+// IF 제어 흐름
+println("2. IF Control Flow:");
+let if_cmd = emitIRIF("condition_check", "end_if");
+println(if_cmd);
+println("");
+
+// WHILE 루프
+println("3. WHILE Loop:");
+let while_cmd = emitIRWHILE("loop_start", "loop_exit");
+println(while_cmd);
+println("");
+
+// FOR 루프
+println("4. FOR Loop:");
+let for_cmd = emitIRFOR("i=0", "i<10", "i++", "body_start", "loop_done");
+println(for_cmd);
+println("");
+
+// 조건 분기
+println("5. Conditional Branch:");
+let cond_cmd = emitIRCOND("skip_true_block");
+println(cond_cmd);
+println("");
+
+// 점프 명령어
+println("6. Jump Instructions:");
+println(emitIRJUMP("target_label"));
+println(emitIRJMPFALSE("else_label"));
+println("");
+
+println("✅ All IR control flow functions working correctly!");

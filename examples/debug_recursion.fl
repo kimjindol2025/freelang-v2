@@ -1,0 +1,13 @@
+// 재귀 디버깅
+
+fn test(n) {
+  println(n);
+  if (n <= 0) {
+    return 0;
+  }
+  let x = test(n - 1);
+  return x;
+}
+
+let result = test(3);
+println(result);

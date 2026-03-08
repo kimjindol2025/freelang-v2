@@ -1,0 +1,112 @@
+// String Helpers - String manipulation and formatting
+
+export fn toUpperCase(str) {
+  return str.toUpperCase()
+}
+
+export fn toLowerCase(str) {
+  return str.toLowerCase()
+}
+
+export fn trim(str) {
+  return str.trim()
+}
+
+export fn startsWith(str, prefix) {
+  return str.startsWith(prefix)
+}
+
+export fn endsWith(str, suffix) {
+  return str.endsWith(suffix)
+}
+
+export fn contains(str, substring) {
+  return str.includes(substring)
+}
+
+export fn replace(str, find, replace) {
+  return str.replace(find, replace)
+}
+
+export fn replaceAll(str, find, replace) {
+  let result = str
+  let found = true
+  while found {
+    let newResult = result.replace(find, replace)
+    if newResult == result {
+      found = false
+    }
+    result = newResult
+  }
+  return result
+}
+
+export fn split(str, separator) {
+  return str.split(separator)
+}
+
+export fn join(parts, separator) {
+  let result = ""
+  let i = 0
+  while i < parts.length {
+    result = result + parts[i]
+    if i < parts.length - 1 {
+      result = result + separator
+    }
+    i = i + 1
+  }
+  return result
+}
+
+export fn repeat(str, count) {
+  let result = ""
+  let i = 0
+  while i < count {
+    result = result + str
+    i = i + 1
+  }
+  return result
+}
+
+export fn reverse(str) {
+  let chars = str.split("")
+  let result = ""
+  let i = chars.length - 1
+  while i >= 0 {
+    result = result + chars[i]
+    i = i - 1
+  }
+  return result
+}
+
+export fn capitalize(str) {
+  if str.length == 0 {
+    return str
+  }
+  return str.charAt(0).toUpperCase() + str.substring(1)
+}
+
+export fn camelCase(str) {
+  let parts = str.split("-")
+  let result = parts[0]
+  let i = 1
+  while i < parts.length {
+    result = result + capitalize(parts[i])
+    i = i + 1
+  }
+  return result
+}
+
+export fn snakeCase(str) {
+  return str.toLowerCase().replace(" ", "_")
+}
+
+export fn format(template, values) {
+  let result = template
+  let i = 0
+  while i < values.length {
+    result = result.replace("{" + i + "}", values[i])
+    i = i + 1
+  }
+  return result
+}

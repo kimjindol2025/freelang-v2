@@ -1,0 +1,12 @@
+// 깊은 재귀 테스트
+// 깊이 50 재귀가 정상 작동하는지 검증
+
+fn count_down(n) {
+  if (n <= 0) {
+    return 0;
+  }
+  return 1 + count_down(n - 1);
+}
+
+let result = count_down(50);
+println(result);  // Expected: 50

@@ -1,0 +1,155 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "FreeLang",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#keywords" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#types" },
+    { "include": "#functions" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.freelang",
+          "begin": "//",
+          "end": "$"
+        },
+        {
+          "name": "comment.block.freelang",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.freelang",
+          "match": "\\b(if|else|while|for|return|break|continue)\\b"
+        },
+        {
+          "name": "keyword.declaration.freelang",
+          "match": "\\b(fn|let|trait|impl|type|interface|class|enum)\\b"
+        },
+        {
+          "name": "keyword.type.freelang",
+          "match": "\\b(extends|where|as|is)\\b"
+        },
+        {
+          "name": "constant.language.freelang",
+          "match": "\\b(true|false|null|undefined)\\b"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.freelang",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.freelang",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.freelang",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.freelang",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.template.freelang",
+          "begin": "`",
+          "end": "`",
+          "patterns": [
+            {
+              "name": "variable.other.freelang",
+              "match": "\\$\\{[^}]+\\}"
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.freelang",
+          "match": "\\b\\d+\\.\\d+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.freelang",
+          "match": "\\b\\d+\\b"
+        },
+        {
+          "name": "constant.numeric.hex.freelang",
+          "match": "\\b0x[0-9a-fA-F]+\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "entity.name.type.freelang",
+          "match": "\\b(number|string|boolean|any|void|null|array|Map|Set|Option|Result|List)\\b"
+        },
+        {
+          "name": "entity.name.type.generic.freelang",
+          "match": "[A-Z]\\w*(?=<)"
+        },
+        {
+          "name": "entity.name.type.parameter.freelang",
+          "match": "\\b[A-Z]\\b"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "name": "entity.name.function.freelang",
+          "match": "(?<=fn\\s)\\w+(?=\\s*\\()"
+        },
+        {
+          "name": "variable.parameter.freelang",
+          "match": "(?<=\\(|,)\\s*\\w+(?=\\s*:)"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.comparison.freelang",
+          "match": "(===?|!==?|<=|>=|<|>)"
+        },
+        {
+          "name": "keyword.operator.arithmetic.freelang",
+          "match": "[+\\-*/%]"
+        },
+        {
+          "name": "keyword.operator.logical.freelang",
+          "match": "(&&|\\|\\||!)"
+        },
+        {
+          "name": "keyword.operator.assignment.freelang",
+          "match": "="
+        },
+        {
+          "name": "punctuation.separator.freelang",
+          "match": "[{}()\\[\\];,.]"
+        }
+      ]
+    }
+  },
+  "scopeName": "source.freelang"
+}

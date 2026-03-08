@@ -1,0 +1,107 @@
+/**
+ * FreeLang Redis Module (Phase 17 Week 2)
+ * Async Redis client for FreeLang
+ */
+
+// Callback registry: stores FreeLang callbacks by ID
+let callback_registry = [];
+let next_callback_id = 0;
+
+fn register_callback(fn) => {
+  let id = next_callback_id;
+  next_callback_id = next_callback_id + 1;
+  callback_registry[id] = fn;
+  return id;
+};
+
+fn invoke_callback(id, result) => {
+  if (id >= 0 && id < callback_registry.length) {
+    let fn = callback_registry[id];
+    if (fn != null) {
+      fn(result);
+    }
+  }
+};
+
+// ────────────────────────────────────────
+// Public API: Connection Management
+// ────────────────────────────────────────
+
+export fn connect(host, port) => {
+  return redis_create(host, port, 0);
+};
+
+export fn close(client_id) => {
+  redis_close(client_id);
+};
+
+export fn is_connected(client_id) => {
+  return redis_is_connected(client_id);
+};
+
+export fn ping(client_id, callback) => {
+  let callback_id = register_callback(callback);
+  redis_ping(client_id, callback_id);
+};
+
+// ────────────────────────────────────────
+// Public API: String Commands
+// ────────────────────────────────────────
+
+export fn get(client_id, key, callback) => {
+  let callback_id = register_callback(callback);
+  redis_get(client_id, key, callback_id);
+};
+
+export fn set(client_id, key, value, callback) => {
+  let callback_id = register_callback(callback);
+  redis_set(client_id, key, value, callback_id);
+};
+
+export fn del(client_id, key, callback) => {
+  let callback_id = register_callback(callback);
+  redis_del(client_id, key, callback_id);
+};
+
+// ────────────────────────────────────────
+// Public API: Key Commands
+// ────────────────────────────────────────
+
+export fn exists(client_id, key, callback) => {
+  let callback_id = register_callback(callback);
+  redis_exists(client_id, key, callback_id);
+};
+
+export fn expire(client_id, key, seconds, callback) => {
+  let callback_id = register_callback(callback);
+  redis_expire(client_id, key, seconds, callback_id);
+};
+
+export fn incr(client_id, key, callback) => {
+  let callback_id = register_callback(callback);
+  redis_incr(client_id, key, callback_id);
+};
+
+// ────────────────────────────────────────
+// Response Object Helper
+// ────────────────────────────────────────
+
+export fn make_response(status, value, error_msg) => {
+  let response = [];
+  response["status"] = status;       // "OK", "ERROR", "NIL"
+  response["value"] = value;         // String or number
+  response["error"] = error_msg;     // Error message if status=="ERROR"
+  return response;
+};
+
+export fn make_string_response(value) => {
+  return make_response("OK", value, "");
+};
+
+export fn make_error_response(error_msg) => {
+  return make_response("ERROR", "", error_msg);
+};
+
+export fn make_nil_response() => {
+  return make_response("NIL", "", "");
+};

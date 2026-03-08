@@ -1,0 +1,356 @@
+/**
+ * FreeLang HTTP/2 Module (Phase 16 Week 4)
+ * HTTP/2 server and client using nghttp2 library
+ * Uses Promise Bridge for async/await support
+ */
+
+// Callback registry (timer.c pattern)
+let callback_registry = [];
+let next_callback_id = 0;
+
+// HTTP/2 Methods
+export let HTTP2_METHOD_GET = "GET";
+export let HTTP2_METHOD_HEAD = "HEAD";
+export let HTTP2_METHOD_POST = "POST";
+export let HTTP2_METHOD_PUT = "PUT";
+export let HTTP2_METHOD_DELETE = "DELETE";
+export let HTTP2_METHOD_PATCH = "PATCH";
+export let HTTP2_METHOD_OPTIONS = "OPTIONS";
+export let HTTP2_METHOD_TRACE = "TRACE";
+export let HTTP2_METHOD_CONNECT = "CONNECT";
+
+// HTTP/2 Header names
+export let constants = {
+  HTTP2_METHOD_GET: "GET",
+  HTTP2_METHOD_HEAD: "HEAD",
+  HTTP2_METHOD_POST: "POST",
+  HTTP2_METHOD_PUT: "PUT",
+  HTTP2_METHOD_DELETE: "DELETE",
+  HTTP2_METHOD_PATCH: "PATCH",
+  HTTP2_METHOD_OPTIONS: "OPTIONS",
+  HTTP2_METHOD_TRACE: "TRACE",
+  HTTP2_METHOD_CONNECT: "CONNECT",
+  HTTP2_HEADER_AUTHORITY: ":authority",
+  HTTP2_HEADER_PATH: ":path",
+  HTTP2_HEADER_METHOD: ":method",
+  HTTP2_HEADER_SCHEME: ":scheme",
+  HTTP2_HEADER_STATUS: ":status",
+  HTTP2_HEADER_CONTENT_TYPE: "content-type",
+  HTTP2_HEADER_CONTENT_LENGTH: "content-length",
+  HTTP2_HEADER_ACCEPT: "accept",
+  HTTP2_HEADER_ACCEPT_ENCODING: "accept-encoding",
+  HTTP2_HEADER_USER_AGENT: "user-agent"
+};
+
+// ────────────────────────────────────────
+// Internal Helpers
+// ────────────────────────────────────────
+
+fn register_callback(fn) => {
+  let id = next_callback_id;
+  next_callback_id = next_callback_id + 1;
+  callback_registry[id] = fn;
+  return id;
+};
+
+fn unregister_callback(id) => {
+  callback_registry[id] = null;
+};
+
+// ────────────────────────────────────────
+// HTTP/2 Server
+// ────────────────────────────────────────
+
+/**
+ * Create HTTP/2 server
+ * @param options - server options { key, cert, allowHTTP1, ... }
+ * @returns HTTP/2 server object
+ */
+export async fn createServer(options) => {
+  let opts = options || {};
+
+  let server = {
+    id: 0,
+    port: 0,
+    secure: opts["key"] != null && opts["cert"] != null,
+    sessions: [],
+    listeners: {},
+    _stream_callback: null,
+    _session_callback: null
+  };
+
+  let callback_id = register_callback((event) => event);
+
+  server["id"] = fl_http2_server_create(
+    opts["key"],
+    opts["cert"],
+    callback_id
+  );
+
+  if (server["id"] < 0) {
+    unregister_callback(callback_id);
+    throw "Failed to create HTTP/2 server";
+  }
+
+  server["_session_callback"] = callback_id;
+
+  return server;
+};
+
+/**
+ * Start listening on HTTP/2 server
+ * @param server - server object
+ * @param port - port number
+ * @param callback - connection callback
+ * @returns Promise that resolves when server starts
+ */
+export async fn listen(server, port, callback) => {
+  server["port"] = port;
+
+  let callback_id = register_callback((session_event) => {
+    if (session_event["type"] == "session") {
+      let session = {
+        id: session_event["session_id"],
+        streams: [],
+        listeners: {}
+      };
+
+      let stream_callback = register_callback((stream_event) => {
+        let stream = {
+          id: stream_event["stream_id"],
+          headers: stream_event["headers"],
+          method: stream_event["method"],
+          path: stream_event["path"],
+          respond: fn(headers, options) => {
+            let resp_opts = options || {};
+            let end_stream = resp_opts["endStream"] || false;
+
+            // Convert status to header
+            let status = headers[":status"] || "200";
+            let resp_headers = {};
+
+            // Copy headers
+            let keys_list = keys(headers);
+            let i = 0;
+            while (i < len(keys_list)) {
+              let key = keys_list[i];
+              resp_headers[key] = headers[key];
+              i = i + 1;
+            }
+
+            fl_http2_stream_respond(stream["id"], resp_headers, end_stream);
+          },
+          end: fn(data) => {
+            if (data != null) {
+              fl_http2_stream_write(stream["id"], data);
+            }
+            fl_http2_stream_end(stream["id"]);
+          },
+          write: fn(chunk) => {
+            fl_http2_stream_write(stream["id"], chunk);
+          },
+          pushStream: fn(path, headers, callback_fn) => {
+            let push_id = register_callback((result) => {
+              if (callback_fn != null) {
+                callback_fn(result);
+              }
+            });
+            fl_http2_stream_push_promise(stream["id"], path, headers, push_id);
+          },
+          on: fn(event_type, handler) => {
+            let handler_id = register_callback(handler);
+            if (event_type == "data") {
+              fl_http2_stream_on_data(stream["id"], handler_id);
+            } else if (event_type == "error") {
+              fl_http2_stream_on_error(stream["id"], handler_id);
+            }
+          }
+        };
+
+        if (callback != null) {
+          let stream_callback_for_session = register_callback((stream_evt) => {
+            callback(stream_evt);
+          });
+          fl_http2_session_on_stream(session["id"], stream_callback_for_session);
+        }
+      });
+
+      session["_stream_callback"] = stream_callback;
+    }
+  });
+
+  fl_http2_server_listen(server["id"], port, callback_id);
+};
+
+/**
+ * Close HTTP/2 server
+ * @param server - server object
+ * @returns Promise that resolves when server closes
+ */
+export async fn closeServer(server) => {
+  let callback_id = register_callback((result) => result);
+  fl_http2_server_close(server["id"], callback_id);
+  await callback_id;
+  unregister_callback(server["_session_callback"]);
+  unregister_callback(callback_id);
+};
+
+// ────────────────────────────────────────
+// HTTP/2 Client
+// ────────────────────────────────────────
+
+/**
+ * Connect to HTTP/2 server
+ * @param url - server URL (http://host:port or https://host:port)
+ * @param options - client options { key, cert, ca, rejectUnauthorized, ... }
+ * @returns Promise that resolves to HTTP/2 client session
+ */
+export async fn connect(url, options) => {
+  let opts = options || {};
+
+  let session = {
+    id: 0,
+    url: url,
+    requests: [],
+    _request_callback: null
+  };
+
+  let callback_id = register_callback((event) => event);
+
+  session["id"] = fl_http2_client_connect(
+    url,
+    opts["rejectUnauthorized"] != false,
+    callback_id
+  );
+
+  if (session["id"] < 0) {
+    unregister_callback(callback_id);
+    throw "Failed to connect to HTTP/2 server";
+  }
+
+  session["_request_callback"] = callback_id;
+
+  return session;
+};
+
+/**
+ * Send HTTP/2 request
+ * @param session - HTTP/2 session
+ * @param headers - request headers { ":method", ":path", ":authority", ... }
+ * @param options - request options { endStream, ... }
+ * @returns HTTP/2 request/stream object
+ */
+export fn request(session, headers, options) => {
+  let opts = options || {};
+  let end_stream = opts["endStream"] || false;
+
+  let request = {
+    stream_id: 0,
+    headers: headers,
+    response_headers: null,
+    data_chunks: [],
+    listeners: {},
+    _response_callback: null,
+    end: fn() => {
+      fl_http2_client_end_request(request["stream_id"]);
+    },
+    write: fn(chunk) => {
+      fl_http2_client_write(request["stream_id"], chunk);
+    },
+    on: fn(event_type, handler) => {
+      if (event_type == "response") {
+        let callback_id = register_callback((response_event) => {
+          request["response_headers"] = response_event["headers"];
+          request["status_code"] = response_event["status"];
+          handler(response_event);
+        });
+        fl_http2_client_on_response(request["stream_id"], callback_id);
+      } else if (event_type == "data") {
+        let callback_id = register_callback((data_event) => {
+          request["data_chunks"] = append(request["data_chunks"], data_event["chunk"]);
+          handler(data_event["chunk"]);
+        });
+        fl_http2_client_on_data(request["stream_id"], callback_id);
+      } else if (event_type == "end") {
+        let callback_id = register_callback((end_event) => {
+          handler(end_event);
+        });
+        fl_http2_client_on_end(request["stream_id"], callback_id);
+      } else if (event_type == "error") {
+        let callback_id = register_callback(handler);
+        fl_http2_client_on_error(request["stream_id"], callback_id);
+      }
+    },
+    destroy: fn() => {
+      fl_http2_client_destroy_request(request["stream_id"]);
+    }
+  };
+
+  let callback_id = register_callback((result) => {
+    request["stream_id"] = result;
+  });
+
+  fl_http2_client_request(session["id"], headers, end_stream, callback_id);
+
+  return request;
+};
+
+/**
+ * Close HTTP/2 client session
+ * @param session - HTTP/2 session
+ * @returns Promise that resolves when session closes
+ */
+export async fn closeSession(session) => {
+  let callback_id = register_callback((result) => result);
+  fl_http2_client_close(session["id"], callback_id);
+  await callback_id;
+  unregister_callback(session["_request_callback"]);
+  unregister_callback(callback_id);
+};
+
+// ────────────────────────────────────────
+// Utility Functions
+// ────────────────────────────────────────
+
+/**
+ * Get status text for HTTP status code
+ * @param status_code - status code number
+ * @returns status text
+ */
+export fn getStatusText(status_code) => {
+  let status_map = {
+    200: "OK",
+    201: "Created",
+    204: "No Content",
+    301: "Moved Permanently",
+    302: "Found",
+    304: "Not Modified",
+    400: "Bad Request",
+    401: "Unauthorized",
+    403: "Forbidden",
+    404: "Not Found",
+    405: "Method Not Allowed",
+    409: "Conflict",
+    410: "Gone",
+    500: "Internal Server Error",
+    501: "Not Implemented",
+    502: "Bad Gateway",
+    503: "Service Unavailable",
+    504: "Gateway Timeout"
+  };
+
+  return status_map[status_code] || "Unknown";
+};
+
+/**
+ * Create default response headers
+ * @param status_code - HTTP status code
+ * @param content_type - Content-Type header
+ * @returns headers object
+ */
+export fn createHeaders(status_code, content_type) => {
+  return {
+    ":status": str(status_code),
+    "content-type": content_type || "text/plain"
+  };
+};

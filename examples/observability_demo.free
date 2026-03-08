@@ -1,0 +1,99 @@
+// FreeLang Observability System - 사용 예제
+// 코드 실행을 자동으로 추적하고 성능을 분석
+
+import observability { traceFunction, getTracer, ExecutionTrace }
+import observability.storage { createTraceStorage }
+import observability.metrics { recordMetric, getMetricsReport }
+
+// 테스트용 함수들
+fn fibonacci(n: number) -> number {
+    if (n <= 1) return n
+    return fibonacci(n - 1) + fibonacci(n - 2)
+}
+
+fn processData(items: number[]) -> number {
+    let sum = 0
+    for item in items {
+        sum += item
+    }
+    return sum
+}
+
+fn slowOperation() -> void {
+    // 의도적으로 느린 작업
+    for i = 0; i < 1000000; i += 1 {
+        let x = i * i
+    }
+}
+
+fn errorFunction() -> void {
+    throw Error("예상된 오류!")
+}
+
+// 메인 데모
+fn main() -> void {
+    console.log("🚀 FreeLang Observability System 데모 시작\n")
+    
+    // 1. 저장소 초기화
+    let storage = createTraceStorage("json", "./traces.json")
+    console.log("✅ 저장소 초기화 완료\n")
+    
+    // 2. 함수 추적
+    console.log("📍 함수 실행 추적 시작...\n")
+    
+    // fibonacci 추적
+    let result1 = traceFunction("fibonacci", [10], () => fibonacci(10))
+    console.log("fibonacci(10) = " + result1 + "\n")
+    
+    // processData 추적
+    let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    let result2 = traceFunction("processData", [data], () => processData(data))
+    console.log("processData = " + result2 + "\n")
+    
+    // slowOperation 추적
+    traceFunction("slowOperation", [], () => slowOperation())
+    console.log("slowOperation 완료\n")
+    
+    // 3. 오류 처리 및 추적
+    console.log("❌ 오류 처리 추적...\n")
+    try {
+        traceFunction("errorFunction", [], () => errorFunction())
+    } catch error {
+        console.log("에러 캐치됨: " + error.message + "\n")
+    }
+    
+    // 4. 메트릭 분석
+    console.log("\n📊 메트릭 분석\n")
+    let tracer = getTracer()
+    
+    // 모든 추적 가져오기
+    let traces = tracer.getTraces()
+    for trace in traces {
+        recordMetric(trace)
+    }
+    
+    // 5. 보고서 생성
+    console.log(getMetricsReport())
+    
+    // 6. 추적 데이터 저장
+    console.log("\n💾 추적 데이터 저장...\n")
+    for trace in traces {
+        storage.saveTrace(trace)
+    }
+    console.log("✅ " + traces.length + "개의 추적이 저장되었습니다\n")
+    
+    // 7. 저장된 데이터 조회
+    console.log("🔍 저장된 추적 데이터 조회...\n")
+    let allTraces = storage.getAllTraces()
+    console.log("총 " + allTraces.length + "개의 추적이 저장됨\n")
+    
+    for trace in allTraces {
+        console.log("- " + trace.functionName + ": " + 
+                   trace.executionTimeMs.toFixed(2) + "ms (" + 
+                   trace.status + ")\n")
+    }
+    
+    console.log("✨ 데모 완료!")
+}
+
+main()

@@ -1,0 +1,307 @@
+/**
+ * FreeLang Lexer - 기본 테스트 프로그램
+ *
+ * Phase H: 자체호스팅 Lexer 구현 검증
+ *
+ * 테스트 항목:
+ *   1. 기본 함수 정의 토크나이제이션
+ *   2. 키워드 식별
+ *   3. 숫자와 문자열 처리
+ *   4. 연산자 인식
+ *   5. 위치 정보 추적 (line, col)
+ */
+
+// Import lexer module
+// use lexer
+
+// ============================================
+// Test 1: Basic Function Definition
+// ============================================
+
+fn test1_basicFunction() {
+  println("=== Test 1: Basic Function Definition ===")
+
+  let code = "fn add(a, b) { return a + b }"
+  println("Input: " + code)
+  println("")
+
+  let tokens = tokenize(code)
+
+  println("Output Tokens:")
+  for token in tokens {
+    let info = "  " + token.kind + ": '" + token.value + "'"
+    println(info)
+  }
+
+  let totalTokens = arr.len(tokens)
+  println("\nTotal tokens: " + str(totalTokens))
+  println("Expected: KEYWORD, IDENT, PUNCT, IDENT, PUNCT, IDENT, PUNCT, KEYWORD, IDENT, OP, IDENT, PUNCT, EOF")
+  println("")
+}
+
+// ============================================
+// Test 2: Keywords Recognition
+// ============================================
+
+fn test2_keywords() {
+  println("=== Test 2: Keywords Recognition ===")
+
+  let code = "fn let return if else while for break continue true false"
+  println("Input: " + code)
+  println("")
+
+  let tokens = tokenize(code)
+  let keywords = filterTokens(tokens, "KEYWORD")
+
+  println("Keywords found: " + str(arr.len(keywords)))
+  for keyword in keywords {
+    println("  - " + keyword.value)
+  }
+  println("")
+}
+
+// ============================================
+// Test 3: Numbers and Strings
+// ============================================
+
+fn test3_numbersAndStrings() {
+  println("=== Test 3: Numbers and Strings ===")
+
+  let code = "let x = 42; let y = 3.14; let msg = \"hello world\"; let char = 'a'"
+  println("Input: " + code)
+  println("")
+
+  let tokens = tokenize(code)
+
+  let numbers = filterTokens(tokens, "NUMBER")
+  let strings = filterTokens(tokens, "STRING")
+
+  println("Numbers found: " + str(arr.len(numbers)))
+  for num in numbers {
+    println("  - " + num.value)
+  }
+
+  println("\nStrings found: " + str(arr.len(strings)))
+  for str_token in strings {
+    println("  - " + str_token.value)
+  }
+  println("")
+}
+
+// ============================================
+// Test 4: Operators
+// ============================================
+
+fn test4_operators() {
+  println("=== Test 4: Operators ===")
+
+  let code = "a + b - c * d / e % f == g != h < i > j <= k >= l && m || n"
+  println("Input: " + code)
+  println("")
+
+  let tokens = tokenize(code)
+  let operators = filterTokens(tokens, "OP")
+
+  println("Operators found: " + str(arr.len(operators)))
+  for op in operators {
+    println("  - " + op.value)
+  }
+  println("")
+}
+
+// ============================================
+// Test 5: Location Tracking
+// ============================================
+
+fn test5_locationTracking() {
+  println("=== Test 5: Location Tracking (line, col) ===")
+
+  let code = "fn add(a,
+  b) {
+    return a + b
+  }"
+
+  println("Input code with line breaks")
+  println("")
+
+  let tokens = tokenize(code)
+
+  println("First 10 tokens with positions:")
+  for i = 0; i < 10 && i < arr.len(tokens); i = i + 1 {
+    let token = tokens[i]
+    let info = "  " + str(i) + ". " + token.kind + ": '" + token.value + "' "
+    let pos = "[line " + str(token.line) + ", col " + str(token.col) + "]"
+    println(info + pos)
+  }
+  println("")
+}
+
+// ============================================
+// Test 6: Comments
+// ============================================
+
+fn test6_comments() {
+  println("=== Test 6: Comments ===")
+
+  let code = "
+  fn test() {
+    // this is a line comment
+    let x = 5  // inline comment
+    /* this is a
+       block comment */
+    return x
+  }
+  "
+
+  println("Input code with comments")
+  println("")
+
+  let tokens = tokenize(code)
+  let comments = filterTokens(tokens, "COMMENT")
+
+  println("Comments found: " + str(arr.len(comments)))
+  for comment in comments {
+    println("  - " + comment.value)
+  }
+  println("")
+}
+
+// ============================================
+// Test 7: Token Statistics
+// ============================================
+
+fn test7_statistics() {
+  println("=== Test 7: Token Statistics ===")
+
+  let code = "fn fibonacci(n) { if n <= 1 { return n } return fibonacci(n-1) + fibonacci(n-2) }"
+  println("Input: " + code)
+  println("")
+
+  let tokens = tokenize(code)
+  let counts = countTokens(tokens)
+
+  println("Token type distribution:")
+  for kind in map.keys(counts) {
+    let count = counts[kind]
+    println("  " + kind + ": " + str(count))
+  }
+
+  println("\nTotal tokens: " + str(arr.len(tokens)))
+  println("Is valid: " + str(isValidTokenization(tokens)))
+  println("")
+}
+
+// ============================================
+// Test 8: Token Sequence
+// ============================================
+
+fn test8_tokenSequence() {
+  println("=== Test 8: Token Sequence Pattern ===")
+
+  let code = "let x = 10 + 20"
+  println("Input: " + code)
+  println("")
+
+  let tokens = tokenize(code)
+  let sequence = tokenSequence(tokens)
+
+  println("Token sequence: " + sequence)
+  println("Expected pattern: KEYWORD IDENT OP NUMBER OP NUMBER")
+  println("")
+}
+
+// ============================================
+// Test 9: Complex Expression
+// ============================================
+
+fn test9_complexExpression() {
+  println("=== Test 9: Complex Expression ===")
+
+  let code = "let result = (a + b) * (c - d) / (e + f)"
+  println("Input: " + code)
+  println("")
+
+  let tokens = tokenize(code)
+
+  println("All tokens:")
+  let count = 0
+  for token in tokens {
+    if token.kind != "EOF" {
+      print(token.kind + " ")
+      count = count + 1
+      if count % 5 == 0 {
+        println("")
+      }
+    }
+  }
+  println("")
+  println("\nTotal meaningful tokens: " + str(count))
+  println("")
+}
+
+// ============================================
+// Test 10: Edge Cases
+// ============================================
+
+fn test10_edgeCases() {
+  println("=== Test 10: Edge Cases ===")
+
+  // Empty input
+  println("Test 10a: Empty input")
+  let tokens1 = tokenize("")
+  println("  Empty string tokens: " + str(arr.len(tokens1)))
+  println("  Valid: " + str(isValidTokenization(tokens1)))
+  println("")
+
+  // Only whitespace
+  println("Test 10b: Only whitespace")
+  let tokens2 = tokenize("   \n  \t  ")
+  println("  Whitespace-only tokens: " + str(arr.len(tokens2)))
+  println("  Valid: " + str(isValidTokenization(tokens2)))
+  println("")
+
+  // Single character
+  println("Test 10c: Single character")
+  let tokens3 = tokenize("x")
+  println("  Single char tokens: " + str(arr.len(tokens3)))
+  for token in tokens3 {
+    println("    - " + token.kind + ": '" + token.value + "'")
+  }
+  println("")
+
+  // Special punctuation
+  println("Test 10d: Special punctuation")
+  let code = "();,{}[]:?.="
+  let tokens4 = tokenize(code)
+  println("  Special chars tokens: " + str(arr.len(tokens4)))
+  println("")
+}
+
+// ============================================
+// Main Test Runner
+// ============================================
+
+fn main() {
+  println("====================================")
+  println("FreeLang Lexer - Test Suite")
+  println("====================================")
+  println("")
+
+  test1_basicFunction()
+  test2_keywords()
+  test3_numbersAndStrings()
+  test4_operators()
+  test5_locationTracking()
+  test6_comments()
+  test7_statistics()
+  test8_tokenSequence()
+  test9_complexExpression()
+  test10_edgeCases()
+
+  println("====================================")
+  println("All tests completed!")
+  println("====================================")
+}
+
+// Run main
+main()

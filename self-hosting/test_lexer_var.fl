@@ -1,0 +1,16 @@
+// Test with variable declaration
+
+struct Token {
+  type: string,
+  lexeme: string,
+  line: i32
+}
+
+fn isAlpha(ch: string) -> bool {
+  var c: string = ch
+  return c == "a"
+}
+
+fn main(): void {
+  println("Test OK")
+}

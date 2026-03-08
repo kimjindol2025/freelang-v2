@@ -1,0 +1,340 @@
+// FreeLang v2 - scikit-learn 호환 라이브러리 (Phase 6)
+// ML 알고리즘 API 래퍼
+// Author: Claude AI
+// Version: 1.0.0
+// Date: 2026-03-06
+
+// ════════════════════════════════════════════════════════════════
+// Phase 5: Metrics Functions (평가 지표)
+// ════════════════════════════════════════════════════════════════
+
+// 정확도 (Accuracy)
+// accuracy(y_true, y_pred) → number (0.0 ~ 1.0)
+fn accuracy(y_true, y_pred) {
+  let native_result = native_call("sklearn_accuracy_score", [y_true, y_pred]);
+  return native_result;
+}
+
+// 평균 제곱 오차 (Mean Squared Error)
+// mse(y_true, y_pred) → number
+fn mse(y_true, y_pred) {
+  let native_result = native_call("sklearn_mse", [y_true, y_pred]);
+  return native_result;
+}
+
+// 평균 절대 오차 (Mean Absolute Error)
+// mae(y_true, y_pred) → number
+fn mae(y_true, y_pred) {
+  let native_result = native_call("sklearn_mae", [y_true, y_pred]);
+  return native_result;
+}
+
+// R² 결정 계수
+// r2_score(y_true, y_pred) → number
+fn r2_score(y_true, y_pred) {
+  let native_result = native_call("sklearn_r2_score", [y_true, y_pred]);
+  return native_result;
+}
+
+// 혼동 행렬 (Confusion Matrix)
+// confusion_matrix(y_true, y_pred) → [[tn, fp], [fn, tp]]
+fn confusion_matrix(y_true, y_pred) {
+  let native_result = native_call("sklearn_confusion_matrix", [y_true, y_pred]);
+  return native_result;
+}
+
+// 정밀도 (Precision)
+// precision(y_true, y_pred) → number
+fn precision(y_true, y_pred) {
+  let native_result = native_call("sklearn_precision", [y_true, y_pred]);
+  return native_result;
+}
+
+// 재현율 (Recall)
+// recall(y_true, y_pred) → number
+fn recall(y_true, y_pred) {
+  let native_result = native_call("sklearn_recall", [y_true, y_pred]);
+  return native_result;
+}
+
+// F1 점수
+// f1_score(y_true, y_pred) → number
+fn f1_score(y_true, y_pred) {
+  let native_result = native_call("sklearn_f1_score", [y_true, y_pred]);
+  return native_result;
+}
+
+// ════════════════════════════════════════════════════════════════
+// Preprocessing Functions (데이터 전처리)
+// ════════════════════════════════════════════════════════════════
+
+// StandardScaler 학습
+// scaler_fit(X) → { means, stds, n_features }
+fn scaler_fit(X) {
+  let native_result = native_call("sklearn_standard_scaler_fit", [X]);
+  return native_result;
+}
+
+// StandardScaler 변환
+// scaler_transform(X, params) → X_scaled
+fn scaler_transform(X, params) {
+  let native_result = native_call("sklearn_standard_scaler_transform", [X, params]);
+  return native_result;
+}
+
+// StandardScaler 학습 + 변환
+// scaler_fit_transform(X) → X_scaled
+fn scaler_fit_transform(X) {
+  let native_result = native_call("sklearn_standard_scaler_fit_transform", [X]);
+  return native_result;
+}
+
+// 학습/테스트 데이터 분할
+// train_test_split(X, y, test_size) → { X_train, X_test, y_train, y_test }
+fn train_test_split(X, y, test_size) {
+  let native_result = native_call("sklearn_train_test_split", [X, y, test_size]);
+  return native_result;
+}
+
+// ════════════════════════════════════════════════════════════════
+// Linear Models (선형 모델)
+// ════════════════════════════════════════════════════════════════
+
+// 선형 회귀 학습
+// linear_fit(X, y, learning_rate, epochs) → { weights, bias, loss_history }
+fn linear_fit(X, y, learning_rate, epochs) {
+  let native_result = native_call("sklearn_linear_fit", [X, y, learning_rate, epochs]);
+  return native_result;
+}
+
+// 선형 회귀 예측
+// linear_predict(X, model) → predictions
+fn linear_predict(X, model) {
+  let native_result = native_call("sklearn_linear_predict", [X, model]);
+  return native_result;
+}
+
+// 로지스틱 회귀 학습
+// logistic_fit(X, y, learning_rate, epochs) → { weights, bias, loss_history }
+fn logistic_fit(X, y, learning_rate, epochs) {
+  let native_result = native_call("sklearn_logistic_fit", [X, y, learning_rate, epochs]);
+  return native_result;
+}
+
+// 로지스틱 회귀 예측
+// logistic_predict(X, model) → predictions (확률)
+fn logistic_predict(X, model) {
+  let native_result = native_call("sklearn_logistic_predict", [X, model]);
+  return native_result;
+}
+
+// ════════════════════════════════════════════════════════════════
+// Clustering (군집화)
+// ════════════════════════════════════════════════════════════════
+
+// K-Means 학습
+// kmeans_fit(X, k, max_iter, random_state) → { centers, labels, inertia }
+fn kmeans_fit(X, k, max_iter, random_state) {
+  let native_result = native_call("sklearn_kmeans_fit", [X, k, max_iter, random_state]);
+  return native_result;
+}
+
+// K-Means 예측
+// kmeans_predict(X, model) → labels
+fn kmeans_predict(X, model) {
+  let native_result = native_call("sklearn_kmeans_predict", [X, model]);
+  return native_result;
+}
+
+// ════════════════════════════════════════════════════════════════
+// Neighbors (최근접 이웃)
+// ════════════════════════════════════════════════════════════════
+
+// KNN 모델 학습
+// knn_fit(X, y) → { X, y }
+fn knn_fit(X, y) {
+  let native_result = native_call("sklearn_knn_fit", [X, y]);
+  return native_result;
+}
+
+// KNN 예측
+// knn_predict(X, model, k) → predictions
+fn knn_predict(X, model, k) {
+  let native_result = native_call("sklearn_knn_predict", [X, model, k]);
+  return native_result;
+}
+
+// ════════════════════════════════════════════════════════════════
+// 고수준 API (Convenience Functions)
+// ════════════════════════════════════════════════════════════════
+
+// 선형 회귀 전체 파이프라인
+// linear_regression(X, y, test_size, learning_rate, epochs) → { model, metrics }
+fn linear_regression(X, y, test_size, learning_rate, epochs) {
+  // 데이터 분할
+  let split = train_test_split(X, y, test_size);
+  
+  // 모델 학습
+  let model = linear_fit(split["X_train"], split["y_train"], learning_rate, epochs);
+  
+  // 예측
+  let y_pred = linear_predict(split["X_test"], model);
+  
+  // 평가
+  let mse_score = mse(split["y_test"], y_pred);
+  let r2 = r2_score(split["y_test"], y_pred);
+  
+  return {
+    "model": model,
+    "metrics": {
+      "mse": mse_score,
+      "r2": r2,
+      "test_size": test_size
+    }
+  };
+}
+
+// 로지스틱 회귀 전체 파이프라인
+// logistic_regression(X, y, test_size, learning_rate, epochs) → { model, metrics }
+fn logistic_regression(X, y, test_size, learning_rate, epochs) {
+  // 데이터 분할
+  let split = train_test_split(X, y, test_size);
+  
+  // 모델 학습
+  let model = logistic_fit(split["X_train"], split["y_train"], learning_rate, epochs);
+  
+  // 예측
+  let y_pred = logistic_predict(split["X_test"], model);
+  
+  // 이진 클래스로 변환 (0.5 기준)
+  let y_pred_binary = [];
+  let i = 0;
+  while (i < len(y_pred)) {
+    if (y_pred[i] > 0.5) {
+      append(y_pred_binary, 1);
+    } else {
+      append(y_pred_binary, 0);
+    }
+    i = i + 1;
+  }
+  
+  // 평가
+  let acc = accuracy(split["y_test"], y_pred_binary);
+  let prec = precision(split["y_test"], y_pred_binary);
+  let rec = recall(split["y_test"], y_pred_binary);
+  let f1 = f1_score(split["y_test"], y_pred_binary);
+  
+  return {
+    "model": model,
+    "metrics": {
+      "accuracy": acc,
+      "precision": prec,
+      "recall": rec,
+      "f1": f1,
+      "test_size": test_size
+    }
+  };
+}
+
+// K-Means 전체 파이프라인
+// kmeans_clustering(X, k, max_iter) → { model, metrics }
+fn kmeans_clustering(X, k, max_iter) {
+  // 데이터 정규화
+  let X_scaled = scaler_fit_transform(X);
+  
+  // 모델 학습
+  let model = kmeans_fit(X_scaled, k, max_iter, 42);
+  
+  return {
+    "model": model,
+    "metrics": {
+      "k": k,
+      "inertia": model["inertia"],
+      "n_samples": len(X)
+    }
+  };
+}
+
+// KNN 전체 파이프라인
+// knn_classification(X, y, test_size, k) → { model, metrics }
+fn knn_classification(X, y, test_size, k) {
+  // 데이터 분할
+  let split = train_test_split(X, y, test_size);
+  
+  // 모델 학습
+  let model = knn_fit(split["X_train"], split["y_train"]);
+  
+  // 예측
+  let y_pred = knn_predict(split["X_test"], model, k);
+  
+  // 평가
+  let acc = accuracy(split["y_test"], y_pred);
+  
+  return {
+    "model": model,
+    "metrics": {
+      "accuracy": acc,
+      "k": k,
+      "test_size": test_size
+    }
+  };
+}
+
+// ════════════════════════════════════════════════════════════════
+// Utility Functions
+// ════════════════════════════════════════════════════════════════
+
+// 평가 메트릭 요약 출력
+// print_metrics(metrics) → void
+fn print_metrics(metrics) {
+  println("=== Evaluation Metrics ===");
+  
+  if (has(metrics, "accuracy")) {
+    println("Accuracy: " + format(metrics["accuracy"], 4));
+  }
+  if (has(metrics, "precision")) {
+    println("Precision: " + format(metrics["precision"], 4));
+  }
+  if (has(metrics, "recall")) {
+    println("Recall: " + format(metrics["recall"], 4));
+  }
+  if (has(metrics, "f1")) {
+    println("F1 Score: " + format(metrics["f1"], 4));
+  }
+  if (has(metrics, "mse")) {
+    println("MSE: " + format(metrics["mse"], 4));
+  }
+  if (has(metrics, "r2")) {
+    println("R²: " + format(metrics["r2"], 4));
+  }
+  if (has(metrics, "inertia")) {
+    println("Inertia: " + format(metrics["inertia"], 4));
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// Example Usage
+// ════════════════════════════════════════════════════════════════
+
+// Example 1: 선형 회귀
+// let X_train = [[1, 2], [2, 3], [3, 4], [4, 5]];
+// let y_train = [3, 5, 7, 9];
+// let result = linear_regression(X_train, y_train, 0.2, 0.01, 100);
+// print_metrics(result["metrics"]);
+
+// Example 2: 로지스틱 회귀
+// let X_train = [[1, 2], [2, 3], [3, 4], [4, 5]];
+// let y_train = [0, 0, 1, 1];
+// let result = logistic_regression(X_train, y_train, 0.2, 0.01, 100);
+// print_metrics(result["metrics"]);
+
+// Example 3: K-Means 클러스터링
+// let X_train = [[1, 2], [2, 3], [3, 4], [8, 9], [9, 10]];
+// let result = kmeans_clustering(X_train, 2, 100);
+// print_metrics(result["metrics"]);
+
+// Example 4: KNN 분류
+// let X_train = [[1, 2], [2, 3], [3, 4], [4, 5]];
+// let y_train = [0, 0, 1, 1];
+// let result = knn_classification(X_train, y_train, 0.2, 3);
+// print_metrics(result["metrics"]);

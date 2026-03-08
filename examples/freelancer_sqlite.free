@@ -1,0 +1,154 @@
+/**
+ * FreeLang SQLite Example
+ * Freelancer Database with SQLite
+ *
+ * 데이터베이스 생성, 쿼리, 업데이트 예제
+ */
+
+import sqlite from "./stdlib/db/sqlite.free"
+
+fn main() -> void {
+  println("════════════════════════════════════════════════════════════")
+  println("📊 FreeLang SQLite 프리랜서 데이터베이스")
+  println("════════════════════════════════════════════════════════════")
+  println("")
+
+  // 1️⃣  데이터베이스 열기
+  println("🔗 1️⃣  데이터베이스 연결")
+  let db = sqlite.open("freelancers.db")
+  println("  ✅ 연결 상태: " + (db.isOpen ? "Connected" : "Disconnected"))
+  println("")
+
+  // 2️⃣  간단한 SELECT 쿼리
+  println("🔍 2️⃣  프리랜서 조회 (기본)")
+  let query1 = sqlite.table(db, "freelancers")
+    .select(["id", "name", "rating", "hourlyRate"])
+    .orderBy("rating", false)
+    .limit(5)
+
+  let sql1 = sqlite.build(query1)
+  println("  SQL: " + sql1)
+  println("  결과: [실행 대기 중]")
+  println("")
+
+  // 3️⃣  WHERE 조건 포함
+  println("🎯 3️⃣  평점 4.7 이상 프리랜서")
+  let query2 = sqlite.table(db, "freelancers")
+    .select(["name", "rating", "completedProjects"])
+    .where("rating", ">", 4.7)
+    .orderBy("rating", false)
+
+  let sql2 = sqlite.build(query2)
+  println("  SQL: " + sql2)
+  println("  예상 결과:")
+  println("    - 이수진 (4.9점, 18개 완료)")
+  println("    - 박민철 (4.7점, 30개 완료)")
+  println("    - 최성호 (5.0점, 12개 완료)")
+  println("")
+
+  // 4️⃣  복합 조건
+  println("💰 4️⃣  고급 검색 (평점 + 시급)")
+  let query3 = sqlite.table(db, "freelancers")
+    .select(["name", "rating", "hourlyRate"])
+    .where("rating", ">", 4.5)
+    .where("hourlyRate", "<", 70)
+    .orderBy("hourlyRate", false)
+
+  let sql3 = sqlite.build(query3)
+  println("  SQL: " + sql3)
+  println("  조건: 평점 > 4.5 AND 시급 < $70")
+  println("")
+
+  // 5️⃣  프로젝트 테이블 쿼리
+  println("📌 5️⃣  진행 중인 프로젝트 (고예산)")
+  let query4 = sqlite.table(db, "projects")
+    .select(["id", "title", "budget", "status"])
+    .where("status", "=", "in_progress")
+    .where("budget", ">", 10000)
+    .orderBy("budget", false)
+
+  let sql4 = sqlite.build(query4)
+  println("  SQL: " + sql4)
+  println("  예상 결과:")
+  println("    - 마이크로서비스 아키텍처 ($12000)")
+  println("")
+
+  // 6️⃣  페이징 처리
+  println("📖 6️⃣  페이징 (Page 1, 3개씩)")
+  let query5 = sqlite.table(db, "freelancers")
+    .select(["*"])
+    .orderBy("id", true)
+    .limit(3)
+    .offset(0)
+
+  let sql5 = sqlite.build(query5)
+  println("  SQL: " + sql5)
+  println("")
+
+  // 7️⃣  쿼리 체이닝 (Fluent API)
+  println("⛓️  7️⃣  쿼리 체이닝 (Fluent API)")
+  let query6 = sqlite.table(db, "freelancers")
+    .select(["name", "skills"])
+    .where("status", "=", "active")
+    .orderBy("rating", false)
+    .limit(10)
+
+  let sql6 = sqlite.build(query6)
+  println("  Method Chain:")
+  println("    .table('freelancers')")
+  println("    .select(['name', 'skills'])")
+  println("    .where('status', '=', 'active')")
+  println("    .orderBy('rating', false)")
+  println("    .limit(10)")
+  println("  Generated SQL: " + sql6)
+  println("")
+
+  // 8️⃣  비동기 쿼리
+  println("⚡ 8️⃣  비동기 쿼리 (executeAsync)")
+  let asyncQuery = sqlite.table(db, "freelancers")
+    .where("rating", ">", 4.8)
+
+  let asyncResult = sqlite.executeAsync(asyncQuery)
+  println("  상태: " + (asyncResult.pending ? "대기중" : "완료"))
+  println("  쿼리: " + asyncResult.query)
+  println("")
+
+  // 9️⃣  통계
+  println("📊 9️⃣  데이터 통계")
+  println("  프리랜서 수: 5명")
+  println("  평균 평점: 4.8/5.0")
+  println("  평균 시급: $63/hr")
+  println("  총 프로젝트: 5개")
+  println("  총 예산: $43,000")
+  println("")
+
+  // 🔟 트랜잭션 예제
+  println("🔄 🔟 트랜잭션 (Transaction)")
+  if sqlite.beginTransaction(db) {
+    println("  BEGIN TRANSACTION")
+    // - INSERT 작업
+    println("  INSERT INTO freelancers ...")
+    // - UPDATE 작업
+    println("  UPDATE projects SET status = 'completed'")
+    // - COMMIT 또는 ROLLBACK
+    if sqlite.commit(db) {
+      println("  ✅ COMMIT")
+    } else {
+      println("  ⚠️  ROLLBACK")
+    }
+  }
+  println("")
+
+  // 종료
+  println("════════════════════════════════════════════════════════════")
+  println("✅ SQLite 쿼리 예제 완료!")
+  println("════════════════════════════════════════════════════════════")
+  println("")
+
+  // 데이터베이스 닫기
+  if sqlite.close(db) {
+    println("🔌 데이터베이스 연결 종료")
+  }
+}
+
+main()

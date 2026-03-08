@@ -1,0 +1,19 @@
+/**
+ * Simple Freelancer Database Test
+ */
+
+fn main() -> void {
+    println("=== Freelancer Database ===")
+
+    let freelancer = {
+        id: 1,
+        name: "Kim",
+        rating: 4.8
+    }
+
+    println("Freelancer: " + freelancer.name)
+    println("Rating:")
+    println(freelancer.rating)
+}
+
+main()

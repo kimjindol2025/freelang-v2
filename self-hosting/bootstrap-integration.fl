@@ -1,0 +1,464 @@
+// FreeLang Self-Hosting Bootstrap 통합 테스트
+// Lexer → Parser → Emitter 전체 파이프라인 검증
+
+// ============================================================
+// Part 1: Lexer (lexer-fixed.fl에서)
+// ============================================================
+
+struct Token {
+  type: string,
+  lexeme: string,
+  line: i32
+}
+
+fn isAlpha(ch: string) -> bool {
+  return (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch == "_"
+}
+
+fn isDigit(ch: string) -> bool {
+  return ch >= "0" && ch <= "9"
+}
+
+fn isAlphaNumeric(ch: string) -> bool {
+  return isAlpha(ch) || isDigit(ch)
+}
+
+fn tokenize(source: string) -> any {
+  var tokens: any = []
+  var pos: i32 = 0
+  var line: i32 = 1
+  var len: i32 = length(source)
+
+  while pos < len {
+    var ch: string = char_at(source, pos)
+
+    // 공백 건너뛰기
+    if ch == " " || ch == "\t" || ch == "\r" {
+      pos = pos + 1
+      continue
+    }
+
+    // 개행 처리
+    if ch == "\n" {
+      pos = pos + 1
+      line = line + 1
+      continue
+    }
+
+    // 주석 처리
+    if ch == "/" && pos + 1 < len && char_at(source, pos + 1) == "/" {
+      pos = pos + 2
+      while pos < len && char_at(source, pos) != "\n" {
+        pos = pos + 1
+      }
+      continue
+    }
+
+    // 숫자 토큰
+    if isDigit(ch) {
+      var start: i32 = pos
+      while pos < len && isDigit(char_at(source, pos)) {
+        pos = pos + 1
+      }
+      var lexeme: string = slice(source, start, pos)
+      var token: Token = Token { type: "INT", lexeme: lexeme, line: line }
+      push(tokens, token)
+      continue
+    }
+
+    // 식별자 및 키워드
+    if isAlpha(ch) {
+      var start: i32 = pos
+      while pos < len && isAlphaNumeric(char_at(source, pos)) {
+        pos = pos + 1
+      }
+      var lexeme: string = slice(source, start, pos)
+      var tok_type: string = "IDENT"
+
+      // 키워드 확인
+      if lexeme == "fn" {
+        tok_type = "FN"
+      } else if lexeme == "var" {
+        tok_type = "VAR"
+      } else if lexeme == "while" {
+        tok_type = "WHILE"
+      } else if lexeme == "if" {
+        tok_type = "IF"
+      } else if lexeme == "return" {
+        tok_type = "RETURN"
+      }
+
+      var token: Token = Token { type: tok_type, lexeme: lexeme, line: line }
+      push(tokens, token)
+      continue
+    }
+
+    // 기호들
+    if ch == "(" {
+      var token: Token = Token { type: "LPAREN", lexeme: "(", line: line }
+      push(tokens, token)
+      pos = pos + 1
+    } else if ch == ")" {
+      var token: Token = Token { type: "RPAREN", lexeme: ")", line: line }
+      push(tokens, token)
+      pos = pos + 1
+    } else if ch == "{" {
+      var token: Token = Token { type: "LBRACE", lexeme: "{", line: line }
+      push(tokens, token)
+      pos = pos + 1
+    } else if ch == "}" {
+      var token: Token = Token { type: "RBRACE", lexeme: "}", line: line }
+      push(tokens, token)
+      pos = pos + 1
+    } else if ch == "=" {
+      var token: Token = Token { type: "EQ", lexeme: "=", line: line }
+      push(tokens, token)
+      pos = pos + 1
+    } else if ch == "+" {
+      var token: Token = Token { type: "PLUS", lexeme: "+", line: line }
+      push(tokens, token)
+      pos = pos + 1
+    } else if ch == ":" {
+      var token: Token = Token { type: "COLON", lexeme: ":", line: line }
+      push(tokens, token)
+      pos = pos + 1
+    } else if ch == "-" {
+      var token: Token = Token { type: "MINUS", lexeme: "-", line: line }
+      push(tokens, token)
+      pos = pos + 1
+    } else if ch == "*" {
+      var token: Token = Token { type: "STAR", lexeme: "*", line: line }
+      push(tokens, token)
+      pos = pos + 1
+    } else if ch == "," {
+      var token: Token = Token { type: "COMMA", lexeme: ",", line: line }
+      push(tokens, token)
+      pos = pos + 1
+    } else {
+      pos = pos + 1
+    }
+  }
+
+  var eof: Token = Token { type: "EOF", lexeme: "", line: line }
+  push(tokens, eof)
+  return tokens
+}
+
+// ============================================================
+// Part 2: Simple Parser (JSON AST 생성)
+// ============================================================
+
+fn createParser(tokens: any) -> any {
+  return {pos: 0, tokens: tokens}
+}
+
+fn peek(parser: any) -> any {
+  var tokens_arr: any = parser.tokens
+  if parser.pos >= length(tokens_arr) {
+    return tokens_arr[length(tokens_arr) - 1]
+  }
+  return tokens_arr[parser.pos]
+}
+
+fn advance(parser: any) -> void {
+  parser.pos = parser.pos + 1
+}
+
+fn match(parser: any, type: string) -> bool {
+  var tok: any = peek(parser)
+  if tok.type == type {
+    advance(parser)
+    return true
+  }
+  return false
+}
+
+fn parseProgram(tokens: any) -> string {
+  var parser: any = createParser(tokens)
+  var ast: string = "{"
+  ast = ast + "\"kind\":\"program\","
+  ast = ast + "\"stmts\":["
+
+  var first: bool = true
+  while peek(parser).type != "EOF" {
+    if !first {
+      ast = ast + ","
+    }
+    first = false
+
+    var stmt: string = parseStmt(parser)
+    ast = ast + stmt
+  }
+
+  ast = ast + "]}"
+  return ast
+}
+
+fn parseStmt(parser: any) -> string {
+  var tok: any = peek(parser)
+
+  if tok.type == "VAR" {
+    return parseVarDecl(parser)
+  } else if tok.type == "FN" {
+    return parseFnDecl(parser)
+  } else if tok.type == "WHILE" {
+    return parseWhileStmt(parser)
+  } else if tok.type == "IF" {
+    return parseIfStmt(parser)
+  } else {
+    advance(parser)
+    return "{\"kind\":\"expr\"}"
+  }
+}
+
+fn parseVarDecl(parser: any) -> string {
+  advance(parser)
+  var name_tok: any = peek(parser)
+  var name: string = name_tok.lexeme
+  advance(parser)
+
+  // Skip : and type
+  if peek(parser).type == "COLON" {
+    advance(parser)
+    advance(parser)
+  }
+
+  // Skip =
+  advance(parser)
+
+  // Parse init expression
+  var init: string = parseExpr(parser)
+
+  var result: string = "{"
+  result = result + "\"kind\":\"var_decl\","
+  result = result + "\"name\":\"" + name + "\","
+  result = result + "\"init\":" + init
+  result = result + "}"
+  return result
+}
+
+fn parseFnDecl(parser: any) -> string {
+  advance(parser)
+  var name_tok: any = peek(parser)
+  var name: string = name_tok.lexeme
+  advance(parser)
+
+  // Skip ( ) and params
+  advance(parser)
+  while peek(parser).type != "RPAREN" {
+    advance(parser)
+  }
+  advance(parser)
+
+  // Skip return type
+  if peek(parser).type == "COLON" {
+    advance(parser)
+    advance(parser)
+  }
+
+  // Skip {
+  advance(parser)
+
+  // Parse body
+  var body: string = "["
+  var first_stmt: bool = true
+  while peek(parser).type != "RBRACE" {
+    if !first_stmt {
+      body = body + ","
+    }
+    first_stmt = false
+    var stmt: string = parseStmt(parser)
+    body = body + stmt
+  }
+  body = body + "]"
+
+  // Skip }
+  advance(parser)
+
+  var result: string = "{"
+  result = result + "\"kind\":\"fn_decl\","
+  result = result + "\"name\":\"" + name + "\","
+  result = result + "\"body\":" + body
+  result = result + "}"
+  return result
+}
+
+fn parseWhileStmt(parser: any) -> string {
+  advance(parser)
+
+  // Parse condition
+  var cond: string = parseExpr(parser)
+
+  // Skip {
+  advance(parser)
+
+  // Parse body
+  var body: string = "["
+  var first_stmt: bool = true
+  while peek(parser).type != "RBRACE" {
+    if !first_stmt {
+      body = body + ","
+    }
+    first_stmt = false
+    var stmt: string = parseStmt(parser)
+    body = body + stmt
+  }
+  body = body + "]"
+
+  // Skip }
+  advance(parser)
+
+  var result: string = "{"
+  result = result + "\"kind\":\"while_stmt\","
+  result = result + "\"condition\":" + cond + ","
+  result = result + "\"body\":" + body
+  result = result + "}"
+  return result
+}
+
+fn parseIfStmt(parser: any) -> string {
+  advance(parser)
+
+  var cond: string = parseExpr(parser)
+  advance(parser)
+
+  var then_body: string = "["
+  var first: bool = true
+  while peek(parser).type != "RBRACE" {
+    if !first {
+      then_body = then_body + ","
+    }
+    first = false
+    var stmt: string = parseStmt(parser)
+    then_body = then_body + stmt
+  }
+  then_body = then_body + "]"
+  advance(parser)
+
+  var result: string = "{"
+  result = result + "\"kind\":\"if_stmt\","
+  result = result + "\"condition\":" + cond + ","
+  result = result + "\"then\":" + then_body
+  result = result + "}"
+  return result
+}
+
+fn parseExpr(parser: any) -> string {
+  var left: string = parsePrimary(parser)
+
+  while peek(parser).type != "EOF" {
+    var tok: any = peek(parser)
+    var is_binop: bool = tok.type == "PLUS" || tok.type == "MINUS" || tok.type == "STAR"
+
+    if !is_binop {
+      break
+    }
+
+    advance(parser)
+    var op: string = tok.lexeme
+    var right: string = parsePrimary(parser)
+
+    var binop: string = "{"
+    binop = binop + "\"kind\":\"binary\","
+    binop = binop + "\"op\":\"" + op + "\","
+    binop = binop + "\"left\":" + left + ","
+    binop = binop + "\"right\":" + right
+    binop = binop + "}"
+    left = binop
+  }
+
+  return left
+}
+
+fn parsePrimary(parser: any) -> string {
+  var tok: any = peek(parser)
+
+  if tok.type == "INT" {
+    advance(parser)
+    var result: string = "{"
+    result = result + "\"kind\":\"int_lit\","
+    result = result + "\"value\":" + tok.lexeme
+    result = result + "}"
+    return result
+  }
+
+  if tok.type == "IDENT" {
+    var name: string = tok.lexeme
+    advance(parser)
+
+    if peek(parser).type == "LPAREN" {
+      advance(parser)
+      var args: string = "["
+      var first: bool = true
+      while peek(parser).type != "RPAREN" {
+        if !first {
+          args = args + ","
+        }
+        first = false
+        var arg: string = parseExpr(parser)
+        args = args + arg
+
+        if peek(parser).type == "COMMA" {
+          advance(parser)
+        }
+      }
+      args = args + "]"
+      advance(parser)
+
+      var result: string = "{"
+      result = result + "\"kind\":\"call\","
+      result = result + "\"func\":\"" + name + "\","
+      result = result + "\"args\":" + args
+      result = result + "}"
+      return result
+    }
+
+    var result: string = "{"
+    result = result + "\"kind\":\"ident\","
+    result = result + "\"name\":\"" + name + "\""
+    result = result + "}"
+    return result
+  }
+
+  advance(parser)
+  return "{\"kind\":\"unknown\"}"
+}
+
+// ============================================================
+// Main: 통합 테스트
+// ============================================================
+
+fn main(): void {
+  println("======================================")
+  println("  FreeLang Bootstrap Integration Test")
+  println("======================================")
+  println("")
+
+  // 테스트할 코드
+  var code: string = "var x = 42 var y = x + 10"
+  println("Input Code:")
+  println("  " + code)
+  println("")
+
+  // Step 1: Tokenize
+  println("Step 1: Tokenize")
+  var tokens: any = tokenize(code)
+  println("  Total tokens: " + str(length(tokens)))
+  var i: i32 = 0
+  while i < length(tokens) && i < 5 {
+    var tok: any = tokens[i]
+    println("    [" + str(i) + "] " + tok.type + " = " + tok.lexeme)
+    i = i + 1
+  }
+  println("")
+
+  // Step 2: Parse
+  println("Step 2: Parse to JSON AST")
+  var ast_json: string = parseProgram(tokens)
+  println("  AST JSON (first 100 chars):")
+  println("    " + slice(ast_json, 0, 100))
+  println("")
+
+  println("✅ Bootstrap Integration Complete!")
+  println("======================================")
+}

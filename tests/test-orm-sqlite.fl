@@ -1,0 +1,301 @@
+/**
+ * FreeLang ORM SQLite 통합 테스트
+ *
+ * SQLite 드라이버와 ORM의 실제 동작 검증
+ */
+
+import {
+  sqlite,
+  select,
+  insert,
+  all,
+  first,
+  build_select_sql
+} from "./stdlib/orm"
+
+import {
+  sqlite_create_table,
+  sqlite_drop_table,
+  sqlite_table_exists,
+  sqlite_info
+} from "./stdlib/sqlite-driver"
+
+// ============================================
+// 테스트 1: SQLite 연결
+// ============================================
+
+fn test_sqlite_connection() {
+  let db = sqlite("./test-orm.db")
+
+  if db.isConnected && db.type == "sqlite" {
+    println("✅ Test 1: SQLite connection - PASS")
+  } else {
+    println("❌ Test 1: SQLite connection - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 2: 테이블 생성
+// ============================================
+
+fn test_create_table() {
+  let db = sqlite("./test-orm.db")
+
+  // 테이블 삭제 (테스트용)
+  sqlite_drop_table(db.sqliteConn, "test_users")
+
+  // 테이블 생성
+  let schema = "
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT UNIQUE,
+    age INTEGER
+  "
+
+  let success = sqlite_create_table(db.sqliteConn, "test_users", schema)
+
+  if success {
+    println("✅ Test 2: Create table - PASS")
+  } else {
+    println("❌ Test 2: Create table - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 3: 테이블 존재 확인
+// ============================================
+
+fn test_table_exists() {
+  let db = sqlite("./test-orm.db")
+
+  let exists = sqlite_table_exists(db.sqliteConn, "test_users")
+
+  if exists {
+    println("✅ Test 3: Table exists - PASS")
+  } else {
+    println("❌ Test 3: Table exists - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 4: INSERT (ORM)
+// ============================================
+
+fn test_orm_insert() {
+  let db = sqlite("./test-orm.db")
+
+  let result = insert(db, "test_users", {
+    name: "Alice",
+    email: "alice@example.com",
+    age: 25
+  })
+
+  if result.affectedRows > 0 {
+    println("✅ Test 4: ORM insert - PASS")
+  } else {
+    println("❌ Test 4: ORM insert - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 5: SELECT ALL (ORM)
+// ============================================
+
+fn test_orm_select_all() {
+  let db = sqlite("./test-orm.db")
+
+  // 추가 데이터 삽입
+  insert(db, "test_users", { name: "Bob", email: "bob@example.com", age: 30 })
+  insert(db, "test_users", { name: "Charlie", email: "charlie@example.com", age: 28 })
+
+  let users = select(db, "test_users").all()
+
+  if arr.length(users) >= 3 {
+    println("✅ Test 5: ORM select all - PASS (found", arr.length(users), "records)")
+  } else {
+    println("❌ Test 5: ORM select all - FAIL (found", arr.length(users), "records)")
+  }
+}
+
+// ============================================
+// 테스트 6: SELECT WITH WHERE
+// ============================================
+
+fn test_orm_select_where() {
+  let db = sqlite("./test-orm.db")
+
+  let user = select(db, "test_users")
+    .where("name = ?", "Alice")
+    .first()
+
+  if user != null && user.name == "Alice" {
+    println("✅ Test 6: ORM select with where - PASS")
+  } else {
+    println("❌ Test 6: ORM select with where - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 7: SELECT ORDER BY
+// ============================================
+
+fn test_orm_select_order_by() {
+  let db = sqlite("./test-orm.db")
+
+  let users = select(db, "test_users")
+    .order_by("age DESC")
+    .all()
+
+  if arr.length(users) > 0 {
+    let first = users[0]
+    if first.age >= 25 {  // 가장 나이 많은 사람
+      println("✅ Test 7: ORM select order by - PASS")
+    } else {
+      println("❌ Test 7: ORM select order by - FAIL")
+    }
+  } else {
+    println("❌ Test 7: ORM select order by - FAIL (no data)")
+  }
+}
+
+// ============================================
+// 테스트 8: SELECT LIMIT
+// ============================================
+
+fn test_orm_select_limit() {
+  let db = sqlite("./test-orm.db")
+
+  let limited = select(db, "test_users")
+    .limit(2)
+    .all()
+
+  if arr.length(limited) == 2 {
+    println("✅ Test 8: ORM select limit - PASS")
+  } else {
+    println("❌ Test 8: ORM select limit - FAIL (got", arr.length(limited), "records)")
+  }
+}
+
+// ============================================
+// 테스트 9: SQL 생성 (복합 쿼리)
+// ============================================
+
+fn test_complex_sql_generation() {
+  let db = sqlite("./test-orm.db")
+
+  let builder = select(db, "test_users")
+  builder = select(db, "test_users")
+    .where("age > ?", 25)
+    .order_by("name ASC")
+    .limit(5)
+
+  let sql = build_select_sql(builder)
+
+  if (str.includes(sql, "WHERE") &&
+      str.includes(sql, "ORDER BY") &&
+      str.includes(sql, "LIMIT")) {
+    println("✅ Test 9: Complex SQL generation - PASS")
+  } else {
+    println("❌ Test 9: Complex SQL generation - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 10: 데이터베이스 정보
+// ============================================
+
+fn test_database_info() {
+  let db = sqlite("./test-orm.db")
+
+  let info = sqlite_info(db.sqliteConn)
+
+  if info.tableCount > 0 {
+    println("✅ Test 10: Database info - PASS (", info.tableCount, "tables)")
+  } else {
+    println("❌ Test 10: Database info - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 11: 연속 쿼리 (파이프라인)
+// ============================================
+
+fn test_query_pipeline() {
+  let db = sqlite("./test-orm.db")
+
+  // 파이프라인: 25세 이상, 이름순, 2개 제한
+  let result = select(db, "test_users")
+    .where("age >= ?", 25)
+    .order_by("name ASC")
+    .limit(2)
+    .all()
+
+  if arr.length(result) > 0 {
+    println("✅ Test 11: Query pipeline - PASS (", arr.length(result), "results)")
+  } else {
+    println("❌ Test 11: Query pipeline - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 12: 다중 WHERE 조건
+// ============================================
+
+fn test_multiple_where() {
+  let db = sqlite("./test-orm.db")
+
+  let builder = select(db, "test_users")
+  builder = builder.where("age >= ?", 25)
+  builder = builder.where("age <= ?", 30)
+
+  let sql = build_select_sql(builder)
+
+  if str.includes(sql, "AND") {
+    println("✅ Test 12: Multiple WHERE - PASS")
+  } else {
+    println("❌ Test 12: Multiple WHERE - FAIL")
+  }
+}
+
+// ============================================
+// 정리
+// ============================================
+
+fn cleanup() {
+  let db = sqlite("./test-orm.db")
+  sqlite_drop_table(db.sqliteConn, "test_users")
+  println("🧹 Cleanup completed")
+}
+
+// ============================================
+// 테스트 실행
+// ============================================
+
+fn main() {
+  println("========================================")
+  println("FreeLang ORM SQLite Integration Tests")
+  println("========================================")
+  println("")
+
+  test_sqlite_connection()
+  test_create_table()
+  test_table_exists()
+  test_orm_insert()
+  test_orm_select_all()
+  test_orm_select_where()
+  test_orm_select_order_by()
+  test_orm_select_limit()
+  test_complex_sql_generation()
+  test_database_info()
+  test_query_pipeline()
+  test_multiple_where()
+
+  println("")
+  println("========================================")
+  println("✅ All ORM SQLite Tests Completed!")
+  println("========================================")
+
+  cleanup()
+}
+
+main()

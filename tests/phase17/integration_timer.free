@@ -1,0 +1,104 @@
+/**
+ * FreeLang Phase 17 - Integration Test: Timer + Event Loop
+ * Tests the complete timer flow: FFI → Event Loop → VM Callback
+ */
+
+import { set_timeout, set_interval, clear_interval, loop_run, loop_stop } from "timer";
+
+// Global state for testing
+let global_event_count = 0;
+let global_max_events = 5;
+let global_test_passed = false;
+
+fn test_timer_integration() => {
+  println("═══════════════════════════════════════");
+  println("Phase 17 Integration Test: Timer + Event Loop");
+  println("═══════════════════════════════════════");
+
+  global_event_count = 0;
+
+  // Set up interval timer
+  println("Starting interval timer (500ms)...");
+
+  let timer_id = set_interval(500, fn() => {
+    global_event_count = global_event_count + 1;
+    let event_num = global_event_count;
+
+    println("[Event #" + event_num + "] Timer fired at " + global_event_count + " x 500ms = " + (global_event_count * 500) + "ms");
+
+    if (global_event_count >= global_max_events) {
+      println("Reached max events (" + global_max_events + "). Stopping loop...");
+      clear_interval(timer_id);
+      loop_stop();
+    }
+  });
+
+  if (timer_id < 0) {
+    println("ERROR: Failed to create interval timer!");
+    return false;
+  }
+
+  println("Timer created successfully (ID: " + timer_id + ")");
+  println("Running event loop (will stop after " + global_max_events + " events)...");
+  println("");
+
+  // Run event loop
+  loop_run();
+
+  println("");
+  println("═══════════════════════════════════════");
+
+  if (global_event_count >= global_max_events) {
+    println("✓ SUCCESS: Timer fired " + global_event_count + " times");
+    global_test_passed = true;
+    return true;
+  } else {
+    println("✗ FAILURE: Timer only fired " + global_event_count + " times (expected " + global_max_events + ")");
+    return false;
+  }
+};
+
+fn test_timeout() => {
+  println("");
+  println("Test 2: One-shot timeout");
+
+  let timeout_fired = false;
+
+  set_timeout(200, fn() => {
+    println("✓ Timeout fired after 200ms");
+    timeout_fired = true;
+  });
+
+  // Simulate delay
+  let i = 0;
+  while (i < 5000000) {
+    i = i + 1;
+  }
+
+  if (timeout_fired) {
+    println("✓ One-shot timeout works");
+  } else {
+    println("✗ One-shot timeout failed");
+    global_test_passed = false;
+  }
+};
+
+fn main() => {
+  let result = test_timer_integration();
+
+  if (result) {
+    test_timeout();
+  }
+
+  if (global_test_passed) {
+    println("═══════════════════════════════════════");
+    println("🎉 ALL TESTS PASSED!");
+    println("═══════════════════════════════════════");
+  } else {
+    println("═══════════════════════════════════════");
+    println("❌ SOME TESTS FAILED");
+    println("═══════════════════════════════════════");
+  }
+};
+
+main();

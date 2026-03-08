@@ -1,0 +1,106 @@
+/**
+ * FreeLang JSON stdlib examples and tests
+ * Usage: freelang json-test.free
+ */
+
+import json from "../index.free"
+
+console.log("========== JSON stdlib Tests ==========\n")
+
+// Test 1: Parse simple object
+console.log("Test 1: Parse simple object")
+let obj1 = json.parse('{"name":"kim","age":30}')
+console.assert(obj1.name == "kim", "name should be 'kim'")
+console.assert(obj1.age == 30, "age should be 30")
+console.log("✅ PASSED\n")
+
+// Test 2: Parse array
+console.log("Test 2: Parse array")
+let arr = json.parse('[1,2,3,4,5]')
+console.assert(arr.length == 5, "array length should be 5")
+console.assert(arr[0] == 1, "first element should be 1")
+console.log("✅ PASSED\n")
+
+// Test 3: Parse nested object
+console.log("Test 3: Parse nested object")
+let obj2 = json.parse('{"user":{"name":"alice","email":"alice@example.com"},"active":true}')
+console.assert(obj2.user.name == "alice", "nested name should be 'alice'")
+console.assert(obj2.active == true, "active should be true")
+console.log("✅ PASSED\n")
+
+// Test 4: Parse special types
+console.log("Test 4: Parse special types")
+let null_val = json.parse('null')
+let bool_val = json.parse('true')
+let num_val = json.parse('42')
+let str_val = json.parse('"hello"')
+console.assert(null_val == null, "null should be null")
+console.assert(bool_val == true, "true should be true")
+console.assert(num_val == 42, "number should be 42")
+console.assert(str_val == "hello", "string should be 'hello'")
+console.log("✅ PASSED\n")
+
+// Test 5: Stringify object
+console.log("Test 5: Stringify object")
+let str1 = json.stringify({ status: "ok", code: 200 })
+console.assert(str1.includes("status"), "should contain 'status'")
+console.assert(str1.includes("ok"), "should contain 'ok'")
+console.assert(str1.includes("code"), "should contain 'code'")
+console.log("Result: " + str1)
+console.log("✅ PASSED\n")
+
+// Test 6: Stringify array
+console.log("Test 6: Stringify array")
+let str2 = json.stringify([1, 2, 3, "four", true])
+console.assert(str2.includes("1"), "should contain '1'")
+console.assert(str2.includes("four"), "should contain 'four'")
+console.assert(str2.includes("true"), "should contain 'true'")
+console.log("Result: " + str2)
+console.log("✅ PASSED\n")
+
+// Test 7: Round-trip (parse -> stringify -> parse)
+console.log("Test 7: Round-trip conversion")
+let original = '{"message":"hello","numbers":[1,2,3]}'
+let parsed = json.parse(original)
+let stringified = json.stringify(parsed)
+let reparsed = json.parse(stringified)
+console.assert(reparsed.message == "hello", "message should round-trip correctly")
+console.assert(reparsed.numbers.length == 3, "array should round-trip correctly")
+console.log("✅ PASSED\n")
+
+// Test 8: is_valid function
+console.log("Test 8: Validate JSON")
+console.assert(json.is_valid('{"valid":true}'), "valid JSON should return true")
+console.assert(!json.is_valid('{invalid}'), "invalid JSON should return false")
+console.log("✅ PASSED\n")
+
+// Test 9: Escape special characters
+console.log("Test 9: Handle escape sequences")
+let escaped = json.stringify({ text: 'line1\nline2\t"quoted"' })
+console.log("Escaped: " + escaped)
+let unescaped = json.parse(escaped)
+console.assert(unescaped.text.includes('\n'), "should handle newline escape")
+console.assert(unescaped.text.includes('\t'), "should handle tab escape")
+console.assert(unescaped.text.includes('"'), "should handle quote escape")
+console.log("✅ PASSED\n")
+
+// Test 10: Complex nested structure
+console.log("Test 10: Complex nested structure")
+let complex = {
+  users: [
+    { id: 1, name: "alice", roles: ["admin", "user"] },
+    { id: 2, name: "bob", roles: ["user"] }
+  ],
+  metadata: {
+    version: "1.0",
+    timestamp: 1234567890
+  }
+}
+let complexStr = json.stringify(complex)
+let complexParsed = json.parse(complexStr)
+console.assert(complexParsed.users.length == 2, "should have 2 users")
+console.assert(complexParsed.users[0].name == "alice", "first user should be alice")
+console.assert(complexParsed.metadata.version == "1.0", "version should be 1.0")
+console.log("✅ PASSED\n")
+
+console.log("========== All Tests Passed! ==========")

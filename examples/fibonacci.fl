@@ -1,0 +1,12 @@
+// Fibonacci 재귀 함수 테스트
+// fib(10) = 55 검증
+
+fn fib(n) {
+  if (n <= 1) {
+    return n;
+  }
+  return fib(n - 1) + fib(n - 2);
+}
+
+let result = fib(10);
+println(result);  // Expected: 55

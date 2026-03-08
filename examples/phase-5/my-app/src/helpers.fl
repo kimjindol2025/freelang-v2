@@ -1,0 +1,20 @@
+// Local helpers for my-app
+// Demonstrates local module imports alongside package imports
+
+import { capitalize } from "string-helpers"
+
+export fn helper(name) {
+  return "Welcome to " + capitalize(name) + "!"
+}
+
+export fn greet(name) {
+  return "Hello, " + name + "!"
+}
+
+export fn farewell(name) {
+  return "Goodbye, " + name + "!"
+}
+
+export fn makeTitle(text) {
+  return capitalize(text)
+}

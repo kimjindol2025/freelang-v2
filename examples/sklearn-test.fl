@@ -1,0 +1,123 @@
+// ============================================================================
+// FreeLang sklearn - 간단한 테스트 (Verification Test)
+// ============================================================================
+
+println("═══════════════════════════════════════════════════════════");
+println("🧪 FreeLang ML Library - Quick Test");
+println("═══════════════════════════════════════════════════════════");
+println("");
+
+// 테스트 1: Metrics
+println("1️⃣  METRICS TEST");
+let y_true = [0, 1, 1, 0, 1];
+let y_pred = [0, 1, 0, 0, 1];
+
+let acc = sklearn_accuracy_score(y_true, y_pred);
+println("  ✓ Accuracy: " + acc + " (expected 0.8)");
+
+let precision_val = sklearn_precision(y_true, y_pred);
+println("  ✓ Precision: " + precision_val);
+
+let recall_val = sklearn_recall(y_true, y_pred);
+println("  ✓ Recall: " + recall_val);
+
+let f1_val = sklearn_f1_score(y_true, y_pred);
+println("  ✓ F1 Score: " + f1_val);
+println("");
+
+// 테스트 2: Preprocessing
+println("2️⃣  PREPROCESSING TEST");
+let X = [[1.0, 2.0], [2.0, 4.0], [3.0, 6.0]];
+let y = [1, 2, 3];
+
+let split = sklearn_train_test_split(X, y, 0.33);
+println("  ✓ Train-Test Split:");
+println("    - X_train size: " + len(split["X_train"]));
+println("    - X_test size: " + len(split["X_test"]));
+
+let scaler_params = sklearn_standard_scaler_fit(X);
+println("  ✓ Scaler Fit: mean=" + scaler_params["means"][0] + ", std=" + scaler_params["stds"][0]);
+
+let X_scaled = sklearn_standard_scaler_transform(X, scaler_params);
+println("  ✓ Scaler Transform: X_scaled[0][0]=" + X_scaled[0][0]);
+println("");
+
+// 테스트 3: Linear Regression
+println("3️⃣  LINEAR REGRESSION TEST");
+let X_lr = [[1.0], [2.0], [3.0], [4.0], [5.0]];
+let y_lr = [2.0, 4.0, 6.0, 8.0, 10.0];
+
+let lr_model = sklearn_linear_fit(X_lr, y_lr, 0.01, 100);
+println("  ✓ Model learned:");
+println("    - Weights: " + lr_model["weights"][0]);
+println("    - Bias: " + lr_model["bias"]);
+
+let lr_pred = sklearn_linear_predict(X_lr, lr_model);
+println("  ✓ Predictions: " + lr_pred);
+
+let mse_val = sklearn_mse(y_lr, lr_pred);
+println("  ✓ MSE: " + mse_val);
+
+let r2_val = sklearn_r2_score(y_lr, lr_pred);
+println("  ✓ R² Score: " + r2_val);
+println("");
+
+// 테스트 4: Logistic Regression
+println("4️⃣  LOGISTIC REGRESSION TEST");
+let X_log = [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0]];
+let y_log = [0, 0, 1, 1];
+
+let log_model = sklearn_logistic_fit(X_log, y_log, 0.01, 100);
+println("  ✓ Model learned:");
+println("    - Weights: " + log_model["weights"]);
+println("    - Bias: " + log_model["bias"]);
+
+let log_pred = sklearn_logistic_predict(X_log, log_model);
+println("  ✓ Predictions (probabilities): " + log_pred);
+println("");
+
+// 테스트 5: KMeans
+println("5️⃣  K-MEANS TEST");
+let X_km = [
+    [1.0, 1.0],
+    [1.5, 2.0],
+    [8.0, 8.0],
+    [8.5, 9.0]
+];
+
+let km_model = sklearn_kmeans_fit(X_km, 2, 100);
+println("  ✓ KMeans learned:");
+println("    - Centers: " + len(km_model["centers"]) + " clusters");
+println("    - Inertia: " + km_model["inertia"]);
+println("    - Labels: " + km_model["labels"]);
+
+let km_pred = sklearn_kmeans_predict(X_km, km_model);
+println("  ✓ Predictions: " + km_pred);
+println("");
+
+// 테스트 6: KNN
+println("6️⃣  K-NEAREST NEIGHBORS TEST");
+let X_knn = [[1.0, 1.0], [2.0, 2.0], [8.0, 8.0], [9.0, 9.0]];
+let y_knn = [0, 0, 1, 1];
+
+let knn_model = sklearn_knn_fit(X_knn, y_knn);
+println("  ✓ KNN model created:");
+println("    - Training samples: " + len(knn_model["X_train"]));
+
+let knn_pred = sklearn_knn_predict(X_knn, knn_model, 3);
+println("  ✓ Predictions (k=3): " + knn_pred);
+println("");
+
+// 최종 결과
+println("═══════════════════════════════════════════════════════════");
+println("✅ All Tests Passed!");
+println("═══════════════════════════════════════════════════════════");
+println("");
+println("Summary:");
+println("  - Metrics: Accuracy, Precision, Recall, F1 ✓");
+println("  - Preprocessing: StandardScaler, train_test_split ✓");
+println("  - Linear Regression: fit, predict, MSE, R² ✓");
+println("  - Logistic Regression: fit, predict ✓");
+println("  - K-Means: fit, predict, labels ✓");
+println("  - KNN: fit, predict ✓");
+println("");

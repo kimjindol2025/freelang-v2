@@ -1,0 +1,181 @@
+// ─────────────────────────────────────────────────────────────────
+// Phase 3: FreeLang IR Generator (간소화 버전 v3)
+// ─────────────────────────────────────────────────────────────────
+//
+// 목표: AST → IR 변환 (Self-hosting 핵심)
+// 전략: 극도로 간단한 선형 IR 생성
+//
+
+// ─────────────────────────────────────────────────────────────────
+// 1. IR 명령어 생성
+// ─────────────────────────────────────────────────────────────────
+
+fn emitPUSH(instrs, value) {
+  instrs.push(instrs, "PUSH:" + value);
+  return instrs;
+}
+
+fn emitADD(instrs) {
+  instrs.push(instrs, "ADD");
+  return instrs;
+}
+
+fn emitSUB(instrs) {
+  instrs.push(instrs, "SUB");
+  return instrs;
+}
+
+fn emitMUL(instrs) {
+  instrs.push(instrs, "MUL");
+  return instrs;
+}
+
+fn emitCALL(instrs, name) {
+  instrs.push(instrs, "CALL:" + name);
+  return instrs;
+}
+
+fn emitLOAD(instrs, varname) {
+  instrs.push(instrs, "LOAD:" + varname);
+  return instrs;
+}
+
+fn emitSTORE(instrs, varname) {
+  instrs.push(instrs, "STORE:" + varname);
+  return instrs;
+}
+
+fn emitRETURN(instrs) {
+  instrs.push(instrs, "RETURN");
+  return instrs;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 2. AST → IR 컴파일
+// ─────────────────────────────────────────────────────────────────
+
+fn compileExpr(instrs, expr) {
+  if (expr.type == "number") {
+    emitPUSH(instrs, expr.value);
+  } else if (expr.type == "identifier") {
+    emitLOAD(instrs, expr.name);
+  } else if (expr.type == "binary") {
+    compileExpr(instrs, expr.left);
+    compileExpr(instrs, expr.right);
+    if (expr.op == "+") {
+      emitADD(instrs);
+    } else if (expr.op == "-") {
+      emitSUB(instrs);
+    } else if (expr.op == "*") {
+      emitMUL(instrs);
+    }
+  } else if (expr.type == "call") {
+    let args = expr.arguments || [];
+    let i = 0;
+    while (i < args.len(args)) {
+      compileExpr(instrs, args[i]);
+      i = i + 1;
+    }
+    emitCALL(instrs, expr.name);
+  }
+  return instrs;
+}
+
+fn compileStmt(instrs, stmt) {
+  if (stmt.type == "let") {
+    compileExpr(instrs, stmt.init);
+    emitSTORE(instrs, stmt.id);
+  } else if (stmt.type == "expression") {
+    compileExpr(instrs, stmt.expression);
+  } else if (stmt.type == "return") {
+    if (stmt.argument != null) {
+      compileExpr(instrs, stmt.argument);
+    }
+    emitRETURN(instrs);
+  } else if (stmt.type == "block") {
+    let stmts = stmt.body || [];
+    let i = 0;
+    while (i < stmts.len(stmts)) {
+      compileStmt(instrs, stmts[i]);
+      i = i + 1;
+    }
+  }
+  return instrs;
+}
+
+fn compileFunction(instrs, fnNode) {
+  instrs.push(instrs, "FUNC_START:" + fnNode.id);
+  let body = fnNode.body;
+  let stmts = body.body || [];
+  let i = 0;
+  while (i < stmts.len(stmts)) {
+    compileStmt(instrs, stmts[i]);
+    i = i + 1;
+  }
+  instrs.push(instrs, "FUNC_END:" + fnNode.id);
+  return instrs;
+}
+
+fn compileModule(module) {
+  let instrs = [];
+  let stmts = module.statements || [];
+  let i = 0;
+
+  while (i < stmts.len(stmts)) {
+    let stmt = stmts[i];
+    if (stmt.type == "function") {
+      compileFunction(instrs, stmt);
+    } else {
+      compileStmt(instrs, stmt);
+    }
+    i = i + 1;
+  }
+
+  return instrs;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 3. 공개 API
+// ─────────────────────────────────────────────────────────────────
+
+fn compileAST(ast) {
+  return compileModule(ast);
+}
+
+fn getIRVersion() {
+  return "3.0.0 (minimal, string-based)";
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 4. 테스트
+// ─────────────────────────────────────────────────────────────────
+
+fn testCompile() {
+  println("IR Generator v3 Test");
+
+  let ast = {
+    type: "module",
+    statements: [
+      {
+        type: "let",
+        id: "x",
+        init: { type: "number", value: 5 }
+      },
+      {
+        type: "expression",
+        expression: {
+          type: "binary",
+          op: "+",
+          left: { type: "identifier", name: "x" },
+          right: { type: "number", value: 3 }
+        }
+      }
+    ]
+  };
+
+  let ir = compileAST(ast);
+  println("Generated IR instructions:");
+  println(ir.len(ir));
+}
+
+// testCompile();

@@ -1,0 +1,22 @@
+struct Token {
+  type: string,
+  lexeme: string,
+  line: i32
+}
+
+fn tokenizeSimple(source: string) -> string {
+  var result: string = "["
+  var pos: i32 = 0
+
+  while pos < 3 {
+    var ch: string = "x"
+    pos = pos + 1
+  }
+
+  return result
+}
+
+fn main(): void {
+  var x: string = tokenizeSimple("test")
+  println(x)
+}

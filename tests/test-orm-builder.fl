@@ -1,0 +1,358 @@
+/**
+ * FreeLang ORM Query Builder 테스트
+ */
+
+import {
+  sqlite,
+  select,
+  insert,
+  update,
+  delete,
+  columns,
+  where,
+  where2,
+  join,
+  order_by,
+  group_by,
+  limit,
+  offset,
+  build_select_sql,
+  build_insert_sql,
+  build_update_sql,
+  build_delete_sql
+} from "./stdlib/orm"
+
+// ============================================
+// 테스트 1: 데이터베이스 연결
+// ============================================
+
+fn test_sqlite_connection() {
+  let db = sqlite("./test.db")
+
+  if db.type == "sqlite" && db.path == "./test.db" {
+    println("✅ Test 1: sqlite_connection - PASS")
+  } else {
+    println("❌ Test 1: sqlite_connection - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 2: 기본 SELECT SQL 생성
+// ============================================
+
+fn test_basic_select() {
+  let db = sqlite("./test.db")
+  let builder = select(db, "users")
+
+  let sql = build_select_sql(builder)
+
+  if sql == "SELECT * FROM users" {
+    println("✅ Test 2: basic_select - PASS")
+  } else {
+    println("❌ Test 2: basic_select - FAIL")
+    println("   Got:", sql)
+  }
+}
+
+// ============================================
+// 테스트 3: SELECT 특정 컬럼
+// ============================================
+
+fn test_select_columns() {
+  let db = sqlite("./test.db")
+  let builder = select(db, "users")
+  builder = columns(builder, ["id", "name", "email"])
+
+  let sql = build_select_sql(builder)
+
+  if str.includes(sql, "id, name, email") && str.includes(sql, "FROM users") {
+    println("✅ Test 3: select_columns - PASS")
+  } else {
+    println("❌ Test 3: select_columns - FAIL")
+    println("   Got:", sql)
+  }
+}
+
+// ============================================
+// 테스트 4: SELECT WHERE 조건
+// ============================================
+
+fn test_select_where() {
+  let db = sqlite("./test.db")
+  let builder = select(db, "users")
+  builder = where(builder, "age > ?", 18)
+
+  let sql = build_select_sql(builder)
+
+  if str.includes(sql, "WHERE age > ?") {
+    println("✅ Test 4: select_where - PASS")
+  } else {
+    println("❌ Test 4: select_where - FAIL")
+    println("   Got:", sql)
+  }
+}
+
+// ============================================
+// 테스트 5: SELECT WHERE 다중 조건
+// ============================================
+
+fn test_select_where_multiple() {
+  let db = sqlite("./test.db")
+  let builder = select(db, "users")
+  builder = where(builder, "age > ?", 18)
+  builder = where(builder, "status = ?", "active")
+
+  let sql = build_select_sql(builder)
+
+  if str.includes(sql, "WHERE") && str.includes(sql, "AND") {
+    println("✅ Test 5: select_where_multiple - PASS")
+  } else {
+    println("❌ Test 5: select_where_multiple - FAIL")
+    println("   Got:", sql)
+  }
+}
+
+// ============================================
+// 테스트 6: SELECT JOIN
+// ============================================
+
+fn test_select_join() {
+  let db = sqlite("./test.db")
+  let builder = select(db, "posts")
+  builder = join(builder, "users", "posts.userId = users.id")
+
+  let sql = build_select_sql(builder)
+
+  if str.includes(sql, "JOIN users") && str.includes(sql, "ON") {
+    println("✅ Test 6: select_join - PASS")
+  } else {
+    println("❌ Test 6: select_join - FAIL")
+    println("   Got:", sql)
+  }
+}
+
+// ============================================
+// 테스트 7: SELECT ORDER BY
+// ============================================
+
+fn test_select_order_by() {
+  let db = sqlite("./test.db")
+  let builder = select(db, "users")
+  builder = order_by(builder, "name ASC")
+
+  let sql = build_select_sql(builder)
+
+  if str.includes(sql, "ORDER BY name ASC") {
+    println("✅ Test 7: select_order_by - PASS")
+  } else {
+    println("❌ Test 7: select_order_by - FAIL")
+    println("   Got:", sql)
+  }
+}
+
+// ============================================
+// 테스트 8: SELECT LIMIT
+// ============================================
+
+fn test_select_limit() {
+  let db = sqlite("./test.db")
+  let builder = select(db, "users")
+  builder = limit(builder, 10)
+
+  let sql = build_select_sql(builder)
+
+  if str.includes(sql, "LIMIT 10") {
+    println("✅ Test 8: select_limit - PASS")
+  } else {
+    println("❌ Test 8: select_limit - FAIL")
+    println("   Got:", sql)
+  }
+}
+
+// ============================================
+// 테스트 9: INSERT SQL 생성
+// ============================================
+
+fn test_insert_sql() {
+  let db = sqlite("./test.db")
+  let data = { name: "Alice", email: "alice@example.com", age: 25 }
+
+  let builder: QueryBuilder = {
+    connection: db,
+    type: "insert",
+    table: "users",
+    columns: [],
+    values: data,
+    conditions: [],
+    params: [],
+    joins: [],
+    orderBy: [],
+    groupBy: [],
+    limit: -1,
+    offset: 0
+  }
+
+  let sql = build_insert_sql(builder)
+
+  if str.includes(sql, "INSERT INTO users") && str.includes(sql, "VALUES") {
+    println("✅ Test 9: insert_sql - PASS")
+  } else {
+    println("❌ Test 9: insert_sql - FAIL")
+    println("   Got:", sql)
+  }
+}
+
+// ============================================
+// 테스트 10: UPDATE SQL 생성
+// ============================================
+
+fn test_update_sql() {
+  let db = sqlite("./test.db")
+  let builder = update(db, "users", { name: "Bob", age: 30 })
+  builder = where(builder, "id = ?", 1)
+
+  let sql = build_update_sql(builder)
+
+  if str.includes(sql, "UPDATE users") && str.includes(sql, "SET") && str.includes(sql, "WHERE") {
+    println("✅ Test 10: update_sql - PASS")
+  } else {
+    println("❌ Test 10: update_sql - FAIL")
+    println("   Got:", sql)
+  }
+}
+
+// ============================================
+// 테스트 11: DELETE SQL 생성
+// ============================================
+
+fn test_delete_sql() {
+  let db = sqlite("./test.db")
+  let builder = delete(db, "users")
+  builder = where(builder, "id = ?", 1)
+
+  let sql = build_delete_sql(builder)
+
+  if str.includes(sql, "DELETE FROM users") && str.includes(sql, "WHERE") {
+    println("✅ Test 11: delete_sql - PASS")
+  } else {
+    println("❌ Test 11: delete_sql - FAIL")
+    println("   Got:", sql)
+  }
+}
+
+// ============================================
+// 테스트 12: 복잡한 쿼리
+// ============================================
+
+fn test_complex_query() {
+  let db = sqlite("./test.db")
+  let builder = select(db, "posts")
+  builder = columns(builder, ["id", "title", "userId"])
+  builder = join(builder, "users", "posts.userId = users.id")
+  builder = where(builder, "posts.published = ?", true)
+  builder = where(builder, "users.active = ?", true)
+  builder = order_by(builder, "posts.createdAt DESC")
+  builder = limit(builder, 10)
+
+  let sql = build_select_sql(builder)
+
+  if (str.includes(sql, "SELECT") && str.includes(sql, "FROM posts") &&
+      str.includes(sql, "JOIN users") && str.includes(sql, "WHERE") &&
+      str.includes(sql, "ORDER BY") && str.includes(sql, "LIMIT")) {
+    println("✅ Test 12: complex_query - PASS")
+  } else {
+    println("❌ Test 12: complex_query - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 13: GROUP BY
+// ============================================
+
+fn test_group_by() {
+  let db = sqlite("./test.db")
+  let builder = select(db, "posts")
+  builder = group_by(builder, "userId")
+
+  let sql = build_select_sql(builder)
+
+  if str.includes(sql, "GROUP BY userId") {
+    println("✅ Test 13: group_by - PASS")
+  } else {
+    println("❌ Test 13: group_by - FAIL")
+    println("   Got:", sql)
+  }
+}
+
+// ============================================
+// 테스트 14: 쿼리 빌더 체인
+// ============================================
+
+fn test_query_chaining() {
+  let db = sqlite("./test.db")
+
+  let builder = select(db, "users")
+    .columns(["id", "name"])
+    .where("age > ?", 18)
+    .order_by("name ASC")
+    .limit(5)
+
+  let sql = build_select_sql(builder)
+
+  if (str.includes(sql, "id, name") && str.includes(sql, "WHERE") &&
+      str.includes(sql, "ORDER BY") && str.includes(sql, "LIMIT 5")) {
+    println("✅ Test 14: query_chaining - PASS")
+  } else {
+    println("❌ Test 14: query_chaining - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 15: NULL 값 처리
+// ============================================
+
+fn test_null_handling() {
+  let db = sqlite("./test.db")
+  let builder = select(db, "users")
+  builder = where(builder, "email IS NULL", null)
+
+  let sql = build_select_sql(builder)
+
+  if str.includes(sql, "email IS NULL") {
+    println("✅ Test 15: null_handling - PASS")
+  } else {
+    println("❌ Test 15: null_handling - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 실행
+// ============================================
+
+fn main() {
+  println("========================================")
+  println("FreeLang ORM Query Builder Tests")
+  println("========================================")
+
+  test_sqlite_connection()
+  test_basic_select()
+  test_select_columns()
+  test_select_where()
+  test_select_where_multiple()
+  test_select_join()
+  test_select_order_by()
+  test_select_limit()
+  test_insert_sql()
+  test_update_sql()
+  test_delete_sql()
+  test_complex_query()
+  test_group_by()
+  test_query_chaining()
+  test_null_handling()
+
+  println("========================================")
+  println("✅ ORM Builder Tests Completed!")
+  println("========================================")
+}
+
+main()

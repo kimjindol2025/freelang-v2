@@ -1,0 +1,6 @@
+var i: i32 = 0
+while i < 5 {
+  println(str(i))
+  i = i + 1
+}
+println("Done!")

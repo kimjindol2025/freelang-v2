@@ -1,0 +1,339 @@
+/**
+ * Express-Compatible Framework 테스트
+ */
+
+import {
+  createApp,
+  get,
+  post,
+  put,
+  delete,
+  use,
+  handleRequest,
+  respondJson,
+  parseJson,
+  matchPath,
+  parsePathParams
+} from "./stdlib/express-compat"
+
+// ============================================
+// 테스트 1: 앱 생성
+// ============================================
+fn test_createApp() {
+  let app = createApp()
+
+  if app.port == 0 && arr.length(app.routes) == 0 {
+    println("✅ Test 1: createApp - PASS")
+  } else {
+    println("❌ Test 1: createApp - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 2: 라우트 등록 (메서드 체인)
+// ============================================
+fn test_chainRoutes() {
+  let app = createApp()
+
+  get(app, "/users", fn(req, res) { })
+    .post(app, "/users", fn(req, res) { })
+    .put(app, "/users/:id", fn(req, res) { })
+
+  if arr.length(app.routes) == 3 {
+    println("✅ Test 2: chainRoutes - PASS")
+  } else {
+    println("❌ Test 2: chainRoutes - FAIL (got", arr.length(app.routes), "routes)")
+  }
+}
+
+// ============================================
+// 테스트 3: 경로 매칭
+// ============================================
+fn test_matchPath() {
+  let pass = 0
+
+  // 정확한 매칭
+  if matchPath("/api/users", "/api/users") { pass = pass + 1 }
+
+  // 와일드카드 매칭
+  if matchPath("/api/users/:id", "/api/users/123") { pass = pass + 1 }
+
+  // 다른 경로
+  if !matchPath("/api/users", "/api/products") { pass = pass + 1 }
+
+  if pass == 3 {
+    println("✅ Test 3: matchPath - PASS")
+  } else {
+    println("❌ Test 3: matchPath - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 4: 경로 파라미터 추출
+// ============================================
+fn test_parsePathParams() {
+  let params = parsePathParams("/users/:userId/posts/:postId", "/users/123/posts/456")
+
+  if params["userId"] == "123" && params["postId"] == "456" {
+    println("✅ Test 4: parsePathParams - PASS")
+  } else {
+    println("❌ Test 4: parsePathParams - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 5: 기본 라우팅
+// ============================================
+fn test_basicRouting() {
+  let app = createApp()
+  let handlerCalled = false
+
+  get(app, "/test", fn(req, res) {
+    handlerCalled = true
+    respondJson(res, { message: "OK" })
+  })
+
+  let req: Request = {
+    method: "GET",
+    path: "/test",
+    url: "/test",
+    query: {},
+    params: {},
+    headers: {},
+    body: "",
+    parsedBody: null,
+    cookies: {},
+    ip: "127.0.0.1",
+    userAgent: "test"
+  }
+
+  let res = handleRequest(app, req)
+
+  if res.status == 200 && res.isSent {
+    println("✅ Test 5: basicRouting - PASS")
+  } else {
+    println("❌ Test 5: basicRouting - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 6: 404 핸들링
+// ============================================
+fn test_notFound() {
+  let app = createApp()
+
+  get(app, "/exists", fn(req, res) { })
+
+  let req: Request = {
+    method: "GET",
+    path: "/notfound",
+    url: "/notfound",
+    query: {},
+    params: {},
+    headers: {},
+    body: "",
+    parsedBody: null,
+    cookies: {},
+    ip: "127.0.0.1",
+    userAgent: "test"
+  }
+
+  let res = handleRequest(app, req)
+
+  if res.status == 404 {
+    println("✅ Test 6: notFound - PASS")
+  } else {
+    println("❌ Test 6: notFound - FAIL (status:", res.status, ")")
+  }
+}
+
+// ============================================
+// 테스트 7: 미들웨어
+// ============================================
+fn test_middleware() {
+  let app = createApp()
+  let middlewareCalled = false
+
+  use(app, fn(req, res) {
+    middlewareCalled = true
+    return true
+  })
+
+  get(app, "/test", fn(req, res) {
+    respondJson(res, { ok: true })
+  })
+
+  let req: Request = {
+    method: "GET",
+    path: "/test",
+    url: "/test",
+    query: {},
+    params: {},
+    headers: {},
+    body: "",
+    parsedBody: null,
+    cookies: {},
+    ip: "127.0.0.1",
+    userAgent: "test"
+  }
+
+  let res = handleRequest(app, req)
+
+  if middlewareCalled {
+    println("✅ Test 7: middleware - PASS")
+  } else {
+    println("❌ Test 7: middleware - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 8: JSON 응답
+// ============================================
+fn test_jsonResponse() {
+  let app = createApp()
+
+  post(app, "/api/data", fn(req, res) {
+    respondJson(res, { name: "test", value: 42 })
+  })
+
+  let req: Request = {
+    method: "POST",
+    path: "/api/data",
+    url: "/api/data",
+    query: {},
+    params: {},
+    headers: { "content-type": "application/json" },
+    body: "",
+    parsedBody: null,
+    cookies: {},
+    ip: "127.0.0.1",
+    userAgent: "test"
+  }
+
+  let res = handleRequest(app, req)
+
+  if res.headers["Content-Type"] == "application/json" && res.body != "" {
+    println("✅ Test 8: jsonResponse - PASS")
+  } else {
+    println("❌ Test 8: jsonResponse - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 9: 경로 파라미터가 있는 라우팅
+// ============================================
+fn test_routeWithParams() {
+  let app = createApp()
+  let receivedId = ""
+
+  get(app, "/users/:id", fn(req, res) {
+    receivedId = getParam(req, "id")
+    respondJson(res, { userId: receivedId })
+  })
+
+  let req: Request = {
+    method: "GET",
+    path: "/users/123",
+    url: "/users/123",
+    query: {},
+    params: {},
+    headers: {},
+    body: "",
+    parsedBody: null,
+    cookies: {},
+    ip: "127.0.0.1",
+    userAgent: "test"
+  }
+
+  let res = handleRequest(app, req)
+
+  if receivedId == "123" {
+    println("✅ Test 9: routeWithParams - PASS")
+  } else {
+    println("❌ Test 9: routeWithParams - FAIL (received:", receivedId, ")")
+  }
+}
+
+// ============================================
+// 테스트 10: 여러 HTTP 메서드
+// ============================================
+fn test_multipleHttpMethods() {
+  let app = createApp()
+  let getCount = 0
+  let postCount = 0
+
+  get(app, "/resource", fn(req, res) {
+    getCount = getCount + 1
+    respondJson(res, { method: "GET" })
+  })
+
+  post(app, "/resource", fn(req, res) {
+    postCount = postCount + 1
+    respondJson(res, { method: "POST" })
+  })
+
+  // GET 요청
+  let getReq: Request = {
+    method: "GET",
+    path: "/resource",
+    url: "/resource",
+    query: {},
+    params: {},
+    headers: {},
+    body: "",
+    parsedBody: null,
+    cookies: {},
+    ip: "127.0.0.1",
+    userAgent: "test"
+  }
+
+  // POST 요청
+  let postReq: Request = {
+    method: "POST",
+    path: "/resource",
+    url: "/resource",
+    query: {},
+    params: {},
+    headers: {},
+    body: "",
+    parsedBody: null,
+    cookies: {},
+    ip: "127.0.0.1",
+    userAgent: "test"
+  }
+
+  handleRequest(app, getReq)
+  handleRequest(app, postReq)
+
+  if getCount == 1 && postCount == 1 {
+    println("✅ Test 10: multipleHttpMethods - PASS")
+  } else {
+    println("❌ Test 10: multipleHttpMethods - FAIL")
+  }
+}
+
+// ============================================
+// 테스트 실행
+// ============================================
+fn main() {
+  println("========================================")
+  println("Express-Compatible Framework Tests")
+  println("========================================")
+
+  test_createApp()
+  test_chainRoutes()
+  test_matchPath()
+  test_parsePathParams()
+  test_basicRouting()
+  test_notFound()
+  test_middleware()
+  test_jsonResponse()
+  test_routeWithParams()
+  test_multipleHttpMethods()
+
+  println("========================================")
+  println("✅ All tests completed!")
+  println("========================================")
+}
+
+main()

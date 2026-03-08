@@ -1,0 +1,643 @@
+/**
+ * FreeLang stdlib/async
+ * Promise, async/await, and async utilities
+ *
+ * Example:
+ *   import async from "stdlib/async"
+ *
+ *   // Sleep
+ *   await async.sleep(1000)
+ *
+ *   // Parallel execution
+ *   results = await async.all([
+ *     promise1,
+ *     promise2,
+ *     promise3
+ *   ])
+ *
+ *   // Race
+ *   winner = await async.race([promise1, promise2])
+ */
+
+/**
+ * Promise class - Simple promise implementation for FreeLang
+ */
+export class Promise {
+  constructor(executor) {
+    this.state = "pending"  // pending, fulfilled, rejected
+    this.value = null
+    this.reason = null
+    this.onFulfilled = []
+    this.onRejected = []
+
+    // Execute the executor function
+    let resolve = (val) => {
+      if this.state == "pending" {
+        this.state = "fulfilled"
+        this.value = val
+        this.onFulfilled.forEach(fn => fn(val))
+      }
+    }
+
+    let reject = (err) => {
+      if this.state == "pending" {
+        this.state = "rejected"
+        this.reason = err
+        this.onRejected.forEach(fn => fn(err))
+      }
+    }
+
+    try {
+      executor(resolve, reject)
+    } catch (e) {
+      reject(e)
+    }
+  }
+
+  /**
+   * Then handler
+   */
+  then(onFulfilled, onRejected) {
+    return new Promise((resolve, reject) => {
+      let handleFulfilled = (val) => {
+        try {
+          if typeof onFulfilled == "function" {
+            let result = onFulfilled(val)
+            if result instanceof Promise {
+              result.then(resolve, reject)
+            } else {
+              resolve(result)
+            }
+          } else {
+            resolve(val)
+          }
+        } catch (e) {
+          reject(e)
+        }
+      }
+
+      let handleRejected = (err) => {
+        try {
+          if typeof onRejected == "function" {
+            let result = onRejected(err)
+            // If error handler returns a promise, chain it
+            if result instanceof Promise {
+              result.then(resolve, reject)
+            } else {
+              resolve(result)
+            }
+          } else {
+            reject(err)
+          }
+        } catch (e) {
+          reject(e)
+        }
+      }
+
+      if this.state == "fulfilled" {
+        handleFulfilled(this.value)
+      } else if this.state == "rejected" {
+        handleRejected(this.reason)
+      } else {
+        this.onFulfilled.push(handleFulfilled)
+        this.onRejected.push(handleRejected)
+      }
+    })
+  }
+
+  /**
+   * Catch handler
+   */
+  catch(onRejected) {
+    return this.then(null, onRejected)
+  }
+
+  /**
+   * Finally handler
+   */
+  finally(onFinally) {
+    return this.then(
+      (val) => {
+        onFinally()
+        return val
+      },
+      (err) => {
+        onFinally()
+        throw err
+      }
+    )
+  }
+
+  /**
+   * Create resolved promise
+   */
+  static resolve(val) {
+    return new Promise((resolve) => {
+      resolve(val)
+    })
+  }
+
+  /**
+   * Create rejected promise
+   */
+  static reject(reason) {
+    return new Promise((resolve, reject) => {
+      reject(reason)
+    })
+  }
+
+  /**
+   * All - Wait for all promises
+   */
+  static all(promises) {
+    return new Promise((resolve, reject) => {
+      if promises.length == 0 {
+        resolve([])
+        return
+      }
+
+      let results = []
+      let completed = 0
+
+      promises.forEach((promise, i) => {
+        Promise.resolve(promise).then(
+          (val) => {
+            results[i] = val
+            completed += 1
+            if completed == promises.length {
+              resolve(results)
+            }
+          },
+          reject
+        )
+      })
+    })
+  }
+
+  /**
+   * Race - First promise wins
+   */
+  static race(promises) {
+    return new Promise((resolve, reject) => {
+      promises.forEach((promise) => {
+        Promise.resolve(promise).then(resolve, reject)
+      })
+    })
+  }
+}
+
+/**
+ * Sleep function - Return a promise that resolves after ms milliseconds
+ * @param {number} ms - Milliseconds to sleep
+ * @returns {Promise}
+ */
+export const sleep = (ms) => {
+  return new Promise((resolve) => {
+    // Use setTimeout for non-blocking delay
+    setTimeout(() => {
+      resolve()
+    }, ms)
+  })
+}
+
+/**
+ * Timeout wrapper
+ * @param {Promise} promise - Promise to wrap
+ * @param {number} ms - Timeout in milliseconds
+ * @returns {Promise}
+ */
+export const timeout = (promise, ms) => {
+  return Promise.race([
+    promise,
+    new Promise((resolve, reject) => {
+      // TODO: Use timer
+      setTimeout(() => {
+        reject(new Error(`Timeout after ${ms}ms`))
+      }, ms)
+    })
+  ])
+}
+
+/**
+ * Retry function
+ * @param {Function} fn - Async function to retry
+ * @param {number} maxAttempts - Maximum attempts
+ * @param {number} delayMs - Delay between retries
+ * @returns {Promise}
+ */
+export const retry = async (fn, maxAttempts = 3, delayMs = 1000) => {
+  let lastError = null
+
+  for let attempt = 1; attempt <= maxAttempts; attempt++
+    try {
+      return await fn()
+    } catch (e) {
+      lastError = e
+      if attempt < maxAttempts {
+        console.log(`[async.retry] Attempt ${attempt} failed, retrying in ${delayMs}ms...`)
+        await sleep(delayMs)
+      }
+    }
+
+  throw lastError
+}
+
+/**
+ * Debounce function
+ * @param {Function} fn - Function to debounce
+ * @param {number} delayMs - Delay in milliseconds
+ * @returns {Function} Debounced function
+ */
+export const debounce = (fn, delayMs) => {
+  let timeoutId = null
+
+  return (...args) => {
+    if timeoutId != null {
+      clearTimeout(timeoutId)
+    }
+
+    timeoutId = setTimeout(() => {
+      fn(...args)
+      timeoutId = null
+    }, delayMs)
+  }
+}
+
+/**
+ * Throttle function
+ * @param {Function} fn - Function to throttle
+ * @param {number} delayMs - Delay in milliseconds
+ * @returns {Function} Throttled function
+ */
+export const throttle = (fn, delayMs) => {
+  let lastCallTime = 0
+  let timeoutId = null
+
+  return (...args) => {
+    let now = Date.now()
+    let timeSinceLastCall = now - lastCallTime
+
+    let execute = () => {
+      fn(...args)
+      lastCallTime = Date.now()
+    }
+
+    if timeSinceLastCall >= delayMs {
+      execute()
+    } else {
+      if timeoutId != null {
+        clearTimeout(timeoutId)
+      }
+      timeoutId = setTimeout(execute, delayMs - timeSinceLastCall)
+    }
+  }
+}
+
+/**
+ * Queue for sequential execution
+ */
+export class Queue {
+  constructor() {
+    this.tasks = []
+    this.running = false
+  }
+
+  /**
+   * Enqueue task to the queue
+   * @param {Function} task - Async function to execute
+   */
+  enqueue(task) {
+    this.tasks.push(task)
+    return this.process()
+  }
+
+  /**
+   * Alias for enqueue
+   */
+  add(task) {
+    return this.enqueue(task)
+  }
+
+  /**
+   * Process queue sequentially
+   */
+  async process() {
+    if this.running || this.tasks.length == 0
+      return
+
+    this.running = true
+
+    while this.tasks.length > 0
+      let task = this.tasks.shift()
+      try {
+        await task()
+      } catch (e) {
+        console.error("[Queue] Task failed:", e.message)
+      }
+
+    this.running = false
+  }
+
+  /**
+   * Cancel all pending tasks
+   * @returns {number} Number of cancelled tasks
+   */
+  cancel() {
+    let cancelled = this.tasks.length
+    this.tasks = []
+    return cancelled
+  }
+
+  /**
+   * Get queue size (pending tasks)
+   */
+  size() {
+    return this.tasks.length
+  }
+
+  /**
+   * Check if queue is currently processing
+   */
+  isRunning() {
+    return this.running
+  }
+
+  /**
+   * Check if queue is empty
+   */
+  isEmpty() {
+    return this.tasks.length == 0
+  }
+
+  /**
+   * Clear all tasks
+   */
+  clear() {
+    return this.cancel()
+  }
+}
+
+/**
+ * Semaphore for controlling concurrent access
+ */
+export class Semaphore {
+  constructor(count = 1) {
+    this.count = count
+    this.waiters = []
+  }
+
+  /**
+   * Acquire semaphore
+   */
+  async acquire() {
+    if this.count > 0 {
+      this.count -= 1
+      return
+    }
+
+    return new Promise((resolve) => {
+      this.waiters.push(resolve)
+    })
+  }
+
+  /**
+   * Release semaphore
+   */
+  release() {
+    if this.waiters.length > 0 {
+      let resolve = this.waiters.shift()
+      resolve()
+    } else {
+      this.count += 1
+    }
+  }
+}
+
+/**
+ * Uncaught rejection handler
+ * Global error handler for unhandled promise rejections
+ */
+let uncaughtRejectionHandlers = []
+
+export const onUncaughtRejection = (handler) => {
+  uncaughtRejectionHandlers.push(handler)
+}
+
+export const offUncaughtRejection = (handler) => {
+  uncaughtRejectionHandlers = uncaughtRejectionHandlers.filter((h) => h != handler)
+}
+
+/**
+ * Report uncaught rejection
+ * @internal
+ */
+export const reportUncaughtRejection = (reason) => {
+  uncaughtRejectionHandlers.forEach((handler) => {
+    try {
+      handler(reason)
+    } catch (e) {
+      console.error("[async] Error in uncaught rejection handler:", e)
+    }
+  })
+}
+
+/**
+ * EventEmitter - Event pub/sub pattern
+ */
+export class EventEmitter {
+  constructor() {
+    this.listeners = {}
+  }
+
+  on(event, handler) {
+    if !this.listeners[event] {
+      this.listeners[event] = []
+    }
+    this.listeners[event].push(handler)
+    return this
+  }
+
+  off(event, handler) {
+    if this.listeners[event] {
+      this.listeners[event] = this.listeners[event].filter((h) => h != handler)
+    }
+    return this
+  }
+
+  emit(event, data) {
+    if this.listeners[event] {
+      this.listeners[event].forEach((handler) => {
+        try {
+          handler(data)
+        } catch (e) {
+          console.error("[EventEmitter] Error in handler:", e)
+        }
+      })
+    }
+    return this
+  }
+
+  once(event, handler) {
+    let onceWrapper = (data) => {
+      handler(data)
+      this.off(event, onceWrapper)
+    }
+    return this.on(event, onceWrapper)
+  }
+
+  removeAllListeners(event) {
+    if event {
+      delete this.listeners[event]
+    } else {
+      this.listeners = {}
+    }
+    return this
+  }
+
+  listenerCount(event) {
+    return this.listeners[event] ? this.listeners[event].length : 0
+  }
+}
+
+/**
+ * Channel - Buffered communication channel
+ */
+export class Channel {
+  constructor(capacity) {
+    this.buffer = []
+    this.capacity = capacity || 1
+    this.closed = false
+    this.waiters = []
+  }
+
+  send(value) {
+    if this.closed {
+      throw new Error("Channel is closed")
+    }
+
+    if this.buffer.length < this.capacity {
+      this.buffer.push(value)
+
+      // Notify waiters
+      if this.waiters.length > 0 {
+        let resolver = this.waiters.shift()
+        resolver(value)
+      }
+
+      return true
+    }
+
+    return false
+  }
+
+  receive() {
+    if this.buffer.length > 0 {
+      return this.buffer.shift()
+    }
+
+    if this.closed {
+      throw new Error("Channel is closed")
+    }
+
+    // Return a promise that resolves when data arrives
+    return new Promise((resolve) => {
+      this.waiters.push(resolve)
+    })
+  }
+
+  close() {
+    this.closed = true
+  }
+
+  isEmpty() {
+    return this.buffer.length == 0
+  }
+
+  isFull() {
+    return this.buffer.length >= this.capacity
+  }
+
+  len() {
+    return this.buffer.length
+  }
+}
+
+/**
+ * Promise.allSettled - Wait for all promises (including rejections)
+ */
+Promise.allSettled = (promises) => {
+  return new Promise((resolve) => {
+    let results = []
+    let completed = 0
+
+    if promises.length == 0 {
+      resolve([])
+      return
+    }
+
+    promises.forEach((promise, i) => {
+      Promise.resolve(promise).then(
+        (value) => {
+          results[i] = { status: "fulfilled", value: value }
+          completed += 1
+          if completed == promises.length {
+            resolve(results)
+          }
+        },
+        (reason) => {
+          results[i] = { status: "rejected", reason: reason }
+          completed += 1
+          if completed == promises.length {
+            resolve(results)
+          }
+        }
+      )
+    })
+  })
+}
+
+/**
+ * Promise.any - First fulfilled promise wins
+ */
+Promise.any = (promises) => {
+  return new Promise((resolve, reject) => {
+    let errors = []
+    let completed = 0
+
+    if promises.length == 0 {
+      reject(new Error("No promises provided"))
+      return
+    }
+
+    promises.forEach((promise, i) => {
+      Promise.resolve(promise).then(
+        (value) => {
+          resolve(value)
+        },
+        (reason) => {
+          errors[i] = reason
+          completed += 1
+          if completed == promises.length {
+            reject(new Error("All promises rejected"))
+          }
+        }
+      )
+    })
+  })
+}
+
+export default {
+  Promise,
+  sleep,
+  timeout,
+  retry,
+  debounce,
+  throttle,
+  Queue,
+  Semaphore,
+  EventEmitter,
+  Channel,
+  onUncaughtRejection,
+  offUncaughtRejection,
+  reportUncaughtRejection,
+}

@@ -1,0 +1,128 @@
+{
+  "Function": {
+    "prefix": "fn",
+    "body": [
+      "fn ${1:functionName}(${2:param}: ${3:Type}): ${4:ReturnType} {",
+      "  $5",
+      "}"
+    ],
+    "description": "Function declaration"
+  },
+  "If Statement": {
+    "prefix": "if",
+    "body": [
+      "if (${1:condition}) {",
+      "  $2",
+      "}"
+    ],
+    "description": "If statement"
+  },
+  "If-Else Statement": {
+    "prefix": "ifelse",
+    "body": [
+      "if (${1:condition}) {",
+      "  $2",
+      "} else {",
+      "  $3",
+      "}"
+    ],
+    "description": "If-else statement"
+  },
+  "For Loop": {
+    "prefix": "for",
+    "body": [
+      "for (let ${1:i} = 0; $1 < ${2:max}; $1++) {",
+      "  $3",
+      "}"
+    ],
+    "description": "For loop"
+  },
+  "While Loop": {
+    "prefix": "while",
+    "body": [
+      "while (${1:condition}) {",
+      "  $2",
+      "}"
+    ],
+    "description": "While loop"
+  },
+  "Trait": {
+    "prefix": "trait",
+    "body": [
+      "trait ${1:TraitName} {",
+      "  fn ${2:method}(${3:param}: ${4:Type}): ${5:ReturnType}",
+      "}"
+    ],
+    "description": "Trait declaration"
+  },
+  "Impl": {
+    "prefix": "impl",
+    "body": [
+      "impl ${1:Trait} for ${2:Type} {",
+      "  fn ${3:method}(${4:param}: ${5:Type}): ${6:ReturnType} {",
+      "    $7",
+      "  }",
+      "}"
+    ],
+    "description": "Trait implementation"
+  },
+  "Type Definition": {
+    "prefix": "type",
+    "body": [
+      "type ${1:TypeName} = ${2:UnionType}"
+    ],
+    "description": "Type alias"
+  },
+  "Let Statement": {
+    "prefix": "let",
+    "body": [
+      "let ${1:name}: ${2:Type} = ${3:value}"
+    ],
+    "description": "Variable declaration"
+  },
+  "Generic Function": {
+    "prefix": "genfn",
+    "body": [
+      "fn ${1:functionName}<${2:T}>(${3:param}: $2): ${4:ReturnType}<$2> {",
+      "  $5",
+      "}"
+    ],
+    "description": "Generic function"
+  },
+  "Generic Type": {
+    "prefix": "gentype",
+    "body": [
+      "trait ${1:TraitName}<${2:T}> {",
+      "  fn ${3:method}(${4:param}: $2): ${5:ReturnType}"
+    ],
+    "description": "Generic trait"
+  },
+  "Where Clause": {
+    "prefix": "where",
+    "body": [
+      "where ${1:T}: ${2:Bound}"
+    ],
+    "description": "Where clause"
+  },
+  "Array Type": {
+    "prefix": "array",
+    "body": [
+      "array<${1:ElementType}>"
+    ],
+    "description": "Array type"
+  },
+  "Map Type": {
+    "prefix": "map",
+    "body": [
+      "Map<${1:KeyType}, ${2:ValueType}>"
+    ],
+    "description": "Map type"
+  },
+  "Option Type": {
+    "prefix": "option",
+    "body": [
+      "Option<${1:Type}>"
+    ],
+    "description": "Option type"
+  }
+}

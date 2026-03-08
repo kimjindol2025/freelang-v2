@@ -1,0 +1,18 @@
+// Struct Literal Test
+// 문법: TypeName { field: value, field: value }
+
+struct Point {
+  x: i32,
+  y: i32
+}
+
+fn main(): void {
+  println("=== Test: struct literal ===")
+
+  // 올바른 struct literal 문법: TypeName { ... }
+  var p: Point = Point { x: 10, y: 20 }
+
+  println("Point: x=" + str(p.x) + " y=" + str(p.y))
+
+  println("=== struct literal 테스트 완료 ===")
+}

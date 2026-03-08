@@ -1,0 +1,93 @@
+/**
+ * FreeLang stdlib/web - 사용 예제
+ *
+ * WebResource 모듈을 사용하여 간단한 웹 애플리케이션 구축
+ */
+
+import web from "stdlib/web"
+
+fn main() {
+  println("=== FreeLang WebResource 예제 ===\n")
+
+  // 1️⃣ WebResource 생성
+  println("1️⃣ WebResource 생성...")
+  let home_html = "<h1>홈 페이지</h1><p>FreeLang 웹 서버에 오신 것을 환영합니다!</p>"
+  let home_css = "h1 { color: #2196F3; font-size: 24px; } p { color: #666; }"
+  let home_js = "console.log('Home page loaded'); alert('환영합니다!');"
+
+  let home_resource = web.create_resource(home_html, home_css, home_js)
+  println("✅ Home 리소스 생성 완료\n")
+
+  // 2️⃣ VMWeb 초기화
+  println("2️⃣ VMWeb 초기화...")
+  let vm_web = web.init_web()
+  println("✅ VMWeb 초기화 완료\n")
+
+  // 3️⃣ 리소스 등록
+  println("3️⃣ 리소스 등록...")
+  web.add_resource(&mut vm_web, "/", home_resource)
+
+  // About 페이지
+  let about_html = "<h1>About</h1><p>이것은 FreeLang으로 만들어진 웹 페이지입니다.</p>"
+  let about_css = "h1 { color: #4CAF50; } p { color: #555; }"
+  let about_js = "console.log('About page loaded');"
+  web.add_resource_parts(&mut vm_web, "/about", about_html, about_css, about_js)
+
+  // Contact 페이지
+  let contact_html = "<h1>연락처</h1><form><input type='email' placeholder='이메일'><button>제출</button></form>"
+  let contact_css = "input { padding: 10px; margin: 10px 0; } button { padding: 10px 20px; background: #FF9800; color: white; }"
+  let contact_js = "console.log('Contact page loaded');"
+  web.add_resource_parts(&mut vm_web, "/contact", contact_html, contact_css, contact_js)
+
+  println("✅ 3개 리소스 등록 완료\n")
+
+  // 4️⃣ 리소스 조회 및 렌더링
+  println("4️⃣ 리소스 조회 및 렌더링...\n")
+
+  let paths = ["/", "/about", "/contact", "/notfound"]
+  let i = 0
+  while i < paths.length {
+    let path = paths[i]
+    println("요청: " + path)
+
+    let response = web.handle_request(&vm_web, path)
+    // 응답의 첫 번째 100자만 출력
+    let preview = if response.length > 100 {
+      response.substring(0, 100) + "..."
+    } else {
+      response
+    }
+    println("응답 미리보기: " + preview + "\n")
+
+    i = i + 1
+  }
+
+  // 5️⃣ 상태 조회
+  println("5️⃣ VMWeb 상태 조회...\n")
+  let status = web.get_status(&vm_web)
+  println(status)
+
+  // 6️⃣ 테이블 생성
+  println("6️⃣ HTML 테이블 생성...\n")
+  let headers = ["이름", "역할", "상태"]
+  let rows = [
+    ["Orchestrator", "코어 엔진", "Running"],
+    ["Market Analyst", "분석가", "Running"],
+    ["Marketing Strategist", "전략가", "Idle"],
+    ["Budget Optimizer", "최적화", "Running"]
+  ]
+
+  let table = web.create_table(headers, rows)
+  println("생성된 테이블:")
+  println(table)
+  println("")
+
+  // 7️⃣ 기본 CSS 스타일 가져오기
+  println("7️⃣ 기본 CSS 스타일...")
+  let default_css = web.get_default_css("default")
+  println("Default CSS 샘플:")
+  println(default_css.substring(0, 100) + "...")
+  println("")
+
+  println("=== 예제 완료 ===")
+}

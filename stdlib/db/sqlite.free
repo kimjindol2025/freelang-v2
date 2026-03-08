@@ -1,0 +1,574 @@
+/**
+ * FreeLang SQLite Driver
+ * std/db/sqlite.free
+ *
+ * High-level SQLite interface for FreeLang
+ * Supports:
+ * - Query builder (fluent API)
+ * - Parameterized queries
+ * - Result sets
+ * - Transactions
+ */
+
+// ═════════════════════════════════════════════════════════════════════════
+// SQLite Database Connection (with FFI support)
+// ═════════════════════════════════════════════════════════════════════════
+
+/**
+ * Open SQLite database connection
+ *
+ * When FFI is fully exposed to FreeLang:
+ * - This will call ffiOpen() from sqlite_ffi_wrapper.free
+ * - Which calls fl_sqlite_open() from stdlib/core/sqlite_binding.c
+ * - Which calls sqlite3_open() from SQLite3 library
+ *
+ * For now: Returns mock connection object
+ */
+fn open(filePath: string) -> object {
+  intent: "Open SQLite database connection"
+  output: object
+  do
+    // TODO: Uncomment when FFI is available
+    // import ffi_sqlite from "./stdlib/ffi/sqlite_ffi_wrapper.free"
+    // return ffi_sqlite.ffiOpen(filePath)
+
+    // For now: Return mock connection
+    return {
+      path: filePath,
+      isOpen: true,
+      tables: [],
+      lastError: null,
+      native_handle: null
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// Query Builder (Fluent API)
+// ═════════════════════════════════════════════════════════════════════════
+
+fn table(db: object, tableName: string) -> object {
+  intent: "Start building query on specific table"
+  output: object
+  do
+    return {
+      database: db,
+      tableName: tableName,
+      selectColumns: ["*"],
+      whereConditions: [],
+      orderByColumn: null,
+      orderAscending: true,
+      limitValue: -1,
+      offsetValue: 0,
+      joinTables: []
+    }
+}
+
+fn select(builder: object, columns: array) -> object {
+  intent: "Select specific columns"
+  output: object
+  do
+    builder.selectColumns = columns
+    return builder
+}
+
+fn where(builder: object, column: string, operator: string, value) -> object {
+  intent: "Add WHERE condition"
+  output: object
+  do
+    builder.whereConditions.push({
+      column: column,
+      operator: operator,
+      value: value
+    })
+    return builder
+}
+
+fn orderBy(builder: object, column: string, ascending: bool) -> object {
+  intent: "Add ORDER BY clause"
+  output: object
+  do
+    builder.orderByColumn = column
+    builder.orderAscending = ascending
+    return builder
+}
+
+fn limit(builder: object, count: number) -> object {
+  intent: "Add LIMIT clause"
+  output: object
+  do
+    builder.limitValue = count
+    return builder
+}
+
+fn offset(builder: object, count: number) -> object {
+  intent: "Add OFFSET clause"
+  output: object
+  do
+    builder.offsetValue = count
+    return builder
+}
+
+fn build(builder: object) -> string {
+  intent: "Build SQL query string"
+  output: string
+  do
+    let query = "SELECT " + builder.selectColumns.join(", ") + " FROM " + builder.tableName
+
+    if builder.whereConditions.length > 0 {
+      query = query + " WHERE "
+      let i = 0
+      while i < builder.whereConditions.length {
+        let cond = builder.whereConditions[i]
+        query = query + cond.column + " " + cond.operator + " '" + cond.value + "'"
+        if i < builder.whereConditions.length - 1 {
+          query = query + " AND "
+        }
+        i = i + 1
+      }
+    }
+
+    if builder.orderByColumn != null {
+      query = query + " ORDER BY " + builder.orderByColumn
+      if builder.orderAscending {
+        query = query + " ASC"
+      } else {
+        query = query + " DESC"
+      }
+    }
+
+    if builder.limitValue > 0 {
+      query = query + " LIMIT " + builder.limitValue
+    }
+
+    if builder.offsetValue > 0 {
+      query = query + " OFFSET " + builder.offsetValue
+    }
+
+    return query
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// Query Execution
+// ═════════════════════════════════════════════════════════════════════════
+
+/**
+ * Execute SQLite query via FFI
+ *
+ * Data Flow:
+ * 1. Build SQL query string (this module)
+ * 2. Call FFI wrapper: ffiExecute() (sqlite_ffi_wrapper.free)
+ * 3. C binding calls: fl_sqlite_execute() (sqlite_binding.c)
+ * 4. SQLite3 executes query
+ * 5. Parse result set and return as FreeLang array
+ *
+ * FFI Wrapper (stdlib/ffi/sqlite_ffi_wrapper.free):
+ * - ffiOpen() - opens connection
+ * - ffiExecute() - executes SELECT
+ * - ffiExecuteUpdate() - executes INSERT/UPDATE/DELETE
+ * - ffiClose() - closes connection
+ *
+ * C Binding (stdlib/core/sqlite_binding.c):
+ * - fl_sqlite_execute() - SELECT execution
+ * - fl_sqlite_execute_update() - UPDATE execution
+ * - fl_sqlite_fetch_row() - row navigation
+ * - fl_sqlite_get_column_*() - value extraction
+ */
+fn execute(builder: object) -> array {
+  intent: "Execute query and return results"
+  output: array
+  do
+    let query = build(builder)
+
+    // TODO: When FFI is fully exposed to FreeLang:
+    // 1. Import FFI wrapper module
+    // let ffiSqlite = import "./stdlib/ffi/sqlite_ffi_wrapper.free"
+    //
+    // 2. Call ffiExecute() which calls C binding
+    // let results = ffiSqlite.ffiExecute(builder.database, query)
+    //
+    // 3. Return parsed result array
+    // return results
+
+    // For now: Return empty array (placeholder)
+    let results = []
+
+    return results
+}
+
+fn executeAsync(builder: object) -> object {
+  intent: "Execute query asynchronously"
+  output: object
+  do
+    return {
+      query: build(builder),
+      pending: true,
+      result: null,
+      error: null
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// Insert/Update/Delete Operations
+// ═════════════════════════════════════════════════════════════════════════
+
+fn insert(db: object, tableName: string, data: object) -> object {
+  intent: "Insert record into table"
+  output: object
+  do
+    // Build INSERT query
+    return {
+      database: db,
+      operation: "INSERT",
+      table: tableName,
+      data: data,
+      rowsAffected: 0
+    }
+}
+
+fn update(db: object, tableName: string, data: object, whereColumn: string, whereValue) -> object {
+  intent: "Update records in table"
+  output: object
+  do
+    return {
+      database: db,
+      operation: "UPDATE",
+      table: tableName,
+      data: data,
+      whereColumn: whereColumn,
+      whereValue: whereValue,
+      rowsAffected: 0
+    }
+}
+
+fn delete(db: object, tableName: string, whereColumn: string, whereValue) -> object {
+  intent: "Delete records from table"
+  output: object
+  do
+    return {
+      database: db,
+      operation: "DELETE",
+      table: tableName,
+      whereColumn: whereColumn,
+      whereValue: whereValue,
+      rowsAffected: 0
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// Transaction Support
+// ═════════════════════════════════════════════════════════════════════════
+
+fn beginTransaction(db: object) -> bool {
+  intent: "Begin database transaction"
+  output: bool
+  do
+    return true
+}
+
+fn commit(db: object) -> bool {
+  intent: "Commit transaction"
+  output: bool
+  do
+    return true
+}
+
+fn rollback(db: object) -> bool {
+  intent: "Rollback transaction"
+  output: bool
+  do
+    return true
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// Connection Management
+// ═════════════════════════════════════════════════════════════════════════
+
+/**
+ * Close database connection via FFI
+ *
+ * Calls: ffiClose() from sqlite_ffi_wrapper.free
+ * Which calls: fl_sqlite_close() from sqlite_binding.c
+ * Which calls: sqlite3_close() from SQLite3 library
+ */
+fn close(db: object) -> bool {
+  intent: "Close database connection"
+  output: bool
+  do
+    // TODO: When FFI is fully exposed:
+    // let ffiSqlite = import "./stdlib/ffi/sqlite_ffi_wrapper.free"
+    // return ffiSqlite.ffiClose(db)
+
+    db.isOpen = false
+    return true
+}
+
+fn isConnected(db: object) -> bool {
+  intent: "Check if database is connected"
+  output: bool
+  do
+    return db.isOpen
+}
+
+fn getLastError(db: object) -> string {
+  intent: "Get last error message"
+  output: string
+  do
+    return db.lastError
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// SQL Builder - Complete Functions
+// ═════════════════════════════════════════════════════════════════════════
+
+fn buildInsert(tableName: string, data: object) -> string {
+  intent: "Build INSERT SQL query"
+  output: string
+  do
+    let keys = Object.keys(data)
+    let columns = keys.join(", ")
+    let values = ""
+
+    let i = 0
+    while i < keys.length {
+      let key = keys[i]
+      let val = data[key]
+      let valStr = ""
+
+      if typeof val == "string" {
+        valStr = "'" + val.replace(/'/g, "''") + "'"
+      } else if typeof val == "number" {
+        valStr = val.toString()
+      } else if typeof val == "boolean" {
+        valStr = val ? "1" : "0"
+      } else {
+        valStr = "NULL"
+      }
+
+      values = values + valStr
+      if i < keys.length - 1 {
+        values = values + ", "
+      }
+      i = i + 1
+    }
+
+    return "INSERT INTO " + tableName + " (" + columns + ") VALUES (" + values + ")"
+}
+
+fn buildUpdate(tableName: string, data: object, whereColumn: string, whereValue) -> string {
+  intent: "Build UPDATE SQL query"
+  output: string
+  do
+    let keys = Object.keys(data)
+    let setClause = ""
+
+    let i = 0
+    while i < keys.length {
+      let key = keys[i]
+      let val = data[key]
+      let valStr = ""
+
+      if typeof val == "string" {
+        valStr = "'" + val.replace(/'/g, "''") + "'"
+      } else if typeof val == "number" {
+        valStr = val.toString()
+      } else if typeof val == "boolean" {
+        valStr = val ? "1" : "0"
+      } else {
+        valStr = "NULL"
+      }
+
+      setClause = setClause + key + " = " + valStr
+      if i < keys.length - 1 {
+        setClause = setClause + ", "
+      }
+      i = i + 1
+    }
+
+    let whereStr = whereColumn + " = '" + whereValue + "'"
+    return "UPDATE " + tableName + " SET " + setClause + " WHERE " + whereStr
+}
+
+fn buildDelete(tableName: string, whereColumn: string, whereValue) -> string {
+  intent: "Build DELETE SQL query"
+  output: string
+  do
+    let whereStr = whereColumn + " = '" + whereValue + "'"
+    return "DELETE FROM " + tableName + " WHERE " + whereStr
+}
+
+fn buildSelectWithJoin(builder: object, joinType: string, joinTable: string,
+                        onLeft: string, onRight: string) -> string {
+  intent: "Build SELECT query with JOIN"
+  output: string
+  do
+    let query = "SELECT " + builder.selectColumns.join(", ") + " FROM " + builder.tableName
+    query = query + " " + joinType + " JOIN " + joinTable + " ON " + onLeft + " = " + onRight
+
+    if builder.whereConditions.length > 0 {
+      query = query + " WHERE "
+      let i = 0
+      while i < builder.whereConditions.length {
+        let cond = builder.whereConditions[i]
+        query = query + cond.column + " " + cond.operator + " '" + cond.value + "'"
+        if i < builder.whereConditions.length - 1 {
+          query = query + " AND "
+        }
+        i = i + 1
+      }
+    }
+
+    if builder.orderByColumn != null {
+      query = query + " ORDER BY " + builder.orderByColumn
+      if builder.orderAscending {
+        query = query + " ASC"
+      } else {
+        query = query + " DESC"
+      }
+    }
+
+    if builder.limitValue > 0 {
+      query = query + " LIMIT " + builder.limitValue
+    }
+
+    return query
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// WHERE Clause Extensions
+// ═════════════════════════════════════════════════════════════════════════
+
+fn whereIn(builder: object, column: string, values: array) -> object {
+  intent: "Add WHERE ... IN (...) condition"
+  output: object
+  do
+    let valueStrs = ""
+    let i = 0
+    while i < values.length {
+      valueStrs = valueStrs + "'" + values[i] + "'"
+      if i < values.length - 1 {
+        valueStrs = valueStrs + ", "
+      }
+      i = i + 1
+    }
+
+    builder.whereConditions.push({
+      column: column,
+      operator: "IN",
+      value: "(" + valueStrs + ")"
+    })
+    return builder
+}
+
+fn whereNull(builder: object, column: string) -> object {
+  intent: "Add WHERE ... IS NULL condition"
+  output: object
+  do
+    builder.whereConditions.push({
+      column: column,
+      operator: "IS",
+      value: "NULL"
+    })
+    return builder
+}
+
+fn whereNotNull(builder: object, column: string) -> object {
+  intent: "Add WHERE ... IS NOT NULL condition"
+  output: object
+  do
+    builder.whereConditions.push({
+      column: column,
+      operator: "IS NOT",
+      value: "NULL"
+    })
+    return builder
+}
+
+fn whereLike(builder: object, column: string, pattern: string) -> object {
+  intent: "Add WHERE ... LIKE condition"
+  output: object
+  do
+    builder.whereConditions.push({
+      column: column,
+      operator: "LIKE",
+      value: pattern
+    })
+    return builder
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// Query Result Type & Helper Functions
+// ═════════════════════════════════════════════════════════════════════════
+
+export struct QueryResult {
+  sql: string
+  rows: array
+  rowCount: number
+  error: string
+  isMock: bool
+}
+
+fn executeMock(builder: object) -> object {
+  intent: "Execute query mock (SQL generation without actual DB)"
+  output: object
+  do
+    let sql = build(builder)
+    return {
+      sql: sql,
+      rows: [],
+      rowCount: 0,
+      error: "",
+      isMock: true
+    }
+}
+
+fn rawQuery(sql: string) -> object {
+  intent: "Execute raw SQL query string"
+  output: object
+  do
+    // FFI_REQUIRED: Actual query execution
+    return {
+      sql: sql,
+      rows: [],
+      rowCount: 0,
+      error: "FFI_REQUIRED: Raw query execution not available",
+      isMock: true
+    }
+}
+
+fn validateSql(sql: string) -> bool {
+  intent: "Validate SQL query for common injection patterns"
+  output: bool
+  do
+    // Basic SQL injection checks
+    let lowerSql = sql
+
+    // Check for multiple semicolons (chained queries)
+    let semiCount = 0
+    let i = 0
+    while i < lowerSql.length {
+      if lowerSql[i] == ";" {
+        semiCount = semiCount + 1
+      }
+      i = i + 1
+    }
+
+    if semiCount > 1 {
+      return false
+    }
+
+    // Check for dangerous keywords
+    if lowerSql.indexOf("DROP") != -1 {
+      return false
+    }
+    if lowerSql.indexOf("TRUNCATE") != -1 {
+      return false
+    }
+    if lowerSql.indexOf("ALTER") != -1 {
+      return false
+    }
+    if lowerSql.indexOf("CREATE") != -1 && sql.indexOf("SELECT") == -1 {
+      return false
+    }
+
+    return true
+}

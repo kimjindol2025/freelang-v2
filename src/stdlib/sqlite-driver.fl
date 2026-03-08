@@ -1,0 +1,246 @@
+/**
+ * FreeLang SQLite Driver
+ *
+ * Native SQLite 함수들을 ORM과 연결
+ * - db_open: 데이터베이스 연결
+ * - db_exec: INSERT/UPDATE/DELETE 실행
+ * - db_query: SELECT 실행
+ * - db_one: 첫 행 반환
+ * - db_close: 연결 종료
+ *
+ * Phase B 완성 (SQLite 드라이버)
+ */
+
+// ============================================
+// SQLite 연결 관리
+// ============================================
+
+struct SQLiteConnection {
+  path: string,
+  dbId: int,        // Native db_id
+  isConnected: bool,
+  lastError: string
+}
+
+// ============================================
+// SQLite 열기
+// ============================================
+
+fn sqlite_open(path: string) -> SQLiteConnection {
+  // Native 함수 호출
+  let dbId = sqlite.db_open(path)
+
+  if dbId < 0 {
+    return {
+      path: path,
+      dbId: -1,
+      isConnected: false,
+      lastError: "Failed to open database"
+    }
+  }
+
+  return {
+    path: path,
+    dbId: dbId,
+    isConnected: true,
+    lastError: ""
+  }
+}
+
+// ============================================
+// SQLite 쿼리 실행 (SELECT)
+// ============================================
+
+fn sqlite_query(conn: SQLiteConnection, sql: string, params: array) -> array {
+  if !conn.isConnected {
+    println("[ERROR] Database not connected")
+    return []
+  }
+
+  // Native db_query 호출
+  let results = sqlite.db_query(conn.dbId, sql, params)
+
+  if results == null {
+    return []
+  }
+
+  return results
+}
+
+// ============================================
+// SQLite 한 행 조회
+// ============================================
+
+fn sqlite_one(conn: SQLiteConnection, sql: string, params: array) -> map {
+  let results = sqlite_query(conn, sql, params)
+
+  if arr.length(results) > 0 {
+    return results[0]
+  }
+
+  return null
+}
+
+// ============================================
+// SQLite 실행 (INSERT/UPDATE/DELETE)
+// ============================================
+
+fn sqlite_exec(conn: SQLiteConnection, sql: string, params: array) -> bool {
+  if !conn.isConnected {
+    println("[ERROR] Database not connected")
+    return false
+  }
+
+  // Native db_exec 호출
+  let success = sqlite.db_exec(conn.dbId, sql, params)
+  return success
+}
+
+// ============================================
+// SQLite 연결 종료
+// ============================================
+
+fn sqlite_close(conn: SQLiteConnection) -> void {
+  if !conn.isConnected {
+    return
+  }
+
+  // TODO: Native db_close 구현 필요
+  conn.isConnected = false
+}
+
+// ============================================
+// 마이그레이션 테이블 생성
+// ============================================
+
+fn sqlite_init_migrations(conn: SQLiteConnection) -> bool {
+  let createTableSQL = "
+    CREATE TABLE IF NOT EXISTS migrations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      batch INTEGER NOT NULL,
+      executed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  "
+
+  return sqlite_exec(conn, createTableSQL, [])
+}
+
+// ============================================
+// 마이그레이션 상태 조회
+// ============================================
+
+fn sqlite_get_migrations(conn: SQLiteConnection) -> array {
+  let sql = "SELECT name, batch, executed_at FROM migrations ORDER BY batch ASC"
+  return sqlite_query(conn, sql, [])
+}
+
+// ============================================
+// 마이그레이션 기록
+// ============================================
+
+fn sqlite_record_migration(conn: SQLiteConnection, name: string, batch: int) -> bool {
+  let sql = "INSERT INTO migrations (name, batch) VALUES (?, ?)"
+  return sqlite_exec(conn, sql, [name, batch])
+}
+
+// ============================================
+// 트랜잭션 시작
+// ============================================
+
+fn sqlite_begin_transaction(conn: SQLiteConnection) -> bool {
+  return sqlite_exec(conn, "BEGIN TRANSACTION", [])
+}
+
+// ============================================
+// 커밋
+// ============================================
+
+fn sqlite_commit(conn: SQLiteConnection) -> bool {
+  return sqlite_exec(conn, "COMMIT", [])
+}
+
+// ============================================
+// 롤백
+// ============================================
+
+fn sqlite_rollback(conn: SQLiteConnection) -> bool {
+  return sqlite_exec(conn, "ROLLBACK", [])
+}
+
+// ============================================
+// 테이블 존재 확인
+// ============================================
+
+fn sqlite_table_exists(conn: SQLiteConnection, table: string) -> bool {
+  let sql = "SELECT name FROM sqlite_master WHERE type='table' AND name=?"
+  let result = sqlite_one(conn, sql, [table])
+  return result != null
+}
+
+// ============================================
+// 테이블 생성 (간단한 버전)
+// ============================================
+
+fn sqlite_create_table(conn: SQLiteConnection, table: string, schema: string) -> bool {
+  let sql = "CREATE TABLE IF NOT EXISTS " + table + " (" + schema + ")"
+  return sqlite_exec(conn, sql, [])
+}
+
+// ============================================
+// 테이블 삭제
+// ============================================
+
+fn sqlite_drop_table(conn: SQLiteConnection, table: string) -> bool {
+  let sql = "DROP TABLE IF EXISTS " + table
+  return sqlite_exec(conn, sql, [])
+}
+
+// ============================================
+// 데이터베이스 정보 조회
+// ============================================
+
+fn sqlite_info(conn: SQLiteConnection) -> map {
+  // 테이블 목록
+  let tables_sql = "SELECT name FROM sqlite_master WHERE type='table'"
+  let tables = sqlite_query(conn, tables_sql, [])
+
+  // 전체 크기 조회
+  let size_sql = "SELECT page_count * page_size as size FROM pragma_page_count, pragma_page_size"
+  let size_result = sqlite_one(conn, size_sql, [])
+
+  return {
+    path: conn.path,
+    isConnected: conn.isConnected,
+    tables: tables,
+    tableCount: arr.length(tables),
+    size: size_result != null ? size_result.size : 0
+  }
+}
+
+// ============================================
+// Export
+// ============================================
+
+export {
+  SQLiteConnection,
+
+  sqlite_open,
+  sqlite_close,
+  sqlite_query,
+  sqlite_one,
+  sqlite_exec,
+
+  sqlite_init_migrations,
+  sqlite_get_migrations,
+  sqlite_record_migration,
+
+  sqlite_begin_transaction,
+  sqlite_commit,
+  sqlite_rollback,
+
+  sqlite_table_exists,
+  sqlite_create_table,
+  sqlite_drop_table,
+  sqlite_info
+}

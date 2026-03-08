@@ -1,0 +1,42 @@
+// ─────────────────────────────────────────────────────────────────
+// IR Generator Minimal (자체호스팅용 최소한의 구현)
+// ─────────────────────────────────────────────────────────────────
+
+// IR 명령어 빌드
+fn buildIRCommand(opcode) {
+  return opcode;
+}
+
+fn emitPush(value) {
+  return "PUSH:" + value;
+}
+
+fn emitAdd() {
+  return "ADD";
+}
+
+fn emitCall(name) {
+  return "CALL:" + name;
+}
+
+// 간단한 식 컴파일
+fn compileSimpleExpr(expr) {
+  if (expr.type == "number") {
+    return emitPush(expr.value);
+  }
+  return null;
+}
+
+fn version() {
+  return "0.1.0-minimal";
+}
+
+// 테스트
+fn demo() {
+  println("IR Generator Minimal");
+  println(emitPush(5));
+  println(emitAdd());
+  println(emitCall("test"));
+}
+
+// demo();

@@ -1,0 +1,7 @@
+fn main() {
+  let test_var = [1, 0, 1]
+  println("Test: " + str(test_var))
+  println("Done!")
+}
+
+main()

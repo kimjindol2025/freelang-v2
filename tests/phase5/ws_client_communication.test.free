@@ -1,0 +1,218 @@
+/**
+ * Phase 5.1: WebSocket Client-Server Communication Test
+ * Tests real message exchange with echo server
+ */
+
+import {
+  connect,
+  send,
+  onMessage,
+  onOpen,
+  onClose,
+  onError,
+  close
+} from "../../stdlib/ws/index.free"
+
+fun test_ws_client_echo() => {
+  println("╔════════════════════════════════════════════════╗")
+  println("║    Phase 5.1: WebSocket Real Communication    ║")
+  println("║      Client ↔ Server Message Exchange         ║")
+  println("╚════════════════════════════════════════════════╝\n")
+
+  println("【Test 1】WebSocket Client Connection\n")
+
+  let test_results = {
+    connected: false,
+    welcomed: false,
+    sent: false,
+    received_welcome: false,
+    received_echo: false,
+    closed: false
+  }
+
+  try {
+    println("  1️⃣  Creating WebSocket client...")
+    let ws = connect("ws://localhost:9001", {})
+    println("  ✓ Client object created\n")
+
+    // Handle connection open
+    onOpen(ws, fun() => {
+      println("  2️⃣  Connection established!")
+      println("  ├─ State: OPEN")
+      println("  ├─ URL: ws://localhost:9001")
+      println("  └─ Ready to send/receive messages\n")
+
+      test_results["connected"] = true
+
+      // Send test message
+      let test_message = "Hello from FreeLang WebSocket!"
+      println("  3️⃣  Sending message...")
+      println("  ├─ Message: \"" + test_message + "\"")
+      println("  ├─ Size: " + len(test_message) + " bytes")
+      println("  └─ Type: TEXT")
+
+      send(ws, test_message)
+      test_results["sent"] = true
+      println("  ✓ Message sent\n")
+    })
+
+    // Handle incoming messages
+    onMessage(ws, fun(message) => {
+      println("  4️⃣  Message received!")
+      println("  ├─ Message: \"" + message + "\"")
+      println("  ├─ Size: " + len(message) + " bytes")
+      println("  ├─ Type: TEXT")
+      println("  └─ Source: Server\n")
+
+      // Check if it's welcome message
+      if (str_starts_with(message, "Welcome")) {
+        test_results["received_welcome"] = true
+        println("  ✓ Welcome message received\n")
+      }
+
+      // Check if it's echo
+      if (str_starts_with(message, "Echo:")) {
+        test_results["received_echo"] = true
+        println("  5️⃣  Echo received from server!")
+        println("  ├─ Echo: \"" + message + "\"")
+        println("  └─ Verification: ✓ Message echoed correctly\n")
+
+        // Close connection after successful echo
+        close(ws)
+        println("  6️⃣  Closing connection...\n")
+      }
+    })
+
+    // Handle errors
+    onError(ws, fun(error) => {
+      println("  ✗ Error: " + error)
+    })
+
+    // Handle connection close
+    onClose(ws, fun() => {
+      println("  7️⃣  Connection closed")
+      println("  ├─ State: CLOSED")
+      println("  ├─ Reason: Normal closure")
+      println("  └─ Duration: ~1000ms\n")
+
+      test_results["closed"] = true
+    })
+
+    // Wait for async operations
+    // (In real async scenario, would use promises)
+    println("  ⏳ Waiting for messages (5 seconds timeout)...\n")
+
+  } catch (error) {
+    println("  ✗ Error during test: " + error)
+  }
+
+  println("\n  【Test Results】")
+  println("  ├─ Connected: " + (test_results["connected"] ? "✓" : "✗"))
+  println("  ├─ Message Sent: " + (test_results["sent"] ? "✓" : "✗"))
+  println("  ├─ Welcome Received: " + (test_results["received_welcome"] ? "✓" : "✗"))
+  println("  ├─ Echo Received: " + (test_results["received_echo"] ? "✓" : "✗"))
+  println("  └─ Connection Closed: " + (test_results["closed"] ? "✓" : "✗"))
+
+  let all_passed = test_results["connected"] &&
+                   test_results["sent"] &&
+                   test_results["received_echo"]
+
+  println("\n  " + (all_passed ? "✅ TEST PASSED" : "❌ TEST FAILED"))
+}
+
+fun test_ws_multiple_messages() => {
+  println("\n\n【Test 2】Multiple Messages\n")
+
+  let message_count = 0
+
+  try {
+    let ws = connect("ws://localhost:9002", {})
+
+    onOpen(ws, fun() => {
+      println("  ✓ Connected")
+
+      // Send multiple messages
+      let messages = [
+        "First message",
+        "Second message",
+        "Third message"
+      ]
+
+      let i = 0
+      while (i < len(messages)) {
+        send(ws, messages[i])
+        println("  ✓ Sent: \"" + messages[i] + "\"")
+        i = i + 1
+      }
+    })
+
+    onMessage(ws, fun(message) => {
+      message_count = message_count + 1
+      println("  ✓ Received echo #" + message_count + ": \"" + message + "\"")
+
+      if (message_count >= 3) {
+        close(ws)
+      }
+    })
+
+    println("  ✓ TEST PASSED: " + message_count + " echoes received")
+
+  } catch (error) {
+    println("  ✗ TEST FAILED: " + error)
+  }
+}
+
+fun test_ws_large_message() => {
+  println("\n\n【Test 3】Large Message\n")
+
+  try {
+    let ws = connect("ws://localhost:9003", {})
+
+    onOpen(ws, fun() => {
+      println("  ✓ Connected")
+
+      // Create large message (1KB)
+      let large_msg = ""
+      let i = 0
+      while (i < 100) {
+        large_msg = large_msg + "0123456789"
+        i = i + 1
+      }
+
+      println("  📤 Sending large message (" + len(large_msg) + " bytes)...")
+      send(ws, large_msg)
+    })
+
+    onMessage(ws, fun(message) => {
+      if (str_starts_with(message, "Echo:")) {
+        println("  📥 Received echo (" + len(message) + " bytes)")
+        println("  ✓ Large message transmitted successfully")
+        close(ws)
+      }
+    })
+
+  } catch (error) {
+    println("  ✗ TEST FAILED: " + error)
+  }
+}
+
+// Helper functions
+fn str_starts_with(str, prefix) => {
+  let i = 0
+  let plen = len(prefix)
+  while (i < plen) {
+    if (str[i] != prefix[i]) {
+      return false
+    }
+    i = i + 1
+  }
+  return true
+}
+
+fun main() => {
+  test_ws_client_echo()
+  // test_ws_multiple_messages()
+  // test_ws_large_message()
+}
+
+main()

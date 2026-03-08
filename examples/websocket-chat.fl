@@ -1,0 +1,243 @@
+// ═══════════════════════════════════════════════════════════════════════
+// WebSocket Chat Application - Complete Example
+// ═══════════════════════════════════════════════════════════════════════
+// A real-time chat server using WebSocket
+// Features:
+//  - User join/leave notifications
+//  - Message broadcasting
+//  - User list management
+//  - Timestamp on every message
+
+fn main() {
+  println("╔════════════════════════════════════════════╗");
+  println("║  WebSocket Chat Server - FreeLang v2      ║");
+  println("╚════════════════════════════════════════════╝");
+
+  let port = 8080;
+  let server = ws.createServer(port);
+
+  // User registry: map of username -> client
+  let users = map.new();
+
+  // Statistics
+  let messageCount = 0;
+  let totalUsers = 0;
+
+  // ─────────────────────────────────────────────────────
+  // Client Connection Handler
+  // ─────────────────────────────────────────────────────
+
+  ws.onConnection(server, fn(client) {
+    println("[SYSTEM] New client connected: " + client.id);
+
+    // Send welcome message
+    ws.send(client, json.stringify({
+      type: "welcome",
+      message: "Welcome to FreeLang WebSocket Chat!",
+      timestamp: os.time()
+    }));
+  });
+
+  // ─────────────────────────────────────────────────────
+  // Message Handler
+  // ─────────────────────────────────────────────────────
+
+  ws.onMessage(server, fn(client, rawMsg) {
+    try {
+      let msg = json.parse(rawMsg);
+
+      match msg.type {
+        "join" => {
+          // User joins chat
+          let username = msg.username;
+
+          // Validate username
+          if strlen(username) == 0 {
+            ws.send(client, json.stringify({
+              type: "error",
+              message: "Username cannot be empty"
+            }));
+            return;
+          }
+
+          // Check if username already exists
+          if map.has(users, username) {
+            ws.send(client, json.stringify({
+              type: "error",
+              message: "Username already taken"
+            }));
+            return;
+          }
+
+          // Register user
+          map.set(users, username, client);
+          client.username = username;
+          totalUsers = totalUsers + 1;
+
+          println("[JOIN] " + username + " joined (Total: " + str(totalUsers) + ")");
+
+          // Notify all clients
+          ws.broadcast(server, json.stringify({
+            type: "user_joined",
+            username: username,
+            userCount: totalUsers,
+            timestamp: os.time(),
+            message: username + " joined the chat"
+          }));
+        },
+
+        "message" => {
+          // User sends message
+          let username = msg.username;
+          let text = msg.text;
+
+          if !map.has(users, username) {
+            ws.send(client, json.stringify({
+              type: "error",
+              message: "User not registered"
+            }));
+            return;
+          }
+
+          messageCount = messageCount + 1;
+
+          println("[MSG] " + username + ": " + text);
+
+          // Broadcast to all
+          ws.broadcast(server, json.stringify({
+            type: "message",
+            from: username,
+            text: text,
+            timestamp: os.time(),
+            messageId: messageCount
+          }));
+        },
+
+        "typing" => {
+          // User is typing
+          let username = msg.username;
+
+          ws.broadcastExcept(server, client, json.stringify({
+            type: "user_typing",
+            username: username,
+            timestamp: os.time()
+          }));
+        },
+
+        "list" => {
+          // Request user list
+          let userList = map.keys(users);
+          ws.send(client, json.stringify({
+            type: "user_list",
+            users: userList,
+            count: arr.length(userList),
+            timestamp: os.time()
+          }));
+        },
+
+        "stats" => {
+          // Request statistics
+          ws.send(client, json.stringify({
+            type: "stats",
+            totalUsers: totalUsers,
+            messageCount: messageCount,
+            timestamp: os.time()
+          }));
+        },
+
+        "leave" => {
+          // User leaves
+          let username = msg.username;
+
+          if map.has(users, username) {
+            map.delete(users, username);
+            totalUsers = totalUsers - 1;
+
+            println("[LEAVE] " + username + " left (Total: " + str(totalUsers) + ")");
+
+            ws.broadcast(server, json.stringify({
+              type: "user_left",
+              username: username,
+              userCount: totalUsers,
+              timestamp: os.time(),
+              message: username + " left the chat"
+            }));
+          }
+        },
+
+        _ => {
+          // Unknown message type
+          println("[WARN] Unknown message type: " + msg.type);
+        }
+      }
+    } catch e {
+      println("[ERROR] Failed to parse message: " + e);
+      ws.send(client, json.stringify({
+        type: "error",
+        message: "Invalid message format"
+      }));
+    }
+  });
+
+  // ─────────────────────────────────────────────────────
+  // Disconnection Handler
+  // ─────────────────────────────────────────────────────
+
+  ws.onDisconnection(server, fn(client) {
+    if client.username {
+      let username = client.username;
+      map.delete(users, username);
+      totalUsers = totalUsers - 1;
+
+      println("[DISCONNECT] " + username + " disconnected (Total: " + str(totalUsers) + ")");
+
+      // Notify remaining clients
+      ws.broadcast(server, json.stringify({
+        type: "user_left",
+        username: username,
+        userCount: totalUsers,
+        timestamp: os.time(),
+        message: username + " disconnected"
+      }));
+    } else {
+      println("[DISCONNECT] Anonymous client disconnected");
+    }
+  });
+
+  // ─────────────────────────────────────────────────────
+  // Error Handler
+  // ─────────────────────────────────────────────────────
+
+  ws.onError(server, fn(error) {
+    println("[ERROR] WebSocket error: " + error);
+  });
+
+  // ─────────────────────────────────────────────────────
+  // Start Server
+  // ─────────────────────────────────────────────────────
+
+  ws.listen(server);
+
+  println("");
+  println("📡 WebSocket chat server listening on ws://localhost:" + str(port));
+  println("");
+  println("Connection format:");
+  println("  ws://localhost:" + str(port));
+  println("");
+  println("Message types:");
+  println("  {\"type\":\"join\",\"username\":\"Alice\"}");
+  println("  {\"type\":\"message\",\"username\":\"Alice\",\"text\":\"Hello!\"}");
+  println("  {\"type\":\"typing\",\"username\":\"Alice\"}");
+  println("  {\"type\":\"list\"}");
+  println("  {\"type\":\"stats\"}");
+  println("  {\"type\":\"leave\",\"username\":\"Alice\"}");
+  println("");
+
+  // Keep server running
+  while true {
+    // In real implementation, this would be event loop
+    let _dummy = 1;
+  }
+}
+
+main()

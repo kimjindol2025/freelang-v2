@@ -1,0 +1,322 @@
+/**
+ * FreeLang stdlib/json
+ * JSON parsing and stringification
+ *
+ * Example:
+ *   import json from "stdlib/json"
+ *
+ *   // Parse
+ *   obj = json.parse('{"name":"kim","age":30}')
+ *   console.log(obj.name)  // "kim"
+ *
+ *   // Stringify
+ *   str = json.stringify({ status: "ok", code: 200 })
+ *   console.log(str)  // '{"status":"ok","code":200}'
+ */
+
+// JSON Parser & Stringifier
+export const json = {
+  /**
+   * Parse JSON string to object
+   * @param {string} jsonString - JSON string
+   * @returns {object} Parsed object
+   */
+  parse: (jsonString) => {
+    if typeof jsonString != "string"
+      return null
+
+    jsonString = jsonString.trim()
+
+    // Handle null, true, false
+    if jsonString == "null" return null
+    if jsonString == "true" return true
+    if jsonString == "false" return false
+
+    // Handle numbers
+    if /^-?\d+\.?\d*([eE][+-]?\d+)?$/.test(jsonString)
+      return parseFloat(jsonString)
+
+    // Handle strings
+    if jsonString[0] == '"' && jsonString[jsonString.length - 1] == '"'
+      return parseJsonString(jsonString.slice(1, -1))
+
+    // Handle arrays
+    if jsonString[0] == '[' && jsonString[jsonString.length - 1] == ']'
+      return parseJsonArray(jsonString)
+
+    // Handle objects
+    if jsonString[0] == '{' && jsonString[jsonString.length - 1] == '}'
+      return parseJsonObject(jsonString)
+
+    return null
+  },
+
+  /**
+   * Stringify object to JSON
+   * @param {object} obj - Object to stringify
+   * @returns {string} JSON string
+   */
+  stringify: (obj) => {
+    if obj == null
+      return "null"
+
+    let type = typeof obj
+    if type == "boolean"
+      return obj ? "true" : "false"
+
+    if type == "number"
+      return obj.toString()
+
+    if type == "string"
+      return '"' + escapeJsonString(obj) + '"'
+
+    if Array.isArray(obj) {
+      let result = "["
+      for let i = 0; i < obj.length; i++
+        result += json.stringify(obj[i])
+        if i < obj.length - 1
+          result += ","
+      result += "]"
+      return result
+    }
+
+    if type == "object" {
+      let result = "{"
+      let keys = Object.keys(obj)
+      for let i = 0; i < keys.length; i++
+        let key = keys[i]
+        result += '"' + key + '":' + json.stringify(obj[key])
+        if i < keys.length - 1
+          result += ","
+      result += "}"
+      return result
+    }
+
+    return "null"
+  },
+
+  /**
+   * Pretty print JSON
+   * @param {object} obj - Object to stringify
+   * @param {number} indent - Indentation spaces (default: 2)
+   * @returns {string} Formatted JSON string
+   */
+  stringify_pretty: (obj, indent = 2) => {
+    return stringifyPrettyInner(obj, indent, 0)
+  },
+
+  /**
+   * Check if string is valid JSON
+   * @param {string} str - String to check
+   * @returns {boolean} Is valid JSON
+   */
+  is_valid: (str) => {
+    try {
+      json.parse(str)
+      return true
+    } catch {
+      return false
+    }
+  },
+}
+
+// ===== Helper Functions =====
+
+// Parse JSON string (handle escapes)
+function parseJsonString(str) {
+  let result = ""
+  let i = 0
+  while i < str.length {
+    if str[i] == "\\" && i + 1 < str.length {
+      let next = str[i + 1]
+      if next == '"' result += '"'
+      else if next == "\\" result += "\\"
+      else if next == "/" result += "/"
+      else if next == "b" result += "\b"
+      else if next == "f" result += "\f"
+      else if next == "n" result += "\n"
+      else if next == "r" result += "\r"
+      else if next == "t" result += "\t"
+      else if next == "u" && i + 5 < str.length {
+        // Unicode escape: \uXXXX
+        let hex = str.slice(i + 2, i + 6)
+        result += String.fromCharCode(parseInt(hex, 16))
+        i += 4
+      }
+      i += 2
+    } else {
+      result += str[i]
+      i += 1
+    }
+  }
+  return result
+}
+
+// Parse JSON array
+function parseJsonArray(str) {
+  let content = str.slice(1, -1).trim()
+  if content == ""
+    return []
+
+  let result = []
+  let current = ""
+  let depth = 0
+  let in_string = false
+
+  for let i = 0; i < content.length; i++
+    let char = content[i]
+
+    if char == '"' && content[i - 1] != "\\"
+      in_string = !in_string
+
+    if !in_string {
+      if char == "[" || char == "{" depth += 1
+      if char == "]" || char == "}" depth -= 1
+      if char == "," && depth == 0 {
+        result.push(json.parse(current.trim()))
+        current = ""
+        continue
+      }
+    }
+
+    current += char
+
+  if current.trim() != ""
+    result.push(json.parse(current.trim()))
+
+  return result
+}
+
+// Parse JSON object
+function parseJsonObject(str) {
+  let content = str.slice(1, -1).trim()
+  if content == ""
+    return {}
+
+  let result = {}
+  let current = ""
+  let depth = 0
+  let in_string = false
+
+  for let i = 0; i < content.length; i++
+    let char = content[i]
+
+    if char == '"' && content[i - 1] != "\\"
+      in_string = !in_string
+
+    if !in_string {
+      if char == "[" || char == "{" depth += 1
+      if char == "]" || char == "}" depth -= 1
+      if char == "," && depth == 0 {
+        parsePair(current.trim(), result)
+        current = ""
+        continue
+      }
+    }
+
+    current += char
+
+  if current.trim() != ""
+    parsePair(current.trim(), result)
+
+  return result
+}
+
+// Parse key:value pair
+function parsePair(pair, obj) {
+  let colon = pair.indexOf(":")
+  if colon == -1
+    return
+
+  let key = pair.slice(0, colon).trim()
+  let value = pair.slice(colon + 1).trim()
+
+  // Remove quotes from key
+  if key[0] == '"'
+    key = key.slice(1, -1)
+
+  obj[key] = json.parse(value)
+}
+
+// Escape special characters in string
+function escapeJsonString(str) {
+  return str
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t")
+    .replace(/\b/g, "\\b")
+    .replace(/\f/g, "\\f")
+}
+
+// ===== Pretty Printing Helpers =====
+
+// Create indentation string (depth * spaces)
+function makeIndent(depth, spaces) {
+  let result = ""
+  let i = 0
+  while i < depth * spaces {
+    result += " "
+    i += 1
+  }
+  return result
+}
+
+// Stringify with pretty printing (recursive)
+function stringifyPrettyInner(obj, indent, depth) {
+  if obj == null
+    return "null"
+
+  let type = typeof obj
+  if type == "boolean"
+    return obj ? "true" : "false"
+
+  if type == "number"
+    return obj.toString()
+
+  if type == "string"
+    return '"' + escapeJsonString(obj) + '"'
+
+  if Array.isArray(obj) {
+    if obj.length == 0
+      return "[]"
+
+    let currentIndent = makeIndent(depth, indent)
+    let nextIndent = makeIndent(depth + 1, indent)
+    let result = "[\n"
+
+    for let i = 0; i < obj.length; i++
+      result += nextIndent + stringifyPrettyInner(obj[i], indent, depth + 1)
+      if i < obj.length - 1
+        result += ","
+      result += "\n"
+
+    result += currentIndent + "]"
+    return result
+  }
+
+  if type == "object" {
+    let keys = Object.keys(obj)
+    if keys.length == 0
+      return "{}"
+
+    let currentIndent = makeIndent(depth, indent)
+    let nextIndent = makeIndent(depth + 1, indent)
+    let result = "{\n"
+
+    for let i = 0; i < keys.length; i++
+      let key = keys[i]
+      result += nextIndent + '"' + key + '": ' + stringifyPrettyInner(obj[key], indent, depth + 1)
+      if i < keys.length - 1
+        result += ","
+      result += "\n"
+
+    result += currentIndent + "}"
+    return result
+  }
+
+  return "null"
+}
+
+export default json

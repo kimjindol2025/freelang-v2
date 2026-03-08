@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<idea-plugin>
+    <id>com.freelang.intellij</id>
+    <name>FreeLang</name>
+    <vendor email="team@freelang.dev" url="https://github.com/freelang/freelang">FreeLang Contributors</vendor>
+
+    <description><![CDATA[
+    Professional IDE support for FreeLang programming language.
+
+    Features:
+    - Syntax highlighting
+    - Code completion
+    - Hover type information
+    - Go to definition
+    - Real-time error detection
+    ]]></description>
+
+    <change-notes><![CDATA[
+    <b>2.2.0</b> - Initial release: WebStorm IDE Integration
+    - Language Server Protocol (LSP) integration
+    - Syntax highlighting for FreeLang code
+    - Code completion and snippets
+    - Type information on hover
+    - Definition navigation
+    - Real-time diagnostics
+    - Project settings configuration
+    ]]></change-notes>
+
+    <!-- Minimal version: IntelliJ Platform 2023.1 -->
+    <depends>com.intellij.modules.platform</depends>
+    <!-- LSP4IJ dependency -->
+    <depends>com.redhat.devtools.lsp4ij</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- File Type Registration -->
+        <fileType
+            name="FreeLang"
+            implementationClass="com.freelang.intellij.FreeLangFileType"
+            fieldName="INSTANCE"
+            language="FreeLang"
+            extensions="fl"/>
+
+        <!-- Language Parser Definition -->
+        <lang.parserDefinition
+            language="FreeLang"
+            implementationClass="com.freelang.intellij.FreeLangParserDefinition"/>
+
+        <!-- Syntax Highlighter -->
+        <lang.syntaxHighlighterFactory
+            language="FreeLang"
+            implementationClass="com.freelang.intellij.FreeLangSyntaxHighlighterFactory"/>
+
+        <!-- Settings Configuration -->
+        <projectConfigurable
+            id="FreeLang"
+            parentId="language"
+            displayName="FreeLang"
+            implementationClass="com.freelang.intellij.FreeLangSettingsConfigurable"/>
+    </extensions>
+
+    <!-- LSP Server Integration -->
+    <extensions defaultExtensionNs="com.redhat.devtools.lsp4ij">
+        <!-- LSP Server Definition -->
+        <server
+            id="freelang"
+            name="FreeLang Language Server"
+            factoryClass="com.freelang.intellij.FreeLangLSPServerFactory"/>
+
+        <!-- File Type to LSP Server Mapping -->
+        <languageMapping
+            language="FreeLang"
+            serverId="freelang"/>
+    </extensions>
+
+    <application-components>
+        <!-- Application-level components (if needed in future) -->
+    </application-components>
+
+    <actions>
+        <!-- Custom actions (if needed in future) -->
+    </actions>
+</idea-plugin>

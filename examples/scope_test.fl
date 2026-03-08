@@ -1,0 +1,37 @@
+// 로컬 변수 스코프 테스트
+// 함수 내 변수가 격리되는지 검증
+
+let global_x = 100;
+
+fn test_local_scope() {
+  let local_x = 5;
+  let result = local_x + 10;
+  return result;
+}
+
+fn modify_and_return() {
+  let x = 20;
+  x = x + 5;
+  return x;
+}
+
+fn nested_scope() {
+  let a = 1;
+  if (a == 1) {
+    let b = 2;
+    a = a + b;
+  }
+  return a;
+}
+
+// 테스트
+let r1 = test_local_scope();
+println(r1);  // Expected: 15
+
+let r2 = modify_and_return();
+println(r2);  // Expected: 25
+
+let r3 = nested_scope();
+println(r3);  // Expected: 3
+
+println(global_x);  // Expected: 100 (unchanged)

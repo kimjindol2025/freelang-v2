@@ -1,0 +1,154 @@
+/**
+ * Phase 5 Integration Test: WebSocket Server-Client Communication
+ * Full bidirectional message exchange
+ */
+
+import {
+  createServer,
+  listen,
+  onConnection,
+  broadcast,
+  close as closeServer,
+  createClient,
+  send,
+  onMessage,
+  onOpen,
+  onClose,
+  onError,
+  close as closeClient
+} from "../../stdlib/ws/index.free"
+
+fun test_ws_server_client_integration() => {
+  println("【Test 1】WebSocket Server-Client Integration")
+
+  let results = {
+    server_ready: false,
+    client_connected: false,
+    message_sent: false,
+    message_received: false,
+    echo_received: false
+  }
+
+  try {
+    println("\n  [Server Setup]")
+
+    // Create WebSocket server
+    let server = createServer(9001, {})
+    println("  ✓ Server created on port 9001")
+
+    // Register connection handler
+    onConnection(server, fun(client) => {
+      println("  ✓ Server: Client connected (id=" + client["id"] + ")")
+      results["client_connected"] = true
+
+      // Setup message handler
+      let messageHandler = fun(message) => {
+        println("  ✓ Server: Received '" + message + "'")
+        results["message_received"] = true
+
+        // Send response back
+        let response = "Echo: " + message
+        client["send"](response)
+        println("  ✓ Server: Sent '" + response + "'")
+      }
+
+      client["on"]("message", messageHandler)
+
+      // Setup close handler
+      let closeHandler = fun() => {
+        println("  ✓ Server: Client disconnected")
+      }
+
+      client["on"]("close", closeHandler)
+    })
+
+    // Start server
+    listen(server, fun() => {
+      println("  ✓ Server: Listening on ws://localhost:9001")
+      results["server_ready"] = true
+    })
+
+    println("\n  [Client Setup]")
+
+    // Create WebSocket client
+    let ws = createClient("ws://localhost:9001", {})
+    println("  ✓ Client: Created")
+
+    // Register open handler
+    onOpen(ws, fun() => {
+      println("  ✓ Client: Connected to server")
+
+      // Send message to server
+      let testMsg = "Hello from FreeLang WebSocket!"
+      send(ws, testMsg)
+      results["message_sent"] = true
+      println("  ✓ Client: Sent '" + testMsg + "'")
+    })
+
+    // Register message handler
+    onMessage(ws, fun(message) => {
+      println("  ✓ Client: Received '" + message + "'")
+      results["echo_received"] = true
+
+      // Close connection after receiving echo
+      closeClient(ws)
+      println("  ✓ Client: Closed")
+    })
+
+    // Register error handler
+    onError(ws, fun(error) => {
+      println("  ✗ Client: Error - " + error)
+    })
+
+    // Register close handler
+    onClose(ws, fun() => {
+      println("  ✓ Client: Connection closed")
+    })
+
+    println("\n  [Test Results]")
+
+    // Check results
+    let all_passed = true
+    let checks = [
+      ["Server Ready", results["server_ready"]],
+      ["Client Connected", results["client_connected"]],
+      ["Message Sent", results["message_sent"]],
+      ["Message Received (Server)", results["message_received"]],
+      ["Echo Received (Client)", results["echo_received"]]
+    ]
+
+    for (let check of checks) {
+      let name = check[0]
+      let value = check[1]
+      let status = value ? "✓" : "✗"
+      println("  " + status + " " + name)
+      if (!value) {
+        all_passed = false
+      }
+    }
+
+    // Close server
+    closeServer(server)
+    println("\n  ✓ Server: Closed")
+
+    println("\n  " + (all_passed ? "✓ Test 1 PASSED" : "✗ Test 1 FAILED"))
+
+  } catch (error) {
+    println("  ✗ Test 1 FAILED: " + error)
+  }
+}
+
+fun main() => {
+  println("╔════════════════════════════════════════════════╗")
+  println("║   Phase 5: WebSocket Integration Test         ║")
+  println("║   Server-Client Bidirectional Communication   ║")
+  println("╚════════════════════════════════════════════════╝")
+
+  test_ws_server_client_integration()
+
+  println("\n╔════════════════════════════════════════════════╗")
+  println("║        Test Complete                           ║")
+  println("╚════════════════════════════════════════════════╝\n")
+}
+
+main()

@@ -1,0 +1,15 @@
+// Simple Lexer Test
+
+struct Token {
+  type: string,
+  lexeme: string,
+  line: i32
+}
+
+fn isDigit(ch: string) -> bool {
+  return ch == "0"
+}
+
+fn main(): void {
+  println("Test OK")
+}

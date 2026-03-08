@@ -1,0 +1,137 @@
+// ─────────────────────────────────────────────────────────────────
+// IR Core Functions (자체호스팅 IR 생성기 핵심)
+// ─────────────────────────────────────────────────────────────────
+
+fn emitIRPush(value) {
+  return "PUSH:" + value;
+}
+
+fn emitIRADD() {
+  return "ADD";
+}
+
+fn emitIRSUB() {
+  return "SUB";
+}
+
+fn emitIRMUL() {
+  return "MUL";
+}
+
+fn emitIRCALL(name) {
+  return "CALL:" + name;
+}
+
+fn emitIRLOAD(varname) {
+  return "LOAD:" + varname;
+}
+
+fn emitIRSTORE(varname) {
+  return "STORE:" + varname;
+}
+
+fn emitIRRETURN() {
+  return "RETURN";
+}
+
+fn emitIRLABEL(label) {
+  return "LABEL:" + label;
+}
+
+fn emitIRJUMP(label) {
+  return "JUMP:" + label;
+}
+
+fn emitIRJMPFALSE(label) {
+  return "JMPF:" + label;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 제어 흐름 IR 생성 함수들
+// ─────────────────────────────────────────────────────────────────
+
+// IF 문 분기 생성
+// condition_label: 조건 평가 시작 지점
+// end_label: IF 문 종료 지점
+fn emitIRIF(condition_label, end_label) {
+  return "IF:cond=" + condition_label + ",end=" + end_label;
+}
+
+// WHILE 루프 생성
+// loop_label: 루프 시작 지점 (조건 재평가)
+// end_label: 루프 종료 지점
+fn emitIRWHILE(loop_label, end_label) {
+  return "WHILE:loop=" + loop_label + ",end=" + end_label;
+}
+
+// FOR 루프 생성
+// init: 초기화 코드
+// test: 테스트 조건
+// update: 업데이트 코드
+// body_label: 루프 본체 시작점
+// end_label: 루프 종료 지점
+fn emitIRFOR(init, test, update, body_label, end_label) {
+  return "FOR:init=" + init + ",test=" + test + ",update=" + update + ",body=" + body_label + ",end=" + end_label;
+}
+
+// 조건 분기 (조건이 거짓이면 특정 레이블로 점프)
+// label: 점프할 목표 레이블
+fn emitIRCOND(label) {
+  return "COND:" + label;
+}
+
+// IR 명령어 목록 생성
+fn createInstructionList() {
+  return [];
+}
+
+fn addInstruction(instrs, ir) {
+  instrs.push(instrs, ir);
+  return instrs;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 테스트 함수
+// ─────────────────────────────────────────────────────────────────
+
+// 기본 IR 명령어 테스트
+fn testIRCore() {
+  println("=== IR Core Test ===");
+  println(emitIRPush(5));
+  println(emitIRPush(3));
+  println(emitIRADD());
+  println(emitIRCALL("print"));
+}
+
+// 제어 흐름 IR 테스트
+fn testIRControlFlow() {
+  println("=== IR Control Flow Test ===");
+  println(emitIRIF("cond_1", "end_if_1"));
+  println(emitIRWHILE("loop_start", "loop_end"));
+  println(emitIRFOR("i=0", "i<10", "i++", "body_1", "end_for"));
+  println(emitIRCOND("skip_block"));
+}
+
+// 통합 테스트
+fn testIRIntegration() {
+  println("=== IR Integration Test ===");
+  println("--- Basic Instructions ---");
+  println(emitIRPush(10));
+  println(emitIRLOAD("x"));
+  println(emitIRSUB());
+  println(emitIRSTORE("result"));
+
+  println("--- Control Flow ---");
+  println(emitIRIF("cond_eval", "end_block"));
+  println(emitIRWHILE("check_condition", "exit_loop"));
+  println(emitIRFOR("init", "test", "inc", "body", "done"));
+
+  println("--- Jumps ---");
+  println(emitIRJUMP("target_label"));
+  println(emitIRJMPFALSE("fallback"));
+  println(emitIRCOND("conditional_skip"));
+}
+
+// testIRCore();
+// testIRControlFlow();
+// testIRIntegration();

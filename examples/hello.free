@@ -1,0 +1,5 @@
+fn hello
+  intent: "인사말 출력"
+  output: string
+  do
+    return "Hello, FreeLang!"

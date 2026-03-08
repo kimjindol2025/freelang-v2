@@ -1,0 +1,107 @@
+// Simple Tokenizer for FreeLang Bootstrap
+// 간단한 토큰화 (struct literal 문제 우회)
+
+struct Token {
+  type: string,
+  lexeme: string,
+  line: i32
+}
+
+// 모든 토큰을 문자열로 저장 (JSON 형식)
+fn tokenizeSimple(source: string) -> string {
+  var result: string = "["
+  var pos: i32 = 0
+  var len: i32 = length(source)
+  var line: i32 = 1
+  var first: bool = true
+
+  while pos < len {
+    var ch: string = char_at(source, pos)
+
+    // 공백 건너뛰기
+    if ch == " " || ch == "\t" {
+      pos = pos + 1
+      continue
+    }
+
+    // 개행 처리
+    if ch == "\n" {
+      pos = pos + 1
+      line = line + 1
+      continue
+    }
+
+    // 이전 토큰 이후 쉼표
+    if first {
+      first = false
+    } else {
+      result = result + ","
+    }
+
+    // 숫자 토큰
+    if ch >= "0" && ch <= "9" {
+      var start: i32 = pos
+      while pos < len && char_at(source, pos) >= "0" && char_at(source, pos) <= "9" {
+        pos = pos + 1
+      }
+      var lexeme: string = slice(source, start, pos)
+      result = result + "{\"type\":\"INT\",\"lexeme\":\"" + lexeme + "\",\"line\":" + str(line) + "}"
+      continue
+    }
+
+    // 식별자 또는 키워드
+    if (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch == "_" {
+      var start: i32 = pos
+      while pos < len {
+        var c: string = char_at(source, pos)
+        if (c >= "a" && c <= "z") || (c >= "A" && c <= "Z") || (c >= "0" && c <= "9") || c == "_" {
+          pos = pos + 1
+        } else {
+          pos = pos
+          break
+        }
+      }
+      var lexeme: string = slice(source, start, pos)
+      var tok_type: string = "IDENT"
+      if lexeme == "fn" {
+        tok_type = "FN"
+      } else if lexeme == "var" {
+        tok_type = "VAR"
+      } else if lexeme == "if" {
+        tok_type = "IF"
+      } else if lexeme == "while" {
+        tok_type = "WHILE"
+      }
+      result = result + "{\"type\":\"" + tok_type + "\",\"lexeme\":\"" + lexeme + "\",\"line\":" + str(line) + "}"
+      continue
+    }
+
+    // 기호
+    if ch == "(" {
+      result = result + "{\"type\":\"LPAREN\",\"lexeme\":\"(\",\"line\":" + str(line) + "}"
+      pos = pos + 1
+    } else if ch == ")" {
+      result = result + "{\"type\":\"RPAREN\",\"lexeme\":\")\",\"line\":" + str(line) + "}"
+      pos = pos + 1
+    } else if ch == "{" {
+      result = result + "{\"type\":\"LBRACE\",\"lexeme\":\"{\",\"line\":" + str(line) + "}"
+      pos = pos + 1
+    } else if ch == "}" {
+      result = result + "{\"type\":\"RBRACE\",\"lexeme\":\"}\",\"line\":" + str(line) + "}"
+      pos = pos + 1
+    } else {
+      pos = pos + 1
+    }
+  }
+
+  result = result + ",{\"type\":\"EOF\",\"lexeme\":\"\",\"line\":" + str(line) + "}]"
+  return result
+}
+
+fn main(): void {
+  var code: string = "fn main(): void { var x: i32 = 42 }"
+  var tokens_json: string = tokenizeSimple(code)
+
+  println("=== Simple Tokenizer Output ===")
+  println(tokens_json)
+}

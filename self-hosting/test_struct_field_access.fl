@@ -1,0 +1,19 @@
+// Struct Field Access Test
+// 목표: struct 필드 접근 및 변경 검증
+
+struct Counter {
+  value: i32,
+  name: string
+}
+
+fn main(): void {
+  println("=== Test: struct field access ===")
+
+  // 필드 직접 할당 및 접근 테스트
+  var c: Counter = {value: 0, name: "test"}
+
+  println("초기 value: " + str(c.value))
+  println("초기 name: " + c.name)
+
+  println("=== 필드 접근 테스트 완료 ===")
+}

@@ -1,0 +1,381 @@
+/**
+ * FreeLang Stream Module (Phase 16 Week 4)
+ * Streaming APIs with libuv integration
+ * Readable, Writable, and Transform streams
+ * Uses Promise Bridge for async/await support
+ */
+
+// Callback registry (timer.c pattern)
+let callback_registry = [];
+let next_callback_id = 0;
+
+// ────────────────────────────────────────
+// Internal Helpers
+// ────────────────────────────────────────
+
+fn register_callback(fn) => {
+  let id = next_callback_id;
+  next_callback_id = next_callback_id + 1;
+  callback_registry[id] = fn;
+  return id;
+};
+
+fn unregister_callback(id) => {
+  callback_registry[id] = null;
+};
+
+// ────────────────────────────────────────
+// Readable Stream
+// ────────────────────────────────────────
+
+/**
+ * Create a readable stream
+ * @param options - stream options { highWaterMark, ... }
+ * @returns Readable stream object
+ */
+export fn createReadable(options) => {
+  let opts = options || {};
+  let high_water = opts["highWaterMark"] || 16384;
+
+  let stream = {
+    type: "readable",
+    id: 0,
+    highWaterMark: high_water,
+    paused: false,
+    ended: false,
+    destroyed: false,
+    listeners: {},
+    _buffer: [],
+    _read_callback: null,
+    _listeners: {}
+  };
+
+  // Initialize stream with FFI
+  stream["id"] = fl_stream_readable_create(high_water);
+
+  return stream;
+};
+
+/**
+ * Read chunk from readable stream
+ * @param stream - readable stream object
+ * @param size - number of bytes to read (optional)
+ * @returns chunk of data or null if no data available
+ */
+export fn read(stream, size) => {
+  let callback_id = register_callback((chunk) => chunk);
+  let read_size = size || stream["highWaterMark"];
+
+  fl_stream_readable_read(stream["id"], read_size, callback_id);
+
+  // For now, return null - proper implementation would await
+  return null;
+};
+
+/**
+ * Resume reading from readable stream
+ * @param stream - readable stream object
+ */
+export fn resume(stream) => {
+  if (stream["paused"]) {
+    stream["paused"] = false;
+    fl_stream_readable_resume(stream["id"]);
+  }
+};
+
+/**
+ * Pause reading from readable stream
+ * @param stream - readable stream object
+ */
+export fn pause(stream) => {
+  if (!stream["paused"]) {
+    stream["paused"] = true;
+    fl_stream_readable_pause(stream["id"]);
+  }
+};
+
+/**
+ * Pipe readable stream to writable stream
+ * @param readable - readable stream
+ * @param writable - writable stream
+ * @returns writable stream for chaining
+ */
+export fn pipe(readable, writable) => {
+  let callback_id = register_callback((chunk) => {
+    if (chunk != null) {
+      write(writable, chunk);
+    } else {
+      // End of stream
+      end(writable);
+    }
+  });
+
+  fl_stream_readable_pipe(readable["id"], writable["id"], callback_id);
+
+  return writable;
+};
+
+/**
+ * Register listener on readable stream
+ * @param stream - readable stream object
+ * @param event - "data", "end", "error", "close"
+ * @param handler - callback function
+ */
+export fn on_readable(stream, event, handler) => {
+  let callback_id = register_callback(handler);
+
+  if (!stream["_listeners"][event]) {
+    stream["_listeners"][event] = [];
+  }
+  stream["_listeners"][event] = append(stream["_listeners"][event], callback_id);
+
+  if (event == "data") {
+    fl_stream_readable_on_data(stream["id"], callback_id);
+  } else if (event == "end") {
+    fl_stream_readable_on_end(stream["id"], callback_id);
+  } else if (event == "error") {
+    fl_stream_readable_on_error(stream["id"], callback_id);
+  } else if (event == "close") {
+    fl_stream_readable_on_close(stream["id"], callback_id);
+  }
+};
+
+/**
+ * Destroy readable stream
+ * @param stream - readable stream object
+ */
+export fn destroy_readable(stream) => {
+  if (!stream["destroyed"]) {
+    stream["destroyed"] = true;
+    fl_stream_readable_destroy(stream["id"]);
+  }
+};
+
+// ────────────────────────────────────────
+// Writable Stream
+// ────────────────────────────────────────
+
+/**
+ * Create a writable stream
+ * @param options - stream options { highWaterMark, ... }
+ * @returns Writable stream object
+ */
+export fn createWritable(options) => {
+  let opts = options || {};
+  let high_water = opts["highWaterMark"] || 16384;
+
+  let stream = {
+    type: "writable",
+    id: 0,
+    highWaterMark: high_water,
+    writableEnded: false,
+    writableFinished: false,
+    destroyed: false,
+    _listeners: {},
+    _buffer: []
+  };
+
+  // Initialize stream with FFI
+  stream["id"] = fl_stream_writable_create(high_water);
+
+  return stream;
+};
+
+/**
+ * Write data to writable stream
+ * @param stream - writable stream object
+ * @param chunk - data to write
+ * @param encoding - encoding (optional, for strings)
+ * @returns boolean indicating if write buffer is full
+ */
+export fn write(stream, chunk, encoding) => {
+  if (stream["writableEnded"]) {
+    throw "Cannot write to ended stream";
+  }
+
+  let enc = encoding || "utf8";
+  let callback_id = register_callback((result) => result);
+
+  let should_drain = fl_stream_writable_write(stream["id"], chunk, enc, callback_id);
+
+  return should_drain;
+};
+
+/**
+ * End writable stream (no more writes)
+ * @param stream - writable stream object
+ * @param chunk - optional final chunk to write
+ */
+export fn end(stream, chunk) => {
+  if (!stream["writableEnded"]) {
+    stream["writableEnded"] = true;
+
+    let callback_id = register_callback((result) => {
+      stream["writableFinished"] = true;
+    });
+
+    if (chunk != null) {
+      write(stream, chunk);
+    }
+
+    fl_stream_writable_end(stream["id"], callback_id);
+  }
+};
+
+/**
+ * Register listener on writable stream
+ * @param stream - writable stream object
+ * @param event - "drain", "finish", "error", "close"
+ * @param handler - callback function
+ */
+export fn on_writable(stream, event, handler) => {
+  let callback_id = register_callback(handler);
+
+  if (!stream["_listeners"][event]) {
+    stream["_listeners"][event] = [];
+  }
+  stream["_listeners"][event] = append(stream["_listeners"][event], callback_id);
+
+  if (event == "drain") {
+    fl_stream_writable_on_drain(stream["id"], callback_id);
+  } else if (event == "finish") {
+    fl_stream_writable_on_finish(stream["id"], callback_id);
+  } else if (event == "error") {
+    fl_stream_writable_on_error(stream["id"], callback_id);
+  } else if (event == "close") {
+    fl_stream_writable_on_close(stream["id"], callback_id);
+  }
+};
+
+/**
+ * Destroy writable stream
+ * @param stream - writable stream object
+ */
+export fn destroy_writable(stream) => {
+  if (!stream["destroyed"]) {
+    stream["destroyed"] = true;
+    fl_stream_writable_destroy(stream["id"]);
+  }
+};
+
+// ────────────────────────────────────────
+// Transform Stream
+// ────────────────────────────────────────
+
+/**
+ * Create a transform stream
+ * @param transform_fn - function(chunk, encoding) => transformed chunk
+ * @param options - stream options
+ * @returns Transform stream object
+ */
+export fn createTransform(transform_fn, options) => {
+  let opts = options || {};
+  let high_water = opts["highWaterMark"] || 16384;
+
+  let stream = {
+    type: "transform",
+    id: 0,
+    highWaterMark: high_water,
+    transform_fn: transform_fn,
+    paused: false,
+    writableEnded: false,
+    readableEnded: false,
+    destroyed: false,
+    _listeners: {}
+  };
+
+  // Initialize stream with FFI
+  let callback_id = register_callback((chunk, encoding) => {
+    return transform_fn(chunk, encoding);
+  });
+
+  stream["id"] = fl_stream_transform_create(high_water, callback_id);
+
+  return stream;
+};
+
+/**
+ * Write data to transform stream
+ * @param stream - transform stream
+ * @param chunk - data to transform
+ * @returns boolean
+ */
+export fn transform_write(stream, chunk) => {
+  if (stream["writableEnded"]) {
+    throw "Cannot write to ended transform";
+  }
+
+  let callback_id = register_callback((result) => result);
+  return fl_stream_transform_write(stream["id"], chunk, callback_id);
+};
+
+/**
+ * End transform stream
+ * @param stream - transform stream
+ */
+export fn transform_end(stream) => {
+  if (!stream["writableEnded"]) {
+    stream["writableEnded"] = true;
+    let callback_id = register_callback((result) => {
+      stream["readableEnded"] = true;
+    });
+    fl_stream_transform_end(stream["id"], callback_id);
+  }
+};
+
+// ────────────────────────────────────────
+// Utility Functions
+// ────────────────────────────────────────
+
+/**
+ * Pipe multiple streams together
+ * @param readable - readable stream
+ * @param transforms - array of transform streams
+ * @param writable - writable stream
+ * @returns Promise that resolves when all data is processed
+ */
+export async fn pipeline(readable, transforms, writable) => {
+  let current = readable;
+
+  // Pipe through each transform
+  let i = 0;
+  while (i < len(transforms)) {
+    current = pipe(current, transforms[i]);
+    i = i + 1;
+  }
+
+  // Pipe to final writable
+  pipe(current, writable);
+
+  // Wait for finish
+  let callback_id = register_callback((result) => result);
+  fl_stream_writable_on_finish(writable["id"], callback_id);
+
+  await callback_id;
+};
+
+/**
+ * Wait for stream to finish
+ * @param stream - stream to wait for
+ * @returns Promise that resolves when stream finishes
+ */
+export async fn finished(stream) => {
+  let callback_id = register_callback((result) => result);
+
+  if (stream["type"] == "writable") {
+    fl_stream_writable_on_finish(stream["id"], callback_id);
+  } else if (stream["type"] == "readable") {
+    fl_stream_readable_on_end(stream["id"], callback_id);
+  }
+
+  await callback_id;
+};
+
+/**
+ * Promisify a stream for async/await
+ * @param stream - stream to promisify
+ * @returns Promise that resolves when stream finishes
+ */
+export fn promisify(stream) => {
+  return finished(stream);
+};

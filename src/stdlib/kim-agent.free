@@ -1,0 +1,153 @@
+/**
+ * kim-agent.free - FreeLang 기반 Agent 모듈
+ * AI 에이전트, 메모리, 상태 관리
+ */
+
+// Agent 객체
+struct Agent {
+  name: string,
+  memory: map,
+  state: string,
+  history: array
+}
+
+// 에이전트 생성
+fn createAgent(name: string) -> Agent {
+  return {
+    name: name,
+    memory: {},
+    state: "idle",
+    history: []
+  }
+}
+
+// 메모리 저장
+fn remember(a: Agent, key: string, value: any) -> void {
+  a.memory[key] = value
+}
+
+// 메모리 조회
+fn recall(a: Agent, key: string) -> any {
+  if a.memory[key] != null {
+    return a.memory[key]
+  }
+  return null
+}
+
+// 메모리 삭제
+fn forget(a: Agent, key: string) -> void {
+  a.memory[key] = null
+}
+
+// 모든 메모리 조회
+fn getMemory(a: Agent) -> map {
+  return a.memory
+}
+
+// 메모리 초기화
+fn clearMemory(a: Agent) -> void {
+  a.memory = {}
+}
+
+// 메시지 전송 및 처리
+fn send(a: Agent, message: string) -> string {
+  // 메시지 기록
+  a.history.push(message)
+
+  // 상태 업데이트
+  a.state = "processing"
+
+  // VM 에이전트 엔진에 전달
+  let response = vm.agent.process(a.name, message)
+
+  // 메모리에 기록
+  remember(a, "last_message", message)
+  remember(a, "last_response", response)
+
+  a.state = "idle"
+
+  return response
+}
+
+// 비동기 메시지 처리
+fn sendAsync(a: Agent, message: string) -> Promise<string> {
+  return Promise(fn(resolve: fn(string) -> void, reject: fn(string) -> void) -> void {
+    scheduleDelayed(fn() -> void {
+      let response = send(a, message)
+      resolve(response)
+    }, 0)
+  })
+}
+
+// 상태 변경
+fn setState(a: Agent, state: string) -> void {
+  a.state = state
+}
+
+// 상태 조회
+fn getState(a: Agent) -> string {
+  return a.state
+}
+
+// 히스토리 조회
+fn getHistory(a: Agent) -> array {
+  return a.history
+}
+
+// 히스토리 지우기
+fn clearHistory(a: Agent) -> void {
+  a.history = []
+}
+
+// 에이전트 정보 출력
+fn printInfo(a: Agent) -> void {
+  println("=== Agent:", a.name, "===")
+  println("State:", a.state)
+  println("Memory keys:", keys(a.memory))
+  println("History count:", length(a.history))
+}
+
+// 마지막 메시지 조회
+fn getLastMessage(a: Agent) -> string {
+  let lastMsg = recall(a, "last_message")
+  if lastMsg != null {
+    return lastMsg
+  }
+  return ""
+}
+
+// 마지막 응답 조회
+fn getLastResponse(a: Agent) -> string {
+  let lastResp = recall(a, "last_response")
+  if lastResp != null {
+    return lastResp
+  }
+  return ""
+}
+
+// 에이전트 초기화
+fn reset(a: Agent) -> void {
+  clearMemory(a)
+  clearHistory(a)
+  setState(a, "idle")
+}
+
+export {
+  Agent,
+  createAgent,
+  remember,
+  recall,
+  forget,
+  getMemory,
+  clearMemory,
+  send,
+  sendAsync,
+  setState,
+  getState,
+  getHistory,
+  clearHistory,
+  printInfo,
+  getLastMessage,
+  getLastResponse,
+  reset
+}

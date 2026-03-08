@@ -1,0 +1,6 @@
+struct P {
+  x: i32
+}
+
+let p: P = P { x: 5 }
+println("done")

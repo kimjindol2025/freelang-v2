@@ -1,0 +1,102 @@
+// 자체 호스팅 테스트: v2가 자신을 컴파일할 수 있는가?
+
+fn test_basic_arithmetic() -> void {
+  var x: i32 = 10
+  var y: i32 = 20
+  var result: i32 = x + y
+  println("Basic arithmetic: " + str(result))
+}
+
+fn test_function_call() -> void {
+  fn add(a: i32, b: i32) -> i32 {
+    return a + b
+  }
+
+  var result: i32 = add(5, 7)
+  println("Function call: " + str(result))
+}
+
+fn test_while_loop() -> void {
+  var i: i32 = 0
+  var sum: i32 = 0
+
+  while i < 5 {
+    sum = sum + i
+    i = i + 1
+  }
+
+  println("While loop sum (0+1+2+3+4): " + str(sum))
+}
+
+fn test_if_statement() -> void {
+  var x: i32 = 10
+
+  if x > 5 {
+    println("If statement: x is greater than 5")
+  }
+}
+
+fn test_array_operations() -> void {
+  var arr: any = []
+  push(arr, 1)
+  push(arr, 2)
+  push(arr, 3)
+
+  println("Array length: " + str(length(arr)))
+  println("Array[0]: " + str(arr[0]))
+}
+
+fn test_struct_mutation() -> void {
+  struct Point {
+    x: i32,
+    y: i32
+  }
+
+  var p: Point = Point { x: 10, y: 20 }
+  println("Initial point: (" + str(p.x) + ", " + str(p.y) + ")")
+
+  p.x = 30
+  p.y = 40
+  println("After mutation: (" + str(p.x) + ", " + str(p.y) + ")")
+}
+
+fn test_break_continue() -> void {
+  var i: i32 = 0
+  var count: i32 = 0
+
+  while i < 10 {
+    i = i + 1
+
+    if i == 3 {
+      continue
+    }
+
+    if i == 7 {
+      break
+    }
+
+    count = count + 1
+  }
+
+  println("Break/Continue: count = " + str(count))
+}
+
+fn main(): void {
+  println("=====================================")
+  println("  FreeLang v2 Self-Hosting Test")
+  println("=====================================")
+  println("")
+
+  test_basic_arithmetic()
+  test_function_call()
+  test_while_loop()
+  test_if_statement()
+  test_array_operations()
+  test_struct_mutation()
+  test_break_continue()
+
+  println("")
+  println("=====================================")
+  println("✅ All Self-Hosting Tests Complete!")
+  println("=====================================")
+}

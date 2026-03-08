@@ -1,0 +1,67 @@
+@csp_policy(
+    default_src: [.self],
+    script_src: [.self, "https://trusted.dclub.kr"],
+    style_src: [.self, .unsafe_inline],
+    img_src: [.self, "data:"],
+    report_uri: "/api/security/report"
+)
+
+fn get_home_page() {
+    let headers = map_new()
+    map_put(headers, "Content-Type", "text/html")
+    let body = "<html><body>FreeLang Native-CSP-Shield Test</body></html>"
+    let res = map_new()
+    map_put(res, "status", 200)
+    map_put(res, "headers", headers)
+    map_put(res, "body", body)
+    ret res
+}
+
+fn test_csp_header() {
+    let policy = csp_policy_active()
+    print(policy)
+    ret policy
+}
+
+fn test_hash_inline() {
+    let script = "alert('hello')"
+    let h = csp_hash_inline(script)
+    print(h)
+    ret h
+}
+
+fn test_nonce() {
+    let n = csp_nonce_generate()
+    print(n)
+    ret n
+}
+
+fn test_violation_log() {
+    let report = "{\"violated-directive\":\"script-src\",\"blocked-uri\":\"https://evil.com/hack.js\"}"
+    csp_violation_log(report)
+    let count = csp_violation_count()
+    print(count)
+    ret count
+}
+
+fn main() {
+    print("=== Native-CSP-Shield 실측 테스트 ===")
+
+    print("[1] CSP 헤더 빌드:")
+    let header = test_csp_header()
+
+    print("[2] 인라인 스크립트 SHA-256 해시:")
+    let hash = test_hash_inline()
+
+    print("[3] 랜덤 Nonce 생성:")
+    let nonce = test_nonce()
+
+    print("[4] 위반 로그 기록:")
+    let count = test_violation_log()
+
+    print("[5] 페이지 응답 (CSP 자동 주입 확인):")
+    let page = get_home_page()
+    print(page)
+
+    print("=== 테스트 완료 ===")
+}

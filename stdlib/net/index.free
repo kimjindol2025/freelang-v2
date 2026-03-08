@@ -1,0 +1,169 @@
+/**
+ * FreeLang Network Module (Phase 16 Week 3)
+ * TCP/UDP networking with libuv integration
+ * Uses Promise Bridge for async/await support
+ */
+
+// Callback registry (timer.c pattern)
+let callback_registry = [];
+let next_callback_id = 0;
+
+fn register_callback(fn) => {
+  let id = next_callback_id;
+  next_callback_id = next_callback_id + 1;
+  callback_registry[id] = fn;
+  return id;
+};
+
+fn unregister_callback(id) => {
+  callback_registry[id] = null;
+};
+
+// ────────────────────────────────────────
+// TCP Server
+// ────────────────────────────────────────
+
+/**
+ * Create TCP server
+ * @param port - port number to listen on
+ * @param onConnection - callback function called when client connects
+ * @returns Promise that resolves to server handle
+ */
+export async fn createServer(port, onConnection) => {
+  let callback_id = register_callback(onConnection);
+  let server_id = fl_tcp_server_create(port, callback_id);
+
+  if (server_id < 0) {
+    unregister_callback(callback_id);
+    throw "Failed to create server";
+  }
+
+  return server_id;
+};
+
+/**
+ * Close TCP server
+ * @param server_id - server handle
+ */
+export async fn closeServer(server_id) => {
+  fl_tcp_close(server_id);
+};
+
+// ────────────────────────────────────────
+// TCP Connection (read/write)
+// ────────────────────────────────────────
+
+/**
+ * Read data from TCP connection
+ * @param conn_id - connection handle
+ * @returns Promise that resolves to received data
+ */
+export async fn readData(conn_id) => {
+  let callback_id = register_callback((data) => data);
+  fl_tcp_read_start(conn_id, callback_id);
+
+  let data = await callback_id;
+  unregister_callback(callback_id);
+  return data;
+};
+
+/**
+ * Write data to TCP connection
+ * @param conn_id - connection handle
+ * @param data - data to send
+ * @returns Promise that resolves when write completes
+ */
+export async fn writeData(conn_id, data) => {
+  let callback_id = register_callback((result) => result);
+  fl_tcp_write_async(conn_id, data, callback_id);
+
+  await callback_id;
+  unregister_callback(callback_id);
+};
+
+/**
+ * Close TCP connection
+ * @param conn_id - connection handle
+ */
+export async fn closeConnection(conn_id) => {
+  fl_tcp_close(conn_id);
+};
+
+/**
+ * Shutdown TCP connection gracefully
+ * @param conn_id - connection handle
+ * @returns Promise that resolves when shutdown completes
+ */
+export async fn shutdownConnection(conn_id) => {
+  let callback_id = register_callback((result) => result);
+  fl_tcp_shutdown(conn_id, callback_id);
+
+  await callback_id;
+  unregister_callback(callback_id);
+};
+
+// ────────────────────────────────────────
+// TCP Client
+// ────────────────────────────────────────
+
+/**
+ * Connect to TCP server
+ * @param host - host address (IP or hostname)
+ * @param port - port number
+ * @returns Promise that resolves to connection handle
+ */
+export async fn connect(host, port) => {
+  let callback_id = register_callback((conn) => conn);
+  fl_tcp_connect_async(host, port, callback_id);
+
+  let conn_id = await callback_id;
+  unregister_callback(callback_id);
+  return conn_id;
+};
+
+// ────────────────────────────────────────
+// UDP Socket
+// ────────────────────────────────────────
+
+/**
+ * Create UDP socket
+ * @param port - port number to bind to
+ * @param onReceive - callback function called when data is received
+ * @returns Promise that resolves to socket handle
+ */
+export async fn createUdpSocket(port, onReceive) => {
+  let callback_id = register_callback(onReceive);
+  let socket_id = fl_udp_create(port, callback_id);
+
+  if (socket_id < 0) {
+    unregister_callback(callback_id);
+    throw "Failed to create UDP socket";
+  }
+
+  fl_udp_recv_start(socket_id, callback_id);
+  return socket_id;
+};
+
+/**
+ * Send UDP data
+ * @param socket_id - socket handle
+ * @param data - data to send
+ * @param host - destination host
+ * @param port - destination port
+ * @returns Promise that resolves when send completes
+ */
+export async fn sendUdp(socket_id, data, host, port) => {
+  let callback_id = register_callback((result) => result);
+  fl_udp_send_async(socket_id, data, host, port, callback_id);
+
+  await callback_id;
+  unregister_callback(callback_id);
+};
+
+/**
+ * Close UDP socket
+ * @param socket_id - socket handle
+ */
+export async fn closeUdpSocket(socket_id) => {
+  fl_udp_close(socket_id);
+};

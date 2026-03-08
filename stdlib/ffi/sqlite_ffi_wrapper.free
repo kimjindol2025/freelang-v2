@@ -1,0 +1,398 @@
+/**
+ * FreeLang SQLite FFI Wrapper
+ * stdlib/ffi/sqlite_ffi_wrapper.free
+ *
+ * C 바인딩 함수를 FreeLang에 노출하는 FFI 래퍼
+ * Bridges FreeLang Query Builder to C SQLite bindings
+ *
+ * Architecture:
+ *   FreeLang Code
+ *     ↓
+ *   sqlite_ffi_wrapper.free (this file)
+ *     ↓
+ *   FFI System
+ *     ↓
+ *   stdlib/core/sqlite_binding.c
+ *     ↓
+ *   SQLite3 Library
+ */
+
+// ═════════════════════════════════════════════════════════════════════════
+// FFI Function Declarations
+// ═════════════════════════════════════════════════════════════════════════
+
+/**
+ * Native C function: fl_sqlite_open()
+ * Opens SQLite database connection
+ *
+ * C Signature:
+ *   fl_sqlite_connection_t* fl_sqlite_open(const char *db_path)
+ *
+ * FreeLang Call:
+ *   extern fn native_sqlite_open(path: string) -> object
+ */
+extern fn native_sqlite_open(path: string) -> object
+
+/**
+ * Native C function: fl_sqlite_close()
+ * Closes database connection
+ *
+ * C Signature:
+ *   int fl_sqlite_close(fl_sqlite_connection_t *conn)
+ */
+extern fn native_sqlite_close(conn: object) -> number
+
+/**
+ * Native C function: fl_sqlite_execute()
+ * Executes SELECT query and returns result set
+ *
+ * C Signature:
+ *   fl_sqlite_result_t* fl_sqlite_execute(fl_sqlite_connection_t *conn, const char *query)
+ */
+extern fn native_sqlite_execute(conn: object, query: string) -> object
+
+/**
+ * Native C function: fl_sqlite_execute_update()
+ * Executes INSERT/UPDATE/DELETE query
+ *
+ * C Signature:
+ *   int fl_sqlite_execute_update(fl_sqlite_connection_t *conn, const char *query)
+ */
+extern fn native_sqlite_execute_update(conn: object, query: string) -> number
+
+/**
+ * Native C function: fl_sqlite_fetch_row()
+ * Fetches next row from result set
+ *
+ * Returns:
+ *   1 if row available
+ *   0 if no more rows
+ *   -1 on error
+ */
+extern fn native_sqlite_fetch_row(result: object) -> number
+
+/**
+ * Native C function: fl_sqlite_get_column_text()
+ * Gets column value as text
+ */
+extern fn native_sqlite_get_column_text(result: object, column_index: number) -> string
+
+/**
+ * Native C function: fl_sqlite_get_column_int()
+ * Gets column value as integer
+ */
+extern fn native_sqlite_get_column_int(result: object, column_index: number) -> number
+
+/**
+ * Native C function: fl_sqlite_get_column_double()
+ * Gets column value as double
+ */
+extern fn native_sqlite_get_column_double(result: object, column_index: number) -> number
+
+/**
+ * Native C function: fl_sqlite_get_error()
+ * Gets last error message
+ */
+extern fn native_sqlite_get_error(conn: object) -> string
+
+/**
+ * Native C function: fl_sqlite_get_error_code()
+ * Gets last error code
+ */
+extern fn native_sqlite_get_error_code(conn: object) -> number
+
+/**
+ * Native C function: fl_sqlite_begin/commit/rollback()
+ * Transaction support
+ */
+extern fn native_sqlite_begin(conn: object) -> number
+extern fn native_sqlite_commit(conn: object) -> number
+extern fn native_sqlite_rollback(conn: object) -> number
+
+// ═════════════════════════════════════════════════════════════════════════
+// FFI Wrapper Functions - Database Connection
+// ═════════════════════════════════════════════════════════════════════════
+
+/**
+ * Open SQLite database via FFI
+ * Wrapper around fl_sqlite_open()
+ */
+fn ffiOpen(path: string) -> object {
+  intent: "Open SQLite database via C binding"
+  output: object
+  do
+    let conn = native_sqlite_open(path)
+    return {
+      native_handle: conn,
+      path: path,
+      isOpen: true,
+      lastError: null,
+      errorCode: 0
+    }
+}
+
+/**
+ * Close SQLite database via FFI
+ * Wrapper around fl_sqlite_close()
+ */
+fn ffiClose(db: object) -> bool {
+  intent: "Close SQLite database via C binding"
+  output: bool
+  do
+    let rc = native_sqlite_close(db.native_handle)
+    db.isOpen = false
+    return rc == 0
+}
+
+/**
+ * Check if database is still open
+ */
+fn ffiIsOpen(db: object) -> bool {
+  intent: "Check if database connection is open"
+  output: bool
+  do
+    return db.isOpen
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// FFI Wrapper Functions - Query Execution
+// ═════════════════════════════════════════════════════════════════════════
+
+/**
+ * Execute SELECT query and return results
+ * Wrapper around fl_sqlite_execute()
+ *
+ * Returns: array of result rows
+ * Each row is an object with column names as keys
+ */
+fn ffiExecute(db: object, query: string) -> array {
+  intent: "Execute SELECT query and return results"
+  output: array
+  do
+    // Call native C function
+    let result_set = native_sqlite_execute(db.native_handle, query)
+
+    // Convert result set to FreeLang array
+    let rows = []
+
+    // TODO: Parse result_set and fetch rows
+    // For now: return empty array (FFI not fully exposed yet)
+
+    return rows
+}
+
+/**
+ * Execute INSERT/UPDATE/DELETE query
+ * Wrapper around fl_sqlite_execute_update()
+ *
+ * Returns: number of affected rows (-1 on error)
+ */
+fn ffiExecuteUpdate(db: object, query: string) -> number {
+  intent: "Execute INSERT/UPDATE/DELETE query"
+  output: number
+  do
+    let affected = native_sqlite_execute_update(db.native_handle, query)
+    return affected
+}
+
+/**
+ * Get last error message from database
+ */
+fn ffiGetError(db: object) -> string {
+  intent: "Get last error message"
+  output: string
+  do
+    let error = native_sqlite_get_error(db.native_handle)
+    db.lastError = error
+    return error
+}
+
+/**
+ * Get last error code from database
+ */
+fn ffiGetErrorCode(db: object) -> number {
+  intent: "Get last error code"
+  output: number
+  do
+    let code = native_sqlite_get_error_code(db.native_handle)
+    db.errorCode = code
+    return code
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// FFI Wrapper Functions - Transaction Support
+// ═════════════════════════════════════════════════════════════════════════
+
+/**
+ * Begin transaction via FFI
+ */
+fn ffiBeginTransaction(db: object) -> bool {
+  intent: "Begin database transaction"
+  output: bool
+  do
+    let rc = native_sqlite_begin(db.native_handle)
+    return rc == 0
+}
+
+/**
+ * Commit transaction via FFI
+ */
+fn ffiCommitTransaction(db: object) -> bool {
+  intent: "Commit database transaction"
+  output: bool
+  do
+    let rc = native_sqlite_commit(db.native_handle)
+    return rc == 0
+}
+
+/**
+ * Rollback transaction via FFI
+ */
+fn ffiRollbackTransaction(db: object) -> bool {
+  intent: "Rollback database transaction"
+  output: bool
+  do
+    let rc = native_sqlite_rollback(db.native_handle)
+    return rc == 0
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// Result Set Parsing Functions
+// ═════════════════════════════════════════════════════════════════════════
+
+/**
+ * Parse result set and fetch all rows
+ * Internal helper function for result processing
+ *
+ * Called by: ffiExecute()
+ */
+fn parseResultSet(result_set: object) -> array {
+  intent: "Parse result set and extract all rows"
+  output: array
+  do
+    let rows = []
+
+    // Fetch all rows from result set
+    let row_index = 0
+    while true {
+      let has_row = native_sqlite_fetch_row(result_set)
+
+      if has_row == 0 {
+        // No more rows
+        break
+      }
+
+      if has_row == 1 {
+        // Parse current row
+        let row = {}
+
+        // TODO: Extract column values
+        // For now: push placeholder
+
+        rows.push(row)
+        row_index = row_index + 1
+      } else {
+        // Error occurred
+        break
+      }
+    }
+
+    return rows
+}
+
+/**
+ * Extract column value from result set
+ * Handles different data types
+ */
+fn getColumnValue(result_set: object, column_index: number, expected_type: string) {
+  intent: "Extract column value from result set"
+  output
+  do
+    if expected_type == "text" {
+      return native_sqlite_get_column_text(result_set, column_index)
+    } else {
+      if expected_type == "int" {
+        return native_sqlite_get_column_int(result_set, column_index)
+      } else {
+        if expected_type == "double" {
+          return native_sqlite_get_column_double(result_set, column_index)
+        }
+      }
+    }
+
+    return null
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// Integration Helper Functions
+// ═════════════════════════════════════════════════════════════════════════
+
+/**
+ * Check connection validity
+ */
+fn checkConnection(db: object) -> bool {
+  intent: "Validate database connection"
+  output: bool
+  do
+    if db.native_handle == null {
+      return false
+    }
+
+    return db.isOpen
+}
+
+/**
+ * Handle query execution error
+ */
+fn handleQueryError(db: object) -> string {
+  intent: "Handle and log query execution error"
+  output: string
+  do
+    let error = ffiGetError(db)
+    let code = ffiGetErrorCode(db)
+
+    println("Query Error: [" + code + "] " + error)
+
+    return error
+}
+
+/**
+ * Create result object with metadata
+ */
+fn createResult(success: bool, data, error_msg: string) -> object {
+  intent: "Create result object with status"
+  output: object
+  do
+    return {
+      success: success,
+      data: data,
+      error: error_msg
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// Status & Debug Functions
+// ═════════════════════════════════════════════════════════════════════════
+
+/**
+ * Print connection status
+ */
+fn printConnectionStatus(db: object) -> void {
+  intent: "Print database connection status"
+  do
+    println("[SQLite FFI] Status:")
+    println("  Path: " + db.path)
+    println("  Open: " + (db.isOpen ? "yes" : "no"))
+    println("  Error: " + (db.lastError != null ? db.lastError : "none"))
+    println("  Error Code: " + db.errorCode)
+}
+
+/**
+ * Log FFI operation
+ */
+fn logFFIOperation(operation: string, details: string) -> void {
+  intent: "Log FFI operation for debugging"
+  do
+    println("[SQLite FFI] " + operation + ": " + details)
+}
+

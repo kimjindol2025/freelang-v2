@@ -1,0 +1,90 @@
+/**
+ * Phase 13 Week 4: URL Checker Example
+ * HTTP Client를 사용한 실전 예제
+ *
+ * 사용법:
+ * freelang run examples/url-checker.free
+ */
+
+fn check_single_url
+  intent: "URL 상태 확인"
+  input: url: string
+  output: number
+  do
+    response = http.get(url)
+    return response.status_code
+
+fn check_multiple_urls
+  intent: "여러 URL 동시 확인 (병렬)"
+  input: urls: array<string>
+  output: array<number>
+  do
+    # http_batch로 Go Goroutine처럼 동시 처리
+    results = http_batch(urls, 10)
+
+    status_codes = []
+    for response in results
+      if response !== null
+        status_codes.push(response.status_code)
+
+    return status_codes
+
+fn check_resilient
+  intent: "안정적인 URL 확인 (재시도)"
+  input: url: string, max_retries: number
+  output: object
+  do
+    # 네트워크 에러 자동 복구
+    response = http_get_with_retry(url, max_retries)
+    return response
+
+fn format_status
+  intent: "HTTP 상태 코드를 문자열로"
+  input: code: number
+  output: string
+  do
+    if code == 200
+      return "✅ OK"
+    else if code == 301 or code == 302
+      return "🔄 Redirect"
+    else if code == 404
+      return "❌ Not Found"
+    else if code == 500
+      return "🔥 Server Error"
+    else if code >= 200 and code < 300
+      return "✅ Success"
+    else if code >= 300 and code < 400
+      return "🔄 Redirect"
+    else if code >= 400 and code < 500
+      return "⚠️ Client Error"
+    else if code >= 500
+      return "🔥 Server Error"
+    else
+      return "❓ Unknown"
+
+fn main
+  do
+    # 예제 1: 단일 URL 확인
+    println("=== Single URL Check ===")
+    status = check_single_url("https://www.google.com")
+    println("Google Status: " + status)
+
+    # 예제 2: 여러 URL 동시 확인
+    println("")
+    println("=== Multiple URLs Check (Parallel) ===")
+    urls = [
+      "https://www.google.com",
+      "https://www.github.com",
+      "https://www.example.com",
+      "https://www.stackoverflow.com"
+    ]
+
+    statuses = check_multiple_urls(urls)
+    for i in statuses
+      println("Status " + i + ": " + format_status(i))
+
+    # 예제 3: 재시도 기능
+    println("")
+    println("=== Resilient Check (With Retry) ===")
+    resilient_response = check_resilient("https://httpbin.org/get", 3)
+    println("Resilient status: " + resilient_response.status_code)

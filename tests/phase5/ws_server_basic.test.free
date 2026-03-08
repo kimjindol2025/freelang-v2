@@ -1,0 +1,83 @@
+/**
+ * Phase 5 Integration Test: WebSocket Server
+ * Basic server setup and client handling test
+ */
+
+import {
+  createServer,
+  listen,
+  onConnection,
+  broadcast,
+  close
+} from "../../stdlib/ws/index.free"
+
+fun test_ws_server_basic() => {
+  println("【Test 1】WebSocket Server - Basic Setup")
+
+  let server_ready = false
+  let client_connected = false
+
+  try {
+    // Create WebSocket server
+    let server = createServer(9001, {})
+    println("  ✓ Server created on port 9001")
+
+    // Register connection callback
+    onConnection(server, fun(client) => {
+      println("  ✓ Client connected: " + client["id"])
+      client_connected = true
+
+      // Handle incoming messages
+      let onMsg = fun(message) => {
+        println("  ✓ Server received: " + message)
+
+        // Echo back to client
+        client["send"]("Echo: " + message)
+        println("  ✓ Server sent echo")
+      }
+
+      client["on"]("message", onMsg)
+
+      // Handle close
+      let onClosed = fun() => {
+        println("  ✓ Client disconnected")
+      }
+
+      client["on"]("close", onClosed)
+    })
+
+    // Start listening
+    listen(server, fun() => {
+      println("  ✓ Server listening on ws://localhost:9001")
+      server_ready = true
+    })
+
+    // Simulate server running for a bit
+    // (In real scenario, would keep running until shutdown)
+    if (server_ready && client_connected) {
+      println("  ✓ Test 1 PASSED")
+    } else {
+      println("  ⚠️  Test 1 - Waiting for client connection...")
+    }
+
+    close(server)
+    println("  ✓ Server closed")
+
+  } catch (error) {
+    println("  ✗ Test 1 FAILED: " + error)
+  }
+}
+
+fun main() => {
+  println("╔════════════════════════════════════════════════╗")
+  println("║  Phase 5: WebSocket Server Integration Test   ║")
+  println("╚════════════════════════════════════════════════╝\n")
+
+  test_ws_server_basic()
+
+  println("\n╔════════════════════════════════════════════════╗")
+  println("║        Test Complete                           ║")
+  println("╚════════════════════════════════════════════════╝\n")
+}
+
+main()

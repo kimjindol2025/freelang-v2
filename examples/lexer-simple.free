@@ -1,0 +1,47 @@
+// FreeLang Lexer Simple Test
+// Phase H 검증
+
+// Test 1: Basic tokenization
+let code1 = "fn add(a, b) { return a + b }"
+let tokens1 = tokenize(code1)
+println("Test 1: Function definition")
+println("  Input: " + code1)
+println("  Tokens: " + str(arr.len(tokens1)))
+println("")
+
+// Test 2: Keywords
+let code2 = "fn let return if else"
+let tokens2 = tokenize(code2)
+let keywords = filterTokens(tokens2, "KEYWORD")
+println("Test 2: Keywords recognition")
+println("  Keywords found: " + str(arr.len(keywords)))
+println("")
+
+// Test 3: Numbers and strings
+let code3 = "let x = 42; let y = 3.14; let msg = \"hello\""
+let tokens3 = tokenize(code3)
+let numbers = filterTokens(tokens3, "NUMBER")
+let strings = filterTokens(tokens3, "STRING")
+println("Test 3: Numbers and strings")
+println("  Numbers: " + str(arr.len(numbers)))
+println("  Strings: " + str(arr.len(strings)))
+println("")
+
+// Test 4: Operators
+let code4 = "a + b - c * d / e"
+let tokens4 = tokenize(code4)
+let operators = filterTokens(tokens4, "OP")
+println("Test 4: Operators")
+println("  Operators found: " + str(arr.len(operators)))
+println("")
+
+// Test 5: Statistics
+let code5 = "fn fib(n) { if n <= 1 { return n } return fib(n-1) + fib(n-2) }"
+let tokens5 = tokenize(code5)
+let counts = countTokens(tokens5)
+println("Test 5: Token statistics")
+println("  Total tokens: " + str(arr.len(tokens5)))
+println("  Valid: " + str(isValidTokenization(tokens5)))
+println("")
+
+println("=== All tests completed ===")

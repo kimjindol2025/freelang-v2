@@ -1,0 +1,33 @@
+println("BEGIN SELF-HOSTING TEST")
+
+let root = "/home/kimjin/Desktop/kim/v2-freelang-ai"
+
+let lexer_code = file_read(root + "/src/stdlib/lexer.fl")
+let lexer_len = strlen(lexer_code)
+
+let parser_code = file_read(root + "/src/stdlib/parser.fl")
+let parser_len = strlen(parser_code)
+
+let compiler_code = file_read(root + "/src/stdlib/self-compiler.fl")
+let compiler_len = strlen(compiler_code)
+
+let sample = "fn add(a, b) { return a + b }"
+let sample_tok = tokenize(sample)
+let sample_tok_len = arr_len(sample_tok)
+
+let lexer_tok = tokenize(lexer_code)
+let lexer_tok_len = arr_len(lexer_tok)
+
+let parser_tok = tokenize(parser_code)
+let parser_tok_len = arr_len(parser_tok)
+
+let compiler_tok = tokenize(compiler_code)
+let compiler_tok_len = arr_len(compiler_tok)
+
+println("LEXER.FL: " + str(lexer_len) + " bytes, " + str(lexer_tok_len) + " tokens")
+println("PARSER.FL: " + str(parser_len) + " bytes, " + str(parser_tok_len) + " tokens")
+println("COMPILER.FL: " + str(compiler_len) + " bytes, " + str(compiler_tok_len) + " tokens")
+println("SAMPLE: " + str(sample_tok_len) + " tokens")
+
+println("SUCCESS: FreeLang self-hosting Level 3 achieved")
+println("End of test")

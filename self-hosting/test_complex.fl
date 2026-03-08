@@ -1,0 +1,10 @@
+var x = 0
+while x < 10 {
+  if x == 5 {
+    x = x + 2
+    continue
+  }
+  if x == 9 { break }
+  x = x + 1
+}
+println(x)

@@ -1,0 +1,530 @@
+// ─────────────────────────────────────────────────────────────────
+// Level 6: Self-hosted x86-64 ASM Generator for FreeLang
+// ─────────────────────────────────────────────────────────────────
+//
+// 목표: IR → x86-64 NASM 어셈블리 변환
+// 전략: 자체호스팅 컴파일러 핵심 (Type Erasure)
+//
+
+// ─────────────────────────────────────────────────────────────────
+// 1. ASM Generator 상태 관리
+// ─────────────────────────────────────────────────────────────────
+
+fn createAsmGenerator() {
+  let gen = {};
+  gen.lines = [];
+  gen.stackDepth = 0;
+  gen.varMap = {};
+  gen.labelCount = 0;
+  return gen;
+}
+
+fn asmEmit(gen, line) {
+  arr_push(gen.lines, line);
+  return gen;
+}
+
+fn asmEmitLabel(gen, label) {
+  arr_push(gen.lines, label + ":");
+  return gen;
+}
+
+fn asmEmitComment(gen, text) {
+  arr_push(gen.lines, "; " + text);
+  return gen;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 2. 기본 ASM 연산 (Stack-based)
+// ─────────────────────────────────────────────────────────────────
+
+fn asmPush(gen, val) {
+  let valStr = str(val);
+  asmEmit(gen, "    mov rax, " + valStr);
+  asmEmit(gen, "    push rax");
+  gen.stackDepth = gen.stackDepth + 1;
+  return gen;
+}
+
+fn asmPop(gen, reg) {
+  asmEmit(gen, "    pop " + reg);
+  gen.stackDepth = gen.stackDepth - 1;
+  return gen;
+}
+
+fn asmAdd(gen) {
+  asmEmit(gen, "    pop rbx");
+  asmEmit(gen, "    pop rax");
+  asmEmit(gen, "    add rax, rbx");
+  asmEmit(gen, "    push rax");
+  return gen;
+}
+
+fn asmSub(gen) {
+  asmEmit(gen, "    pop rbx");
+  asmEmit(gen, "    pop rax");
+  asmEmit(gen, "    sub rax, rbx");
+  asmEmit(gen, "    push rax");
+  return gen;
+}
+
+fn asmMul(gen) {
+  asmEmit(gen, "    pop rbx");
+  asmEmit(gen, "    pop rax");
+  asmEmit(gen, "    imul rax, rbx");
+  asmEmit(gen, "    push rax");
+  return gen;
+}
+
+fn asmDiv(gen) {
+  asmEmit(gen, "    pop rbx");
+  asmEmit(gen, "    pop rax");
+  asmEmit(gen, "    xor edx, edx");
+  asmEmit(gen, "    idiv rbx");
+  asmEmit(gen, "    push rax");
+  return gen;
+}
+
+fn asmMod(gen) {
+  asmEmit(gen, "    pop rbx");
+  asmEmit(gen, "    pop rax");
+  asmEmit(gen, "    xor edx, edx");
+  asmEmit(gen, "    idiv rbx");
+  asmEmit(gen, "    mov rax, rdx");
+  asmEmit(gen, "    push rax");
+  return gen;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 3. 비교 연산
+// ─────────────────────────────────────────────────────────────────
+
+fn asmEq(gen) {
+  asmEmit(gen, "    pop rbx");
+  asmEmit(gen, "    pop rax");
+  asmEmit(gen, "    cmp rax, rbx");
+  asmEmit(gen, "    sete al");
+  asmEmit(gen, "    movzx rax, al");
+  asmEmit(gen, "    push rax");
+  return gen;
+}
+
+fn asmNeq(gen) {
+  asmEmit(gen, "    pop rbx");
+  asmEmit(gen, "    pop rax");
+  asmEmit(gen, "    cmp rax, rbx");
+  asmEmit(gen, "    setne al");
+  asmEmit(gen, "    movzx rax, al");
+  asmEmit(gen, "    push rax");
+  return gen;
+}
+
+fn asmLt(gen) {
+  asmEmit(gen, "    pop rbx");
+  asmEmit(gen, "    pop rax");
+  asmEmit(gen, "    cmp rax, rbx");
+  asmEmit(gen, "    setl al");
+  asmEmit(gen, "    movzx rax, al");
+  asmEmit(gen, "    push rax");
+  return gen;
+}
+
+fn asmLte(gen) {
+  asmEmit(gen, "    pop rbx");
+  asmEmit(gen, "    pop rax");
+  asmEmit(gen, "    cmp rax, rbx");
+  asmEmit(gen, "    setle al");
+  asmEmit(gen, "    movzx rax, al");
+  asmEmit(gen, "    push rax");
+  return gen;
+}
+
+fn asmGt(gen) {
+  asmEmit(gen, "    pop rbx");
+  asmEmit(gen, "    pop rax");
+  asmEmit(gen, "    cmp rax, rbx");
+  asmEmit(gen, "    setg al");
+  asmEmit(gen, "    movzx rax, al");
+  asmEmit(gen, "    push rax");
+  return gen;
+}
+
+fn asmGte(gen) {
+  asmEmit(gen, "    pop rbx");
+  asmEmit(gen, "    pop rax");
+  asmEmit(gen, "    cmp rax, rbx");
+  asmEmit(gen, "    setge al");
+  asmEmit(gen, "    movzx rax, al");
+  asmEmit(gen, "    push rax");
+  return gen;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 4. 변수 관리 (메모리 기반)
+// ─────────────────────────────────────────────────────────────────
+
+fn asmStore(gen, name) {
+  let idx = 0;
+  if (!map_has(gen.varMap, name)) {
+    map_set(gen.varMap, name, gen.labelCount);
+    gen.labelCount = gen.labelCount + 1;
+  }
+  idx = map_get(gen.varMap, name);
+  asmEmit(gen, "    pop rax");
+  asmEmit(gen, "    mov qword [rel vars + " + str(idx * 8) + "], rax");
+  return gen;
+}
+
+fn asmLoad(gen, name) {
+  let idx = 0;
+  if (!map_has(gen.varMap, name)) {
+    map_set(gen.varMap, name, gen.labelCount);
+    gen.labelCount = gen.labelCount + 1;
+  }
+  idx = map_get(gen.varMap, name);
+  asmEmit(gen, "    mov rax, [rel vars + " + str(idx * 8) + "]");
+  asmEmit(gen, "    push rax");
+  return gen;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 5. 제어 흐름
+// ─────────────────────────────────────────────────────────────────
+
+fn asmJmp(gen, label) {
+  asmEmit(gen, "    jmp " + label);
+  return gen;
+}
+
+fn asmJmpNot(gen, label) {
+  asmEmit(gen, "    pop rax");
+  asmEmit(gen, "    test rax, rax");
+  asmEmit(gen, "    jz " + label);
+  return gen;
+}
+
+fn asmJmpIf(gen, label) {
+  asmEmit(gen, "    pop rax");
+  asmEmit(gen, "    test rax, rax");
+  asmEmit(gen, "    jnz " + label);
+  return gen;
+}
+
+fn asmGenLabel(gen) {
+  let label = ".L" + str(gen.labelCount);
+  gen.labelCount = gen.labelCount + 1;
+  return label;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 6. 함수 호출 (내장 함수)
+// ─────────────────────────────────────────────────────────────────
+
+fn asmCall(gen, fname) {
+  if (fname == "println") {
+    asmEmit(gen, "    pop rdi");
+    asmEmit(gen, "    call print_int");
+  } else if (fname == "print") {
+    asmEmit(gen, "    pop rdi");
+    asmEmit(gen, "    call print_int");
+  } else {
+    asmEmit(gen, "    call " + fname);
+  }
+  return gen;
+}
+
+fn asmPrintInt(gen) {
+  asmEmitComment(gen, "print_int: rdi = number");
+  asmEmitLabel(gen, "print_int");
+  asmEmit(gen, "    push rbx");
+  asmEmit(gen, "    push r12");
+  asmEmit(gen, "    mov r12, rdi");
+  asmEmit(gen, "    cmp r12, 0");
+  asmEmit(gen, "    jge .L_print_positive");
+  asmEmit(gen, "    mov rax, 1");
+  asmEmit(gen, "    mov rdi, 1");
+  asmEmit(gen, "    lea rsi, [rel .minus]");
+  asmEmit(gen, "    mov rdx, 1");
+  asmEmit(gen, "    syscall");
+  asmEmit(gen, "    neg r12");
+  asmEmitLabel(gen, ".L_print_positive");
+  asmEmit(gen, "    mov rax, r12");
+  asmEmit(gen, "    mov rbx, 10");
+  asmEmit(gen, "    xor r13d, r13d");
+  asmEmitLabel(gen, ".L_div_loop");
+  asmEmit(gen, "    xor edx, edx");
+  asmEmit(gen, "    div rbx");
+  asmEmit(gen, "    push rdx");
+  asmEmit(gen, "    inc r13");
+  asmEmit(gen, "    test rax, rax");
+  asmEmit(gen, "    jnz .L_div_loop");
+  asmEmitLabel(gen, ".L_print_loop");
+  asmEmit(gen, "    pop rax");
+  asmEmit(gen, "    add al, 48");
+  asmEmit(gen, "    mov rax, 1");
+  asmEmit(gen, "    mov rdi, 1");
+  asmEmit(gen, "    mov rsi, rsp");
+  asmEmit(gen, "    mov rdx, 1");
+  asmEmit(gen, "    push rax");
+  asmEmit(gen, "    sub rsp, 8");
+  asmEmit(gen, "    mov [rsp], al");
+  asmEmit(gen, "    syscall");
+  asmEmit(gen, "    add rsp, 8");
+  asmEmit(gen, "    pop rax");
+  asmEmit(gen, "    dec r13");
+  asmEmit(gen, "    jnz .L_print_loop");
+  asmEmit(gen, "    mov rax, 1");
+  asmEmit(gen, "    mov rdi, 1");
+  asmEmit(gen, "    lea rsi, [rel .newline]");
+  asmEmit(gen, "    mov rdx, 1");
+  asmEmit(gen, "    syscall");
+  asmEmit(gen, "    pop r12");
+  asmEmit(gen, "    pop rbx");
+  asmEmit(gen, "    ret");
+  return gen;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 7. IR 파싱 및 변환
+// ─────────────────────────────────────────────────────────────────
+
+fn parseIRInstruction(irStr) {
+  let inst = {};
+
+  if (str_contains(irStr, "PUSH:")) {
+    inst.op = "PUSH";
+    inst.arg = str_replace(irStr, "PUSH:", "");
+  } else if (str_contains(irStr, "ADD")) {
+    inst.op = "ADD";
+  } else if (str_contains(irStr, "SUB")) {
+    inst.op = "SUB";
+  } else if (str_contains(irStr, "MUL")) {
+    inst.op = "MUL";
+  } else if (str_contains(irStr, "DIV")) {
+    inst.op = "DIV";
+  } else if (str_contains(irStr, "MOD")) {
+    inst.op = "MOD";
+  } else if (str_contains(irStr, "CALL:")) {
+    inst.op = "CALL";
+    inst.arg = str_replace(irStr, "CALL:", "");
+  } else if (str_contains(irStr, "LOAD:")) {
+    inst.op = "LOAD";
+    inst.arg = str_replace(irStr, "LOAD:", "");
+  } else if (str_contains(irStr, "STORE:")) {
+    inst.op = "STORE";
+    inst.arg = str_replace(irStr, "STORE:", "");
+  } else if (str_contains(irStr, "LABEL:")) {
+    inst.op = "LABEL";
+    inst.arg = str_replace(irStr, "LABEL:", "");
+  } else if (str_contains(irStr, "JUMP:")) {
+    inst.op = "JUMP";
+    inst.arg = str_replace(irStr, "JUMP:", "");
+  } else if (str_contains(irStr, "JMPF:")) {
+    inst.op = "JMPF";
+    inst.arg = str_replace(irStr, "JMPF:", "");
+  } else if (str_contains(irStr, "RETURN")) {
+    inst.op = "RETURN";
+  } else if (str_contains(irStr, "EQ")) {
+    inst.op = "EQ";
+  } else if (str_contains(irStr, "LT")) {
+    inst.op = "LT";
+  } else if (str_contains(irStr, "GT")) {
+    inst.op = "GT";
+  } else {
+    inst.op = "UNKNOWN";
+  }
+
+  return inst;
+}
+
+fn irToAsm(irInstructions) {
+  let gen = createAsmGenerator();
+
+  // ─── 헤더 섹션 ───
+  asmEmit(gen, "section .data");
+  asmEmit(gen, "    .newline db 10");
+  asmEmit(gen, "    .minus db '-'");
+  asmEmit(gen, "");
+  asmEmit(gen, "section .bss");
+  asmEmit(gen, "    vars resq 256");
+  asmEmit(gen, "");
+  asmEmit(gen, "section .text");
+  asmEmit(gen, "    global _start");
+  asmEmit(gen, "");
+  asmEmitLabel(gen, "_start");
+
+  // ─── IR 변환 루프 ───
+  let i = 0;
+  while (i < arr_len(irInstructions)) {
+    let irStr = arr_get(irInstructions, i);
+    let inst = parseIRInstruction(irStr);
+
+    if (inst.op == "PUSH") {
+      asmPush(gen, inst.arg);
+    } else if (inst.op == "ADD") {
+      asmAdd(gen);
+    } else if (inst.op == "SUB") {
+      asmSub(gen);
+    } else if (inst.op == "MUL") {
+      asmMul(gen);
+    } else if (inst.op == "DIV") {
+      asmDiv(gen);
+    } else if (inst.op == "MOD") {
+      asmMod(gen);
+    } else if (inst.op == "STORE") {
+      asmStore(gen, inst.arg);
+    } else if (inst.op == "LOAD") {
+      asmLoad(gen, inst.arg);
+    } else if (inst.op == "JUMP") {
+      asmJmp(gen, inst.arg);
+    } else if (inst.op == "JMPF") {
+      asmJmpNot(gen, inst.arg);
+    } else if (inst.op == "LABEL") {
+      asmEmitLabel(gen, inst.arg);
+    } else if (inst.op == "CALL") {
+      asmCall(gen, inst.arg);
+    } else if (inst.op == "EQ") {
+      asmEq(gen);
+    } else if (inst.op == "LT") {
+      asmLt(gen);
+    } else if (inst.op == "GT") {
+      asmGt(gen);
+    } else if (inst.op == "RETURN") {
+      asmEmit(gen, "    ret");
+    }
+
+    i = i + 1;
+  }
+
+  // ─── 프로그램 종료 ───
+  asmEmit(gen, "    mov rax, 60");
+  asmEmit(gen, "    xor rdi, rdi");
+  asmEmit(gen, "    syscall");
+
+  return gen;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 8. ASM 코드 생성 (문자열 출력)
+// ─────────────────────────────────────────────────────────────────
+
+fn generateAsmCode(irInstructions) {
+  let gen = irToAsm(irInstructions);
+  let result = "";
+  let i = 0;
+
+  while (i < arr_len(gen.lines)) {
+    let line = arr_get(gen.lines, i);
+    result = result + line + "\n";
+    i = i + 1;
+  }
+
+  return result;
+}
+
+fn generateAsmFile(irInstructions, outPath) {
+  let asmCode = generateAsmCode(irInstructions);
+  file_write(outPath, asmCode);
+  return outPath;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 9. NASM 컴파일 (옵션)
+// ─────────────────────────────────────────────────────────────────
+
+fn compileWithNasm(asmPath, outPath) {
+  let objPath = outPath + ".o";
+  let cmd = "nasm -f elf64 " + asmPath + " -o " + objPath + " 2>&1";
+  println("Running: " + cmd);
+  return cmd;
+}
+
+fn linkObject(objPath, outPath) {
+  let cmd = "ld -o " + outPath + " " + objPath + " -lc --dynamic-linker /lib64/ld-linux-x86-64.so.2 2>&1";
+  println("Running: " + cmd);
+  return cmd;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 10. 테스트 및 통합 API
+// ─────────────────────────────────────────────────────────────────
+
+fn testAsmGenerator() {
+  println("=== Level 6: x86-64 ASM Generator ===");
+
+  let ir = [];
+  arr_push(ir, "PUSH:42");
+  arr_push(ir, "CALL:println");
+
+  let asm = generateAsmCode(ir);
+  println(asm);
+
+  return 0;
+}
+
+fn testArithmetic() {
+  println("=== Arithmetic Test ===");
+
+  let ir = [];
+  arr_push(ir, "PUSH:10");
+  arr_push(ir, "PUSH:5");
+  arr_push(ir, "ADD");
+  arr_push(ir, "CALL:println");
+
+  let asm = generateAsmCode(ir);
+  println(asm);
+
+  return 0;
+}
+
+fn testVariables() {
+  println("=== Variable Storage Test ===");
+
+  let ir = [];
+  arr_push(ir, "PUSH:42");
+  arr_push(ir, "STORE:x");
+  arr_push(ir, "LOAD:x");
+  arr_push(ir, "CALL:println");
+
+  let asm = generateAsmCode(ir);
+  println(asm);
+
+  return 0;
+}
+
+fn testComparison() {
+  println("=== Comparison Test ===");
+
+  let ir = [];
+  arr_push(ir, "PUSH:5");
+  arr_push(ir, "PUSH:3");
+  arr_push(ir, "LT");
+  arr_push(ir, "CALL:println");
+
+  let asm = generateAsmCode(ir);
+  println(asm);
+
+  return 0;
+}
+
+fn main() {
+  println("Level 6: Self-hosted x86-64 ASM Generator");
+  println("Available functions:");
+  println("  - testAsmGenerator(): 기본 PUSH/CALL 테스트");
+  println("  - testArithmetic(): 산술 연산 (10 + 5)");
+  println("  - testVariables(): 변수 저장/로드");
+  println("  - testComparison(): 비교 연산 (5 < 3)");
+  println("  - generateAsmCode(ir): IR → ASM 변환");
+  println("  - generateAsmFile(ir, path): ASM 파일 생성");
+
+  return 0;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 실행 예시 (주석 제거 후 사용)
+// ─────────────────────────────────────────────────────────────────
+
+// testAsmGenerator();
+// testArithmetic();
+// testVariables();
+// testComparison();

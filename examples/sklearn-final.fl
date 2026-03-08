@@ -1,0 +1,83 @@
+/**
+ * FreeLang Phase 7 - scikit-learn ML Demo
+ */
+
+fn main() {
+  println("=" + "=".repeat(50))
+  println("FreeLang Phase 7: ML Complete Pipeline")
+  println("=" + "=".repeat(50))
+  println("")
+
+  // ============================================
+  // 1. Statistics
+  // ============================================
+  println("1️⃣  Statistics")
+  let data = [10.0, 20.0, 15.0, 25.0, 30.0, 35.0, 28.0, 32.0]
+  println("Mean:  " + str(stats_mean(data)))
+  println("Median: " + str(stats_median(data)))
+  println("StdDev: " + str(stats_std_dev(data)))
+  println("")
+
+  // ============================================
+  // 2. Normalization
+  // ============================================
+  println("2️⃣  Normalization")
+  let norm1 = ml_normalize_minmax(data)
+  let norm2 = ml_normalize_zscore(data)
+  println("MinMax: " + str(arr_len(norm1)) + " values")
+  println("ZScore: " + str(arr_len(norm2)) + " values")
+  println("")
+
+  // ============================================
+  // 3. Distance
+  // ============================================
+  println("3️⃣  Distance Metrics")
+  let p1 = [0.0, 0.0]
+  let p2 = [3.0, 4.0]
+  println("Euclidean: " + str(ml_distance_euclidean(p1, p2)))
+  println("Manhattan: " + str(ml_distance_manhattan(p1, p2)))
+  println("")
+
+  // ============================================
+  // 4. Regression
+  // ============================================
+  println("4️⃣  Linear Regression")
+  let xdata = [1.0, 2.0, 3.0, 4.0, 5.0]
+  let ydata = [2.0, 4.0, 5.0, 4.0, 5.0]
+  let reg = ml_linear_regression(xdata, ydata)
+  println("R²: " + str(reg.r2))
+  println("")
+
+  // ============================================
+  // 5. Clustering
+  // ============================================
+  println("5️⃣  K-Means")
+  let pts = [[1.0, 2.0], [2.0, 3.0], [10.0, 11.0]]
+  let ctrs = ml_kmeans_init(2, pts)
+  println("Centroids: " + str(arr_len(ctrs)))
+  println("")
+
+  // ============================================
+  // 6. Classification
+  // ============================================
+  println("6️⃣  Classification Metrics")
+  let labels_a = [1, 1, 0, 1, 0, 0, 1, 1]
+  let labels_b = [1, 1, 0, 1, 0, 1, 1, 0]
+  let cm_result = ml_confusion_matrix(labels_a, labels_b)
+  println("TP: " + str(cm_result.tp))
+  println("Precision: " + str(ml_precision(labels_a, labels_b)))
+  println("Recall: " + str(ml_recall(labels_a, labels_b)))
+  println("F1: " + str(ml_f1_score(labels_a, labels_b)))
+  println("Accuracy: " + str(ml_accuracy(labels_a, labels_b)))
+  println("")
+
+  // ============================================
+  // Summary
+  // ============================================
+  println("=" + "=".repeat(50))
+  println("✅ Phase 7 Complete!")
+  println("ML Functions: 30+")
+  println("=" + "=".repeat(50))
+}
+
+main()

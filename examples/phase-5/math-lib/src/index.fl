@@ -1,0 +1,52 @@
+// Math Library - Main entry point
+// Provides basic mathematical functions
+
+export fn add(a, b) {
+  return a + b
+}
+
+export fn subtract(a, b) {
+  return a - b
+}
+
+export fn multiply(a, b) {
+  return a * b
+}
+
+export fn divide(a, b) {
+  if b == 0 {
+    return "Error: Division by zero"
+  }
+  return a / b
+}
+
+export fn power(base, exp) {
+  let result = 1
+  let i = 0
+  while i < exp {
+    result = result * base
+    i = i + 1
+  }
+  return result
+}
+
+export fn abs(n) {
+  if n < 0 {
+    return -n
+  }
+  return n
+}
+
+export fn max(a, b) {
+  if a > b {
+    return a
+  }
+  return b
+}
+
+export fn min(a, b) {
+  if a < b {
+    return a
+  }
+  return b
+}

@@ -1,0 +1,11 @@
+struct Pt {
+  x: i32,
+  y: i32
+}
+
+fn make_pt() -> Pt {
+  return Pt { x: 1, y: 2 }
+}
+
+let p: Pt = make_pt()
+println("ok")

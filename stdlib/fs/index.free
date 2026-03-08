@@ -1,0 +1,367 @@
+/**
+ * FreeLang File System Module (Phase 16 Week 3)
+ * Async file I/O with libuv integration
+ * Uses Promise Bridge for async/await support
+ */
+
+// Callback registry (timer.c pattern)
+let callback_registry = [];
+let next_callback_id = 0;
+
+fn register_callback(fn) => {
+  let id = next_callback_id;
+  next_callback_id = next_callback_id + 1;
+  callback_registry[id] = fn;
+  return id;
+};
+
+fn unregister_callback(id) => {
+  callback_registry[id] = null;
+};
+
+// ────────────────────────────────────────
+// Public API
+// ────────────────────────────────────────
+
+/**
+ * Read file asynchronously
+ * @param path - file path to read
+ * @returns Promise that resolves to file content as string
+ */
+export async fn readFile(path) => {
+  let callback_id = register_callback((result) => result);
+
+  fl_fs_read_async(path, callback_id);
+
+  // await is handled by Promise Bridge
+  let content = await callback_id;
+  unregister_callback(callback_id);
+
+  return content;
+};
+
+/**
+ * Write file asynchronously
+ * @param path - file path to write to
+ * @param content - content to write
+ * @returns Promise that resolves when write completes
+ */
+export async fn writeFile(path, content) => {
+  let callback_id = register_callback((result) => result);
+
+  fl_fs_write_async(path, content, callback_id);
+
+  await callback_id;
+  unregister_callback(callback_id);
+};
+
+/**
+ * Append content to file asynchronously
+ * @param path - file path to append to
+ * @param content - content to append
+ * @returns Promise that resolves when append completes
+ */
+export async fn appendFile(path, content) => {
+  let callback_id = register_callback((result) => result);
+  fl_fs_append_async(path, content, callback_id);
+  await callback_id;
+  unregister_callback(callback_id);
+};
+
+/**
+ * Delete file asynchronously
+ * @param path - file path to delete
+ * @returns Promise that resolves when file is deleted
+ */
+export async fn deleteFile(path) => {
+  let callback_id = register_callback((result) => result);
+  fl_fs_unlink_async(path, callback_id);
+  await callback_id;
+  unregister_callback(callback_id);
+};
+
+/**
+ * Rename file asynchronously
+ * @param old_path - current file path
+ * @param new_path - new file path
+ * @returns Promise that resolves when file is renamed
+ */
+export async fn renameFile(old_path, new_path) => {
+  let callback_id = register_callback((result) => result);
+  fl_fs_rename_async(old_path, new_path, callback_id);
+  await callback_id;
+  unregister_callback(callback_id);
+};
+
+/**
+ * Create directory asynchronously
+ * @param path - directory path to create
+ * @param mode - file mode (default: 0755)
+ * @returns Promise that resolves when directory is created
+ */
+export async fn mkdir(path, mode) => {
+  let callback_id = register_callback((result) => result);
+  let actual_mode = mode || 0755;
+  fl_fs_mkdir_async(path, actual_mode, callback_id);
+  await callback_id;
+  unregister_callback(callback_id);
+};
+
+/**
+ * Remove directory asynchronously
+ * @param path - directory path to remove
+ * @returns Promise that resolves when directory is removed
+ */
+export async fn rmdir(path) => {
+  let callback_id = register_callback((result) => result);
+  fl_fs_rmdir_async(path, callback_id);
+  await callback_id;
+  unregister_callback(callback_id);
+};
+
+/**
+ * Get file statistics asynchronously
+ * @param path - file path to stat
+ * @returns Promise that resolves to file stats
+ */
+export async fn stat(path) => {
+  let callback_id = register_callback((result) => result);
+  fl_fs_stat_async(path, callback_id);
+  let stats = await callback_id;
+  unregister_callback(callback_id);
+  return stats;
+};
+
+/**
+ * Check if file exists asynchronously
+ * @param path - file path to check
+ * @returns Promise that resolves to "true" or "false"
+ */
+export async fn exists(path) => {
+  let callback_id = register_callback((result) => result);
+  fl_fs_exists_async(path, callback_id);
+  let result = await callback_id;
+  unregister_callback(callback_id);
+  return result;
+};
+
+// ────────────────────────────────────────
+// Path Manipulation (Pure FreeLang)
+// ────────────────────────────────────────
+
+/**
+ * File statistics type
+ */
+export struct FileStat {
+  path: string
+  exists: bool
+  isFile: bool
+  isDirectory: bool
+  size: number
+}
+
+/**
+ * Join path components
+ * @param parts - array of path components
+ * @returns joined path
+ */
+export fn pathJoin(parts: array) -> string {
+  intent: "Join path components with separator"
+  output: string
+  do
+    if parts.length == 0 {
+      return ""
+    }
+
+    let result = parts[0]
+    let i = 1
+    while i < parts.length {
+      let part = parts[i]
+      if result.length > 0 && result[result.length - 1] != "/" {
+        result = result + "/"
+      }
+      if part.length > 0 && part[0] == "/" {
+        result = result + part.slice(1)
+      } else {
+        result = result + part
+      }
+      i = i + 1
+    }
+    return result
+}
+
+/**
+ * Get directory name from path
+ * @param path - file path
+ * @returns directory path
+ */
+export fn pathDirname(path: string) -> string {
+  intent: "Get directory name of path"
+  output: string
+  do
+    let lastSlash = path.lastIndexOf("/")
+    if lastSlash == -1 {
+      return "."
+    }
+    if lastSlash == 0 {
+      return "/"
+    }
+    return path.slice(0, lastSlash)
+}
+
+/**
+ * Get file name from path
+ * @param path - file path
+ * @returns file name
+ */
+export fn pathBasename(path: string) -> string {
+  intent: "Get file name from path"
+  output: string
+  do
+    let lastSlash = path.lastIndexOf("/")
+    if lastSlash == -1 {
+      return path
+    }
+    return path.slice(lastSlash + 1)
+}
+
+/**
+ * Get file extension from path
+ * @param path - file path
+ * @returns file extension (including dot)
+ */
+export fn pathExtname(path: string) -> string {
+  intent: "Get file extension"
+  output: string
+  do
+    let basename = pathBasename(path)
+    let lastDot = basename.lastIndexOf(".")
+    if lastDot == -1 || lastDot == 0 {
+      return ""
+    }
+    return basename.slice(lastDot)
+}
+
+/**
+ * Normalize path (remove .., ., double slashes)
+ * @param path - file path
+ * @returns normalized path
+ */
+export fn pathNormalize(path: string) -> string {
+  intent: "Normalize path"
+  output: string
+  do
+    // Remove double slashes
+    let normalized = path.replace("//", "/")
+
+    // Remove trailing slash if not root
+    if normalized.length > 1 && normalized[normalized.length - 1] == "/" {
+      normalized = normalized.slice(0, -1)
+    }
+
+    return normalized
+}
+
+/**
+ * Check if path is absolute
+ * @param path - file path
+ * @returns true if path is absolute
+ */
+export fn isAbsolutePath(path: string) -> bool {
+  intent: "Check if path is absolute"
+  output: bool
+  do
+    if path.length > 0 && path[0] == "/" {
+      return true
+    }
+    return false
+}
+
+/**
+ * Check if path is valid
+ * @param path - file path
+ * @returns true if path is valid
+ */
+export fn isValidPath(path: string) -> bool {
+  intent: "Check if path is valid"
+  output: bool
+  do
+    if path.length == 0 {
+      return false
+    }
+
+    // Check for null bytes
+    if path.indexOf("\0") != -1 {
+      return false
+    }
+
+    return true
+}
+
+/**
+ * Sanitize path (prevent directory traversal attacks)
+ * @param path - file path
+ * @returns sanitized path
+ */
+export fn sanitizePath(path: string) -> string {
+  intent: "Sanitize path for security"
+  output: string
+  do
+    let sanitized = path
+      .replace("../", "")
+      .replace("..", "")
+      .replace("//", "/")
+
+    // Remove leading dots
+    while sanitized.length > 0 && sanitized[0] == "." {
+      sanitized = sanitized.slice(1)
+    }
+
+    return sanitized
+}
+
+/**
+ * Change file extension
+ * @param filename - file name or path
+ * @param newExt - new extension (with or without dot)
+ * @returns path with new extension
+ */
+export fn changeExtension(filename: string, newExt: string) -> string {
+  intent: "Change file extension"
+  output: string
+  do
+    let dirname = pathDirname(filename)
+    let basename = pathBasename(filename)
+    let lastDot = basename.lastIndexOf(".")
+
+    let nameWithoutExt = ""
+    if lastDot == -1 || lastDot == 0 {
+      nameWithoutExt = basename
+    } else {
+      nameWithoutExt = basename.slice(0, lastDot)
+    }
+
+    // Ensure extension starts with dot
+    let ext = newExt
+    if ext.length > 0 && ext[0] != "." {
+      ext = "." + ext
+    }
+
+    if dirname == "." {
+      return nameWithoutExt + ext
+    } else {
+      return dirname + "/" + nameWithoutExt + ext
+    }
+}
+
+// ────────────────────────────────────────
+// FFI Note
+// ────────────────────────────────────────
+
+// The following functions require FFI support:
+// - readFile, writeFile, appendFile, deleteFile, renameFile
+// - mkdir, rmdir, stat, exists
+//
+// FFI Status: libfs.so exists but FFI system is "WAITING FOR ACTIVATION"
+// Until FFI is enabled, these functions cannot perform actual file I/O
+// They are mock implementations using async/await pattern

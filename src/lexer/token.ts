@@ -1,0 +1,231 @@
+/**
+ * FreeLang v2 Token Types (v1 base + Phase 5 extensions)
+ *
+ * v1에서 복사된 기본 토큰 타입들 + minimal .free 포맷용 3개 토큰 추가
+ */
+export enum TokenType {
+  // Keywords (30개 - v1 기본 + Phase 4 추가 1개)
+  FN = 'FN',
+  LET = 'LET',
+  CONST = 'CONST',
+  IF = 'IF',
+  ELSE = 'ELSE',
+  MATCH = 'MATCH',
+  FOR = 'FOR',
+  WHILE = 'WHILE',
+  LOOP = 'LOOP',
+  BREAK = 'BREAK',
+  CONTINUE = 'CONTINUE',
+  RETURN = 'RETURN',
+  ASYNC = 'ASYNC',
+  AWAIT = 'AWAIT',
+  IMPORT = 'IMPORT',
+  EXPORT = 'EXPORT',
+  FROM = 'FROM',  // Phase 4: Module System - from keyword for imports
+  STRUCT = 'STRUCT',
+  ENUM = 'ENUM',
+  TRAIT = 'TRAIT',
+  TYPE = 'TYPE',
+  TRUE = 'TRUE',
+  FALSE = 'FALSE',
+  NULL = 'NULL',
+  IN = 'IN',
+  OF = 'OF',  // Phase 2: for...of loop support
+  AS = 'AS',
+  IS = 'IS',
+  PUB = 'PUB',
+  MUT = 'MUT',
+  SELF = 'SELF',
+  SUPER = 'SUPER',
+  IMPL = 'IMPL',
+
+  // Phase I: Exception Handling (4개 추가)
+  TRY = 'TRY',           // try block
+  CATCH = 'CATCH',       // catch block
+  THROW = 'THROW',       // throw statement
+  FINALLY = 'FINALLY',   // finally block
+
+  // Phase 5 minimal .free 포맷 토큰 (3개 추가)
+  INPUT = 'INPUT',       // input: 타입 정의
+  OUTPUT = 'OUTPUT',     // output: 타입 정의
+  INTENT = 'INTENT',     // intent: 의도 정의
+
+  // Secret-Link: 보안 변수 선언 (빌드 타임 주입 / 암호화 메모리)
+  SECRET = 'SECRET',     // secret 키워드
+
+  // MOSS-Style: 제로-런타임 스타일 선언
+  STYLE = 'STYLE',       // style 키워드
+
+  // Self-Testing Compiler: 내장 테스트 블록
+  TEST = 'TEST',         // test 블록 (릴리즈 빌드에서 0바이트 제거)
+  EXPECT = 'EXPECT',     // expect(actual).to.be.xxx(expected) 어서션 (test 블록 전용)
+
+  // Identifiers & Literals
+  IDENT = 'IDENT',
+  NUMBER = 'NUMBER',
+  STRING = 'STRING',
+  CHAR = 'CHAR',
+  REGEX = 'REGEX',  // Regular expression literal
+
+  // Operators
+  PLUS = 'PLUS',           // +
+  MINUS = 'MINUS',         // -
+  STAR = 'STAR',           // *
+  SLASH = 'SLASH',         // /
+  PERCENT = 'PERCENT',     // %
+  POWER = 'POWER',         // **
+
+  EQ = 'EQ',               // ==
+  NE = 'NE',               // !=
+  LT = 'LT',               // <
+  GT = 'GT',               // >
+  LE = 'LE',               // <=
+  GE = 'GE',               // >=
+
+  AND = 'AND',             // &&
+  OR = 'OR',               // ||
+  NOT = 'NOT',             // !
+
+  BIT_AND = 'BIT_AND',     // &
+  BIT_OR = 'BIT_OR',       // |
+  BIT_XOR = 'BIT_XOR',     // ^
+  BIT_NOT = 'BIT_NOT',     // ~
+  SHL = 'SHL',             // <<
+  SHR = 'SHR',             // >>
+
+  ASSIGN = 'ASSIGN',       // =
+  PLUS_ASSIGN = 'PLUS_ASSIGN',     // +=
+  MINUS_ASSIGN = 'MINUS_ASSIGN',   // -=
+  STAR_ASSIGN = 'STAR_ASSIGN',     // *=
+  SLASH_ASSIGN = 'SLASH_ASSIGN',   // /=
+  PERCENT_ASSIGN = 'PERCENT_ASSIGN', // %=
+
+  RANGE = 'RANGE',         // ..
+  RANGE_INC = 'RANGE_INC', // ..=
+
+  DOT = 'DOT',             // .
+  COLON_COLON = 'COLON_COLON', // ::
+  QUESTION = 'QUESTION',   // ?
+  PIPE_GT = 'PIPE_GT',     // |>
+
+  // Delimiters
+  LPAREN = 'LPAREN',       // (
+  RPAREN = 'RPAREN',       // )
+  LBRACKET = 'LBRACKET',   // [
+  RBRACKET = 'RBRACKET',   // ]
+  LBRACE = 'LBRACE',       // {
+  RBRACE = 'RBRACE',       // }
+  COMMA = 'COMMA',         // ,
+  SEMICOLON = 'SEMICOLON', // ;
+  COLON = 'COLON',         // :
+  ARROW = 'ARROW',         // ->
+  FAT_ARROW = 'FAT_ARROW', // =>
+  AT = 'AT',               // @
+  HASH = 'HASH',           // #
+
+  // Special
+  EOF = 'EOF',
+  NEWLINE = 'NEWLINE',
+  COMMENT = 'COMMENT',
+  ILLEGAL = 'ILLEGAL',
+
+  // Native-Graph: 정적 컴파일 기반 GraphQL (Apollo 대체)
+  SCHEMA = 'SCHEMA',     // schema 블록 정의
+  RESOLVER = 'RESOLVER', // @resolver 어노테이션 대상 키워드
+  QUERY = 'QUERY',       // query 타입 정의
+  MUTATION = 'MUTATION', // mutation 타입 정의
+
+  // Self-Formatting Compiler: 포맷 정책 어노테이션
+  FORMAT_POLICY = 'FORMAT_POLICY'  // @format(indent:4, semi:true, ...) 어노테이션
+}
+
+/**
+ * Token represents a lexical token
+ */
+export interface Token {
+  type: TokenType;
+  value: string;
+  line: number;
+  column: number;
+}
+
+/**
+ * Keywords map (v1 기본 29개 + Phase 4 추가 1개 + Phase 5 추가 3개 = 33개)
+ */
+export const KEYWORDS: Record<string, TokenType> = {
+  // v1 기본
+  'fn': TokenType.FN,
+  'let': TokenType.LET,
+  'const': TokenType.CONST,
+  'if': TokenType.IF,
+  'else': TokenType.ELSE,
+  'match': TokenType.MATCH,
+  'for': TokenType.FOR,
+  'while': TokenType.WHILE,
+  'loop': TokenType.LOOP,
+  'break': TokenType.BREAK,
+  'continue': TokenType.CONTINUE,
+  'return': TokenType.RETURN,
+  'async': TokenType.ASYNC,
+  'await': TokenType.AWAIT,
+  'import': TokenType.IMPORT,
+  'export': TokenType.EXPORT,
+  'from': TokenType.FROM,  // Phase 4: Module System
+  'struct': TokenType.STRUCT,
+  'enum': TokenType.ENUM,
+  'trait': TokenType.TRAIT,
+  'type': TokenType.TYPE,
+  'true': TokenType.TRUE,
+  'false': TokenType.FALSE,
+  'null': TokenType.NULL,
+  'in': TokenType.IN,
+  'of': TokenType.OF,  // Phase 2: for...of loop support
+  'as': TokenType.AS,
+  'is': TokenType.IS,
+  'pub': TokenType.PUB,
+  'mut': TokenType.MUT,
+  'self': TokenType.SELF,
+  'super': TokenType.SUPER,
+  'impl': TokenType.IMPL,
+
+  // Phase I: Exception Handling (4개)
+  'try': TokenType.TRY,
+  'catch': TokenType.CATCH,
+  'throw': TokenType.THROW,
+  'finally': TokenType.FINALLY,
+
+  // Phase 5 minimal .free 포맷 토큰 (3개)
+  'input': TokenType.INPUT,
+  'output': TokenType.OUTPUT,
+  'intent': TokenType.INTENT,
+
+  // Secret-Link: 보안 변수
+  'secret': TokenType.SECRET,
+
+  // MOSS-Style: 제로-런타임 스타일 선언
+  'style': TokenType.STYLE,
+
+  // Self-Testing Compiler: 내장 테스트 블록
+  'test': TokenType.TEST,
+  'expect': TokenType.EXPECT,   // expect 어서션 (test 블록 전용)
+
+  // Native-Graph: 정적 컴파일 기반 GraphQL (Apollo 대체)
+  'schema': TokenType.SCHEMA,
+  'resolver': TokenType.RESOLVER,
+  'query': TokenType.QUERY,
+  'mutation': TokenType.MUTATION
+};
+
+/**
+ * Check if a string is a keyword
+ */
+export function isKeyword(str: string): boolean {
+  return str in KEYWORDS;
+}
+
+/**
+ * Get keyword token type
+ */
+export function getKeyword(str: string): TokenType {
+  return KEYWORDS[str] || TokenType.IDENT;
+}

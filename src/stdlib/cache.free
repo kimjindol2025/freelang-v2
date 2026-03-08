@@ -1,0 +1,127 @@
+/**
+ * cache.free - 캐시 표준 라이브러리
+ * 메모리 캐시, Redis 지원, TTL
+ */
+
+// 캐시 객체
+struct Cache {
+  cache: any,
+  type: string,
+  ttl: int
+}
+
+// 캐시 설정 객체
+struct CacheConfig {
+  type: string,      // "memory" 또는 "redis"
+  host: string,      // Redis 호스트 (기본값: "localhost")
+  port: int,         // Redis 포트 (기본값: 6379)
+  ttl: int           // 기본 TTL (초, 기본값: 0 = 무제한)
+}
+
+// 캐시 생성
+fn createCache(config: any) -> Cache {
+  let cacheObj = vm.cache.create(config)
+  return { cache: cacheObj, type: config.type, ttl: config.ttl || 0 }
+}
+
+// 캐시 읽기
+fn get(c: Cache, key: string) -> any {
+  return vm.cache.get(c.cache, key)
+}
+
+// 캐시 쓰기
+fn set(c: Cache, key: string, value: any, ttl: int = 0) -> void {
+  let expireTtl = ttl
+  if ttl == 0 {
+    expireTtl = c.ttl
+  }
+  vm.cache.set(c.cache, key, value, expireTtl)
+}
+
+// 캐시 삭제
+fn delete(c: Cache, key: string) -> void {
+  vm.cache.delete(c.cache, key)
+}
+
+// 캐시 존재 여부
+fn exists(c: Cache, key: string) -> bool {
+  return vm.cache.exists(c.cache, key)
+}
+
+// 캐시 비우기
+fn clear(c: Cache) -> void {
+  vm.cache.clear(c.cache)
+}
+
+// 캐시 TTL 설정
+fn setTTL(c: Cache, key: string, ttl: int) -> void {
+  vm.cache.setTTL(c.cache, key, ttl)
+}
+
+// 캐시 TTL 조회
+fn getTTL(c: Cache, key: string) -> int {
+  return vm.cache.getTTL(c.cache, key)
+}
+
+// 캐시 크기
+fn size(c: Cache) -> int {
+  return vm.cache.size(c.cache)
+}
+
+// 캐시 모든 키
+fn keys(c: Cache) -> array {
+  return vm.cache.keys(c.cache)
+}
+
+// 모든 값
+fn values(c: Cache) -> array {
+  return vm.cache.values(c.cache)
+}
+
+// 비동기 읽기
+fn getAsync(c: Cache, key: string) -> Promise<any> {
+  return Promise(fn(resolve: fn(any) -> void, reject: fn(string) -> void) -> void {
+    scheduleDelayed(fn() -> void {
+      let val = vm.cache.get(c.cache, key)
+      resolve(val)
+    }, 0)
+  })
+}
+
+// 비동기 쓰기
+fn setAsync(c: Cache, key: string, value: any, ttl: int = 0) -> Promise<void> {
+  return Promise(fn(resolve: fn(void) -> void, reject: fn(string) -> void) -> void {
+    scheduleDelayed(fn() -> void {
+      let expireTtl = ttl
+      if ttl == 0 {
+        expireTtl = c.ttl
+      }
+      vm.cache.set(c.cache, key, value, expireTtl)
+      resolve()
+    }, 0)
+  })
+}
+
+// 캐시 닫기 (Redis의 경우)
+fn close(c: Cache) -> void {
+  vm.cache.close(c.cache)
+}
+
+export {
+  Cache,
+  CacheConfig,
+  createCache,
+  get,
+  set,
+  delete,
+  exists,
+  clear,
+  setTTL,
+  getTTL,
+  size,
+  keys,
+  values,
+  getAsync,
+  setAsync,
+  close
+}

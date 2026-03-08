@@ -1,0 +1,367 @@
+/**
+ * FreeLang HTTP Utilities Module
+ * Pure FreeLang HTTP request/response parsing and generation
+ *
+ * Note: This module provides pure FreeLang HTTP utilities.
+ * For actual TCP socket communication, see stdlib/net/index.free
+ * (which requires FFI activation)
+ */
+
+// ────────────────────────────────────────
+// HTTP Request Type
+// ────────────────────────────────────────
+
+export struct HttpRequest {
+  method: string
+  path: string
+  version: string
+  headers: object
+  body: string
+  queryParams: object
+}
+
+// ────────────────────────────────────────
+// HTTP Response Type
+// ────────────────────────────────────────
+
+export struct HttpResponse {
+  statusCode: number
+  statusText: string
+  headers: object
+  body: string
+}
+
+// ────────────────────────────────────────
+// Parse HTTP Request
+// ────────────────────────────────────────
+
+/**
+ * Parse raw HTTP request string to HttpRequest object
+ * @param raw - raw HTTP request text
+ * @returns HttpRequest object
+ */
+export fn parseRequest(raw: string) -> object {
+  intent: "Parse HTTP request string"
+  output: object
+  do
+    // Split headers and body
+    let parts = raw.split("\r\n\r\n")
+    let headerSection = parts[0]
+    let body = if parts.length > 1 { parts[1] } else { "" }
+
+    // Parse request line
+    let lines = headerSection.split("\r\n")
+    let requestLine = lines[0]
+    let requestParts = requestLine.split(" ")
+
+    let method = requestParts[0] || "GET"
+    let path = requestParts[1] || "/"
+    let version = requestParts[2] || "HTTP/1.1"
+
+    // Extract query string and path
+    let pathAndQuery = path
+    let queryParams = {}
+    let questionIdx = path.indexOf("?")
+    if questionIdx != -1 {
+      path = path.slice(0, questionIdx)
+      let queryStr = pathAndQuery.slice(questionIdx + 1)
+      queryParams = parseQueryString(queryStr)
+    }
+
+    // Parse headers
+    let headers = {}
+    let i = 1
+    while i < lines.length {
+      let line = lines[i]
+      if line.length > 0 {
+        let colonIdx = line.indexOf(":")
+        if colonIdx != -1 {
+          let key = line.slice(0, colonIdx).trim()
+          let value = line.slice(colonIdx + 1).trim()
+          headers[key] = value
+        }
+      }
+      i = i + 1
+    }
+
+    return {
+      method: method,
+      path: path,
+      version: version,
+      headers: headers,
+      body: body,
+      queryParams: queryParams
+    }
+}
+
+// ────────────────────────────────────────
+// Build HTTP Response
+// ────────────────────────────────────────
+
+/**
+ * Build HTTP response string from HttpResponse object
+ * @param res - HttpResponse object
+ * @returns raw HTTP response string
+ */
+export fn buildResponse(res: object) -> string {
+  intent: "Build HTTP response string"
+  output: string
+  do
+    let statusLine = "HTTP/1.1 " + res.statusCode + " " + res.statusText + "\r\n"
+
+    let headerStr = ""
+    let keys = Object.keys(res.headers)
+    let i = 0
+    while i < keys.length {
+      let key = keys[i]
+      headerStr = headerStr + key + ": " + res.headers[key] + "\r\n"
+      i = i + 1
+    }
+
+    let contentLength = "Content-Length: " + res.body.length + "\r\n"
+
+    return statusLine + headerStr + contentLength + "\r\n" + res.body
+}
+
+// ────────────────────────────────────────
+// Parse HTTP Headers
+// ────────────────────────────────────────
+
+/**
+ * Parse HTTP headers from string
+ * @param raw - raw headers string
+ * @returns headers object
+ */
+export fn parseHeaders(raw: string) -> object {
+  intent: "Parse HTTP headers"
+  output: object
+  do
+    let headers = {}
+    let lines = raw.split("\r\n")
+
+    let i = 0
+    while i < lines.length {
+      let line = lines[i]
+      if line.length > 0 {
+        let colonIdx = line.indexOf(":")
+        if colonIdx != -1 {
+          let key = line.slice(0, colonIdx).trim()
+          let value = line.slice(colonIdx + 1).trim()
+          headers[key] = value
+        }
+      }
+      i = i + 1
+    }
+
+    return headers
+}
+
+// ────────────────────────────────────────
+// Parse Query String
+// ────────────────────────────────────────
+
+/**
+ * Parse query string to key-value pairs
+ * @param qs - query string (without ?)
+ * @returns object with parsed parameters
+ */
+export fn parseQueryString(qs: string) -> object {
+  intent: "Parse query string"
+  output: object
+  do
+    let params = {}
+    if qs.length == 0 {
+      return params
+    }
+
+    let pairs = qs.split("&")
+    let i = 0
+    while i < pairs.length {
+      let pair = pairs[i]
+      let eqIdx = pair.indexOf("=")
+      if eqIdx != -1 {
+        let key = pair.slice(0, eqIdx)
+        let value = pair.slice(eqIdx + 1)
+        params[urlDecode(key)] = urlDecode(value)
+      } else {
+        params[urlDecode(pair)] = ""
+      }
+      i = i + 1
+    }
+
+    return params
+}
+
+// ────────────────────────────────────────
+// URL Encoding/Decoding
+// ────────────────────────────────────────
+
+/**
+ * URL encode string
+ * @param s - string to encode
+ * @returns URL encoded string
+ */
+export fn urlEncode(s: string) -> string {
+  intent: "URL encode string"
+  output: string
+  do
+    let result = ""
+    let i = 0
+    while i < s.length {
+      let char = s[i]
+      if (char >= "a" && char <= "z") ||
+         (char >= "A" && char <= "Z") ||
+         (char >= "0" && char <= "9") ||
+         char == "-" || char == "_" || char == "." || char == "~" {
+        result = result + char
+      } else {
+        // Convert to hex percent encoding
+        let code = char.charCodeAt(0)
+        result = result + "%" + toHex(code)
+      }
+      i = i + 1
+    }
+    return result
+}
+
+/**
+ * URL decode string
+ * @param s - URL encoded string
+ * @returns decoded string
+ */
+export fn urlDecode(s: string) -> string {
+  intent: "URL decode string"
+  output: string
+  do
+    let result = ""
+    let i = 0
+    while i < s.length {
+      if s[i] == "%" && i + 2 < s.length {
+        let hex = s.slice(i + 1, i + 3)
+        let code = parseInt(hex, 16)
+        result = result + String.fromCharCode(code)
+        i = i + 3
+      } else if s[i] == "+" {
+        result = result + " "
+        i = i + 1
+      } else {
+        result = result + s[i]
+        i = i + 1
+      }
+    }
+    return result
+}
+
+// ────────────────────────────────────────
+// Response Helper Functions
+// ────────────────────────────────────────
+
+/**
+ * Create 200 OK response
+ * @param body - response body
+ * @param contentType - content type (default: text/plain)
+ * @returns HttpResponse object
+ */
+export fn okResponse(body: string, contentType: string) -> object {
+  intent: "Create 200 OK response"
+  output: object
+  do
+    let ct = if contentType { contentType } else { "text/plain" }
+    return {
+      statusCode: 200,
+      statusText: "OK",
+      headers: {
+        "Content-Type": ct
+      },
+      body: body
+    }
+}
+
+/**
+ * Create error response
+ * @param code - HTTP status code
+ * @param message - error message
+ * @returns HttpResponse object
+ */
+export fn errorResponse(code: number, message: string) -> object {
+  intent: "Create error response"
+  output: object
+  do
+    let statusTexts = {
+      400: "Bad Request",
+      401: "Unauthorized",
+      403: "Forbidden",
+      404: "Not Found",
+      500: "Internal Server Error",
+      502: "Bad Gateway",
+      503: "Service Unavailable"
+    }
+
+    let statusText = statusTexts[code] || "Error"
+
+    return {
+      statusCode: code,
+      statusText: statusText,
+      headers: {
+        "Content-Type": "text/plain"
+      },
+      body: message
+    }
+}
+
+/**
+ * Create JSON response
+ * @param body - JSON string
+ * @returns HttpResponse object
+ */
+export fn jsonResponse(body: string) -> object {
+  intent: "Create JSON response"
+  output: object
+  do
+    return {
+      statusCode: 200,
+      statusText: "OK",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: body
+    }
+}
+
+/**
+ * Create redirect response
+ * @param url - redirect URL
+ * @returns HttpResponse object
+ */
+export fn redirectResponse(url: string) -> object {
+  intent: "Create redirect response"
+  output: object
+  do
+    return {
+      statusCode: 302,
+      statusText: "Found",
+      headers: {
+        "Location": url
+      },
+      body: ""
+    }
+}
+
+// ────────────────────────────────────────
+// Helper Functions
+// ────────────────────────────────────────
+
+fn toHex(n: number) -> string {
+  let hexChars = "0123456789ABCDEF"
+  let result = ""
+
+  if n < 16 {
+    result = "0"
+  }
+
+  let q = n / 16
+  let r = n - q * 16
+
+  result = result + hexChars[q] + hexChars[r]
+  return result
+}

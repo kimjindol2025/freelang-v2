@@ -1,0 +1,154 @@
+/**
+ * FreeLang scikit-learn Phase 7 - ML Demo v2
+ *
+ * 머신러닝 기본 함수 데모 (단순화 버전)
+ */
+
+fn main() {
+  println("=".repeat(50))
+  println("FreeLang scikit-learn Phase 7 - ML Demo")
+  println("=".repeat(50))
+  println("")
+
+  // ============================================
+  // 1. 데이터 생성
+  // ============================================
+
+  println("1️⃣  데이터 생성...")
+
+  // 간단한 1D 데이터
+  let x = [1.0, 2.0, 3.0, 4.0, 5.0]
+  let y = [2.0, 4.0, 5.0, 4.0, 5.0]
+
+  println("   X: [1, 2, 3, 4, 5]")
+  println("   Y: [2, 4, 5, 4, 5]")
+  println("")
+
+  // ============================================
+  // 2. 통계 함수
+  // ============================================
+
+  println("2️⃣  통계 함수...")
+
+  let mean_x = stats_mean(x)
+  let mean_y = stats_mean(y)
+
+  println("   Mean X: " + str(mean_x))
+  println("   Mean Y: " + str(mean_y))
+
+  let std_x = stats_std_dev(x)
+  let std_y = stats_std_dev(y)
+
+  println("   Std Dev X: " + str(std_x))
+  println("   Std Dev Y: " + str(std_y))
+  println("")
+
+  // ============================================
+  // 3. 정규화 (Normalization)
+  // ============================================
+
+  println("3️⃣  데이터 정규화...")
+
+  let x_norm = ml_normalize_zscore(x)
+  let y_norm = ml_normalize_zscore(y)
+
+  println("   X normalized (Z-score)")
+  println("   Y normalized (Z-score)")
+  println("")
+
+  // ============================================
+  // 4. 거리 함수
+  // ============================================
+
+  println("4️⃣  거리 함수...")
+
+  let p1 = [0.0, 0.0]
+  let p2 = [3.0, 4.0]
+
+  let euclidean = ml_distance_euclidean(p1, p2)
+  let manhattan = ml_distance_manhattan(p1, p2)
+
+  println("   Euclidean Distance (0,0) to (3,4): " + str(euclidean))
+  println("   Manhattan Distance (0,0) to (3,4): " + str(manhattan))
+  println("")
+
+  // ============================================
+  // 5. 선형 회귀
+  // ============================================
+
+  println("=".repeat(50))
+  println("📊 선형 회귀 (Linear Regression)")
+  println("=".repeat(50))
+
+  let lr_model = ml_linear_regression(x, y)
+
+  println("Slope: " + str(lr_model.slope))
+  println("Intercept: " + str(lr_model.intercept))
+  println("R² Score: " + str(lr_model.r2))
+  println("")
+
+  // ============================================
+  // 6. 혼동 행렬 & 분류 지표
+  // ============================================
+
+  println("=".repeat(50))
+  println("🎯 분류 성능 지표")
+  println("=".repeat(50))
+
+  // 실제 레이블
+  let y_actual = [1, 0, 1, 1, 0, 1, 0, 0]
+
+  // 예측 레이블
+  let y_predicted = [1, 0, 1, 1, 0, 0, 0, 1]
+
+  // 혼동 행렬
+  let cm = ml_confusion_matrix(y_actual, y_predicted)
+
+  println("True Positives: " + str(cm.tp))
+  println("True Negatives: " + str(cm.tn))
+  println("False Positives: " + str(cm.fp))
+  println("False Negatives: " + str(cm.fn))
+  println("")
+
+  // 정확도, 정밀도, 재현율
+  let precision = ml_precision(y_actual, y_predicted)
+  let recall = ml_recall(y_actual, y_predicted)
+  let f1 = ml_f1_score(y_actual, y_predicted)
+  let accuracy = ml_accuracy(y_actual, y_predicted)
+
+  println("Precision: " + str(precision))
+  println("Recall: " + str(recall))
+  println("F1 Score: " + str(f1))
+  println("Accuracy: " + str(accuracy))
+  println("")
+
+  // ============================================
+  // 7. K-Means 초기화
+  // ============================================
+
+  println("=".repeat(50))
+  println("🔮 K-Means 초기화")
+  println("=".repeat(50))
+
+  let data_2d = [
+    [1.0, 2.0],
+    [2.0, 3.0],
+    [3.0, 4.0],
+    [10.0, 11.0],
+    [11.0, 12.0]
+  ]
+
+  let centroids = ml_kmeans_init(3, data_2d)
+  println("Centroids initialized: " + str(arr_len(centroids)) + " clusters")
+  println("")
+
+  // ============================================
+  // 최종 요약
+  // ============================================
+
+  println("=".repeat(50))
+  println("✅ 모든 ML 파이프라인 완료!")
+  println("=".repeat(50))
+}
+
+main()

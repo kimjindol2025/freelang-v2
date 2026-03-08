@@ -1,0 +1,185 @@
+/**
+ * FreeLang PostgreSQL Driver Example
+ *
+ * PostgreSQL 데이터베이스 연결 및 기본 CRUD 작업 예제
+ */
+
+import {
+  postgresql,
+  postgresql_url,
+  select,
+  where,
+  insert,
+  update,
+  delete,
+  all,
+  first
+} from "../src/stdlib/orm"
+
+import {
+  pg_create_table,
+  pg_drop_table,
+  pg_begin,
+  pg_commit,
+  pg_rollback,
+  pg_set_schema,
+  pg_table_exists,
+  pg_create_index,
+  pg_drop_index,
+  pg_info,
+  pg_savepoint,
+  pg_rollback_to_savepoint
+} from "../src/stdlib/pg-driver"
+
+fn main() {
+  // 1. PostgreSQL 연결
+  println("[PG] Connecting to PostgreSQL server...")
+  let conn = postgresql("localhost", 5432, "postgres", "password", "myapp")
+
+  if !conn.isConnected {
+    println("[ERROR] Failed to connect to PostgreSQL")
+    return
+  }
+
+  println("[OK] Connected to PostgreSQL")
+
+  // 2. 스키마 설정
+  println("[PG] Setting schema...")
+  pg_set_schema(conn.pgConn, "public")
+  println("[OK] Schema set to public")
+
+  // 3. 테이블 생성
+  println("[PG] Creating posts table...")
+  let createTableSQL = "
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    content TEXT,
+    author VARCHAR(255),
+    published BOOLEAN DEFAULT false,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  "
+  let success = pg_create_table(conn.pgConn, "posts", createTableSQL)
+  println("[OK] Table created:", success)
+
+  // 4. 인덱스 생성
+  println("[PG] Creating index on author...")
+  let indexCreated = pg_create_index(conn.pgConn, "idx_posts_author", "posts", "author")
+  println("[OK] Index created:", indexCreated)
+
+  // 5. 데이터 삽입 (INSERT)
+  println("[PG] Inserting posts...")
+  let post1 = insert(conn, "posts", {
+    title: "First Post",
+    content: "This is my first post",
+    author: "Alice",
+    published: true
+  })
+  println("[OK] Post 1 inserted. Affected rows:", post1.affectedRows)
+
+  let post2 = insert(conn, "posts", {
+    title: "Second Post",
+    content: "Another interesting post",
+    author: "Bob",
+    published: false
+  })
+  println("[OK] Post 2 inserted. Affected rows:", post2.affectedRows)
+
+  // 6. 데이터 조회 (SELECT)
+  println("[PG] Querying all posts...")
+  let query = select(conn, "posts")
+  let posts = all(query)
+  println("[OK] Total posts:", arr.length(posts))
+
+  let i = 0
+  while i < arr.length(posts) {
+    let post = posts[i]
+    println("  -", post.title, "by", post.author, "(published:", post.published, ")")
+    i = i + 1
+  }
+
+  // 7. WHERE 조건으로 조회
+  println("[PG] Finding published posts...")
+  let query2 = select(conn, "posts") as builder
+  where(builder, "published = ?", true)
+  let publishedPosts = all(builder)
+  println("[OK] Found", arr.length(publishedPosts), "published posts")
+
+  // 8. 단일 포스트 조회
+  println("[PG] Finding post by author...")
+  let query3 = select(conn, "posts") as builder
+  where(builder, "author = ?", "Alice")
+  let alicePost = first(builder)
+
+  if alicePost != null {
+    println("[OK] Found post:", alicePost.title)
+  }
+
+  // 9. 데이터 업데이트 (UPDATE)
+  println("[PG] Updating post...")
+  let updateResult = update(conn, "posts", { published: true })
+  where(updateResult, "author = ?", "Bob")
+  execute_update_where(updateResult)
+  println("[OK] Post updated")
+
+  // 10. 세이브포인트를 이용한 트랜잭션
+  println("[PG] Starting transaction with savepoint...")
+  pg_begin(conn.pgConn)
+
+  // 새 포스트 삽입
+  let post3 = insert(conn, "posts", {
+    title: "Third Post",
+    content: "Test post",
+    author: "Charlie",
+    published: false
+  })
+
+  // 세이브포인트 생성
+  pg_savepoint(conn.pgConn, "sp1")
+  println("[OK] Savepoint created")
+
+  // 또 다른 작업
+  let updateResult2 = update(conn, "posts", { published: true })
+  where(updateResult2, "id = ?", post3.insertedId)
+
+  // 문제 발생 시 세이브포인트로 롤백
+  if false {
+    pg_rollback_to_savepoint(conn.pgConn, "sp1")
+    println("[OK] Rolled back to savepoint")
+  }
+
+  // 전체 트랜잭션 커밋
+  pg_commit(conn.pgConn)
+  println("[OK] Transaction committed")
+
+  // 11. 테이블 정보 조회
+  println("[PG] Table exists check...")
+  let tableExists = pg_table_exists(conn.pgConn, "posts")
+  println("[OK] Posts table exists:", tableExists)
+
+  // 12. 데이터베이스 정보
+  println("[PG] Database info...")
+  let info = pg_info(conn.pgConn)
+  println("  - Host:", info.host)
+  println("  - Database:", info.database)
+  println("  - Schema:", info.schema)
+  println("  - Table count:", info.tableCount)
+
+  // 13. 데이터 삭제 (DELETE)
+  println("[PG] Deleting draft posts...")
+  let deleteResult = delete(conn, "posts")
+  where(deleteResult, "published = ?", false)
+  execute_delete_where(deleteResult)
+  println("[OK] Draft posts deleted")
+
+  // 14. 인덱스 삭제
+  println("[PG] Dropping index...")
+  let indexDropped = pg_drop_index(conn.pgConn, "idx_posts_author")
+  println("[OK] Index dropped:", indexDropped)
+
+  // 15. 테이블 삭제
+  println("[PG] Dropping posts table...")
+  let dropSuccess = pg_drop_table(conn.pgConn, "posts")
+  println("[OK] Table dropped:", dropSuccess)
+
+  println("[PG] Example completed!")
+}

@@ -1,0 +1,36 @@
+// Result<T, E> 타입 테스트
+// Note: Pattern matching과 함수 매개변수 지원 예정
+
+// 임시: Result 타입 기본 구조 테스트
+// Ok(value)의 구조:
+// { tag: 'ok', val: value }
+
+// 빌트인 함수 테스트
+let ok_val = Ok(5);
+println("Created Ok: ");
+println(ok_val);
+
+let err_val = Err("error message");
+println("Created Err: ");
+println(err_val);
+
+let some_val = Some(10);
+println("Created Some: ");
+println(some_val);
+
+let none_val = None();
+println("Created None: ");
+println(none_val);
+
+// 상태 확인 함수 테스트
+println("isOk(ok_val): ");
+println(isOk(ok_val));
+
+println("isErr(err_val): ");
+println(isErr(err_val));
+
+println("isSome(some_val): ");
+println(isSome(some_val));
+
+println("isNone(none_val): ");
+println(isNone(none_val));

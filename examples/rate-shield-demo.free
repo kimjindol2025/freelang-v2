@@ -1,0 +1,34 @@
+// Native-Rate-Shield 데모
+// @rate_limit(window: 1s, max: 3, burst: 5) 어노테이션 테스트
+
+@rate_limit(window: 1s, max: 3, burst: 5)
+fn handle_request(req) {
+  return "OK: 요청 처리 완료"
+}
+
+fn main() {
+  // Shield 수동 초기화 (함수 직접 호출 테스트)
+  shield_init("demo", 1000, 3, 5)
+
+  println("=== Native-Rate-Shield 토큰 버킷 테스트 ===")
+  println("설정: 초당 3회, 버스트 5")
+
+  // 8회 연속 요청 시도 (5회는 버스트, 3회는 차단)
+  let i = 0
+  while (i < 8) {
+    let allowed = shield_check("demo", "192.168.1.1")
+    if (allowed) {
+      println("요청 " + str(i + 1) + ": 허용")
+    } else {
+      println("요청 " + str(i + 1) + ": 차단 (429 Too Many Requests)")
+    }
+    i = i + 1
+  }
+
+  println("")
+  let stats = shield_stats("demo")
+  println("=== 통계 ===")
+  println("허용: " + str(stats["allowed"]))
+  println("차단: " + str(stats["blocked"]))
+  println("차단율: " + str(stats["block_rate"]))
+}

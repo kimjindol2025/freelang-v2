@@ -1,0 +1,328 @@
+/**
+ * FreeLang Timer Module (Phase 16)
+ * Provides set_interval, set_timeout, clear_interval, clear_timeout
+ */
+
+// Callback registry: stores FreeLang functions by ID
+let callback_registry = [];
+let next_callback_id = 0;
+
+fn register_callback(fn) => {
+  let id = next_callback_id;
+  next_callback_id = next_callback_id + 1;
+  callback_registry[id] = fn;
+  return id;
+};
+
+fn unregister_callback(id) => {
+  callback_registry[id] = null;
+};
+
+fn invoke_callback(id) => {
+  if (id >= 0 && id < callback_registry.length) {
+    let fn = callback_registry[id];
+    if (fn != null) {
+      fn();
+    }
+  }
+};
+
+// ────────────────────────────────────────
+// Public API
+// ────────────────────────────────────────
+
+export fn set_timeout(ms, fn) => {
+  let callback_id = register_callback(fn);
+  let timer_id = fl_timer_create();
+
+  if (timer_id < 0) {
+    unregister_callback(callback_id);
+    return -1;
+  }
+
+  let ret = timer_start(timer_id, ms, callback_id, 0);  // 0 = one-shot
+
+  if (ret != 0) {
+    timer_close(timer_id);
+    unregister_callback(callback_id);
+    return -1;
+  }
+
+  return timer_id;
+};
+
+export fn set_interval(ms, fn) => {
+  let callback_id = register_callback(fn);
+  let timer_id = fl_timer_create();
+
+  if (timer_id < 0) {
+    unregister_callback(callback_id);
+    return -1;
+  }
+
+  let ret = timer_start(timer_id, ms, callback_id, 1);  // 1 = repeat
+
+  if (ret != 0) {
+    timer_close(timer_id);
+    unregister_callback(callback_id);
+    return -1;
+  }
+
+  return timer_id;
+};
+
+export fn clear_timeout(timer_id) => {
+  timer_stop(timer_id);
+  timer_close(timer_id);
+};
+
+export fn clear_interval(timer_id) => {
+  timer_stop(timer_id);
+  timer_close(timer_id);
+};
+
+// ────────────────────────────────────────
+// Event Loop Control
+// ────────────────────────────────────────
+
+export fn loop_run() => {
+  event_loop_run(0);
+};
+
+export fn loop_stop() => {
+  event_loop_stop();
+};
+
+// ────────────────────────────────────────
+// Timer Registry (Pure FreeLang)
+// ────────────────────────────────────────
+
+export struct TimerHandle {
+  id: number
+  intervalMs: number
+  isRepeating: bool
+  isActive: bool
+}
+
+export struct TimerRegistry {
+  timers: object
+  nextId: number
+}
+
+export fn createRegistry() -> object {
+  return {
+    timers: {},
+    nextId: 1
+  }
+}
+
+export fn registerTimer(registry: object, intervalMs: number, isRepeating: bool) -> object {
+  let id = registry.nextId
+  registry.nextId = registry.nextId + 1
+
+  let handle = {
+    id: id,
+    intervalMs: intervalMs,
+    isRepeating: isRepeating,
+    isActive: true
+  }
+
+  registry.timers[id] = handle
+  return handle
+}
+
+export fn unregisterTimer(registry: object, id: number) -> bool {
+  if registry.timers[id] {
+    delete registry.timers[id]
+    return true
+  }
+  return false
+}
+
+export fn isActive(registry: object, id: number) -> bool {
+  if registry.timers[id] {
+    return registry.timers[id].isActive
+  }
+  return false
+}
+
+export fn cancelAll(registry: object) -> number {
+  let keys = Object.keys(registry.timers)
+  let count = 0
+
+  let i = 0
+  while i < keys.length {
+    delete registry.timers[keys[i]]
+    count = count + 1
+    i = i + 1
+  }
+
+  return count
+}
+
+export fn listActiveTimers(registry: object) -> array {
+  let keys = Object.keys(registry.timers)
+  let result = []
+
+  let i = 0
+  while i < keys.length {
+    let key = keys[i]
+    if registry.timers[key].isActive {
+      result.push(parseInt(key))
+    }
+    i = i + 1
+  }
+
+  return result
+}
+
+// ────────────────────────────────────────
+// Mock Timer (For Testing)
+// ────────────────────────────────────────
+
+export struct MockTimer {
+  elapsedMs: number
+  pendingCallbacks: array
+  firedCount: number
+}
+
+export fn createMockTimer() -> object {
+  return {
+    elapsedMs: 0,
+    pendingCallbacks: [],
+    firedCount: 0
+  }
+}
+
+export fn addMockCallback(timer: object, delayMs: number, callback: fn) -> number {
+  let callbackId = timer.pendingCallbacks.length
+  timer.pendingCallbacks.push({
+    id: callbackId,
+    delayMs: delayMs,
+    callback: callback,
+    fired: false
+  })
+  return callbackId
+}
+
+export fn mockTick(timer: object, deltaMs: number) -> number {
+  timer.elapsedMs = timer.elapsedMs + deltaMs
+  let firedCount = 0
+
+  let i = 0
+  while i < timer.pendingCallbacks.length {
+    let cb = timer.pendingCallbacks[i]
+    if !cb.fired && timer.elapsedMs >= cb.delayMs {
+      try {
+        cb.callback()
+      } catch (e) {
+        console.error("[MockTimer] Callback error:", e)
+      }
+      cb.fired = true
+      timer.firedCount = timer.firedCount + 1
+      firedCount = firedCount + 1
+    }
+    i = i + 1
+  }
+
+  return firedCount
+}
+
+// ────────────────────────────────────────
+// Cron Expression Parsing
+// ────────────────────────────────────────
+
+export struct CronExpr {
+  minute: string
+  hour: string
+  day: string
+  month: string
+  weekday: string
+}
+
+export fn parseCron(expr: string) -> object {
+  let parts = expr.split(" ")
+
+  if parts.length != 5 {
+    throw "Invalid cron expression: must have 5 fields"
+  }
+
+  return {
+    minute: parts[0],
+    hour: parts[1],
+    day: parts[2],
+    month: parts[3],
+    weekday: parts[4]
+  }
+}
+
+export fn cronMatches(expr: object, hour: number, minute: number,
+                       day: number, month: number, weekday: number) -> bool {
+  if !cronFieldMatches(expr.minute, minute) {
+    return false
+  }
+
+  if !cronFieldMatches(expr.hour, hour) {
+    return false
+  }
+
+  if !cronFieldMatches(expr.day, day) {
+    return false
+  }
+
+  if !cronFieldMatches(expr.month, month) {
+    return false
+  }
+
+  if !cronFieldMatches(expr.weekday, weekday) {
+    return false
+  }
+
+  return true
+}
+
+fn cronFieldMatches(pattern: string, value: number) -> bool {
+  if pattern == "*" {
+    return true
+  }
+
+  // Range: "10-20"
+  if pattern.indexOf("-") != -1 {
+    let parts = pattern.split("-")
+    let start = parseInt(parts[0])
+    let end = parseInt(parts[1])
+    return value >= start && value <= end
+  }
+
+  // Step: "*/5" or "10-20/2"
+  if pattern.indexOf("/") != -1 {
+    let parts = pattern.split("/")
+    let step = parseInt(parts[1])
+
+    if parts[0] == "*" {
+      return value % step == 0
+    } else {
+      let rangeParts = parts[0].split("-")
+      let start = parseInt(rangeParts[0])
+      let end = parseInt(rangeParts[1])
+      return value >= start && value <= end && (value - start) % step == 0
+    }
+  }
+
+  // Exact: "30"
+  return parseInt(pattern) == value
+}
+
+// ────────────────────────────────────────
+// FFI Note
+// ────────────────────────────────────────
+
+// The following functions require FFI support:
+// - set_timeout(), set_interval(), clear_timeout(), clear_interval()
+// - loop_run(), loop_stop()
+//
+// These functions call C FFI functions (fl_timer_create, timer_start, etc.)
+// but FFI system is currently "WAITING FOR ACTIVATION"
+//
+// Until FFI is enabled, use MockTimer for testing
+// or EventEmitter + setTimeout from stdlib/async

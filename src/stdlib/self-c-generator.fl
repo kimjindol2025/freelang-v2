@@ -1,0 +1,800 @@
+/**
+ * FreeLang Self-Hosting C Code Generator (Pure v2 Implementation)
+ *
+ * 자체호스팅 C 코드 생성기 - IR 명령어 배열을 C 코드로 변환
+ *
+ * ⚠️ 제약사항:
+ *   - struct 선언 금지 (객체 리터럴만 사용)
+ *   - JS 메서드 금지 (.length, .push 등)
+ *   - v2 stdlib 함수만 사용 (arr_push, map_set, string_length 등)
+ *
+ * 기능:
+ *   - IR 명령어 (PUSH, POP, ADD, SUB, MUL, DIV 등) → C 코드 변환
+ *   - 스택 기반 실행 환경 (double stack[10240], int sp)
+ *   - 변수 맵 관리 (varName → vars[idx])
+ *   - 레이블 관리 (JMP, JMP_NOT)
+ *   - 함수 호출 지원 (println 등)
+ *
+ * 생성 출력:
+ *   #include <stdio.h>
+ *   #include <stdlib.h>
+ *   double stack[10240];
+ *   int sp = 0;
+ *   double vars[256];
+ *   int main() { ... }
+ *
+ * 예시:
+ *   let insts = [
+ *     {op: "PUSH", arg: 10},
+ *     {op: "PUSH", arg: 20},
+ *     {op: "ADD"},
+ *     {op: "CALL", arg: "println"}
+ *   ]
+ *   let code = generateCCode(insts)
+ *   // #include <stdio.h> ... stack[sp++] = 10; ... printf(...)
+ */
+
+// ============================================
+// 1. C Code Generator 상태 객체
+// ============================================
+
+/**
+ * C Code Generator 초기화
+ * {
+ *   lines: [],        // 생성된 C 코드 라인 배열
+ *   varMap: {},       // 변수명 → 인덱스 맵
+ *   varIdx: 0,        // 현재 변수 인덱스
+ *   labelCount: 0,    // 라벨 카운터
+ *   indentLevel: 0    // 들여쓰기 레벨
+ * }
+ */
+fn createCGenerator() {
+  return {
+    lines: [],
+    varMap: {},
+    varIdx: 0,
+    labelCount: 0,
+    indentLevel: 0
+  }
+}
+
+// ============================================
+// 2. 헬퍼 함수 - 라인 추가
+// ============================================
+
+/**
+ * 코드 라인 추가
+ * 들여쓰기 자동 적용
+ */
+fn emitLine(cgen, line) {
+  let indent = ""
+  let i = 0
+  while (i < cgen.indentLevel) {
+    indent = indent + "  "
+    i = i + 1
+  }
+  arr_push(cgen.lines, indent + line)
+}
+
+/**
+ * 빈 줄 추가
+ */
+fn emitBlank(cgen) {
+  arr_push(cgen.lines, "")
+}
+
+/**
+ * 들여쓰기 증가
+ */
+fn increaseIndent(cgen) {
+  cgen.indentLevel = cgen.indentLevel + 1
+}
+
+/**
+ * 들여쓰기 감소
+ */
+fn decreaseIndent(cgen) {
+  cgen.indentLevel = cgen.indentLevel - 1
+}
+
+// ============================================
+// 3. 변수 관리
+// ============================================
+
+/**
+ * 변수 인덱스 획득 (없으면 생성)
+ * 변수명을 varMap에 저장하고 인덱스 반환
+ */
+fn getVarIndex(cgen, varName) {
+  // varMap에 존재하는지 확인
+  if (map_has(cgen.varMap, varName)) {
+    return map_get(cgen.varMap, varName)
+  }
+
+  // 새 변수 추가
+  let idx = cgen.varIdx
+  map_set(cgen.varMap, varName, idx)
+  cgen.varIdx = cgen.varIdx + 1
+
+  return idx
+}
+
+/**
+ * 변수 맵 출력 (디버깅용)
+ */
+fn printVarMap(cgen) {
+  let vars = map_keys(cgen.varMap)
+  let i = 0
+  while (i < arr_len(vars)) {
+    let varName = arr_get(vars, i)
+    let idx = map_get(cgen.varMap, varName)
+    println("var " + varName + " -> vars[" + str(idx) + "]")
+    i = i + 1
+  }
+}
+
+// ============================================
+// 4. 레이블 관리
+// ============================================
+
+/**
+ * 새 레이블 생성
+ */
+fn newLabel(cgen) {
+  let labelId = cgen.labelCount
+  cgen.labelCount = cgen.labelCount + 1
+  return "L" + str(labelId)
+}
+
+// ============================================
+// 5. 기본 IR 명령어 변환
+// ============================================
+
+/**
+ * PUSH: 상수를 스택에 푸시
+ * IR: {op: "PUSH", arg: 42}
+ * C:  stack[sp++] = 42.0;
+ */
+fn convertPush(cgen, val) {
+  emitLine(cgen, "stack[sp++] = " + str(val) + ".0;")
+}
+
+/**
+ * POP: 스택에서 값 버림
+ * IR: {op: "POP"}
+ * C:  sp--;
+ */
+fn convertPop(cgen) {
+  emitLine(cgen, "sp--;")
+}
+
+/**
+ * ADD: 스택 최상단 2개 값을 더함
+ * IR: {op: "ADD"}
+ * C:  double b = stack[--sp];
+ *     double a = stack[--sp];
+ *     stack[sp++] = a + b;
+ */
+fn convertAdd(cgen) {
+  emitLine(cgen, "double b = stack[--sp];")
+  emitLine(cgen, "double a = stack[--sp];")
+  emitLine(cgen, "stack[sp++] = a + b;")
+}
+
+/**
+ * SUB: 스택 최상단 2개 값을 뺌
+ * IR: {op: "SUB"}
+ * C:  double b = stack[--sp];
+ *     double a = stack[--sp];
+ *     stack[sp++] = a - b;
+ */
+fn convertSub(cgen) {
+  emitLine(cgen, "double b = stack[--sp];")
+  emitLine(cgen, "double a = stack[--sp];")
+  emitLine(cgen, "stack[sp++] = a - b;")
+}
+
+/**
+ * MUL: 스택 최상단 2개 값을 곱함
+ * IR: {op: "MUL"}
+ * C:  double b = stack[--sp];
+ *     double a = stack[--sp];
+ *     stack[sp++] = a * b;
+ */
+fn convertMul(cgen) {
+  emitLine(cgen, "double b = stack[--sp];")
+  emitLine(cgen, "double a = stack[--sp];")
+  emitLine(cgen, "stack[sp++] = a * b;")
+}
+
+/**
+ * DIV: 스택 최상단 2개 값을 나눔
+ * IR: {op: "DIV"}
+ * C:  double b = stack[--sp];
+ *     double a = stack[--sp];
+ *     stack[sp++] = a / b;
+ */
+fn convertDiv(cgen) {
+  emitLine(cgen, "double b = stack[--sp];")
+  emitLine(cgen, "double a = stack[--sp];")
+  emitLine(cgen, "stack[sp++] = a / b;")
+}
+
+// ============================================
+// 6. 비교 연산자 변환
+// ============================================
+
+/**
+ * EQ: 같음 비교 (==)
+ * IR: {op: "EQ"}
+ * C:  double b = stack[--sp];
+ *     double a = stack[--sp];
+ *     stack[sp++] = a == b ? 1.0 : 0.0;
+ */
+fn convertEq(cgen) {
+  emitLine(cgen, "double b = stack[--sp];")
+  emitLine(cgen, "double a = stack[--sp];")
+  emitLine(cgen, "stack[sp++] = (a == b) ? 1.0 : 0.0;")
+}
+
+/**
+ * NE: 다름 비교 (!=)
+ * IR: {op: "NE"}
+ * C:  double b = stack[--sp];
+ *     double a = stack[--sp];
+ *     stack[sp++] = a != b ? 1.0 : 0.0;
+ */
+fn convertNe(cgen) {
+  emitLine(cgen, "double b = stack[--sp];")
+  emitLine(cgen, "double a = stack[--sp];")
+  emitLine(cgen, "stack[sp++] = (a != b) ? 1.0 : 0.0;")
+}
+
+/**
+ * LT: 미만 비교 (<)
+ * IR: {op: "LT"}
+ * C:  double b = stack[--sp];
+ *     double a = stack[--sp];
+ *     stack[sp++] = a < b ? 1.0 : 0.0;
+ */
+fn convertLt(cgen) {
+  emitLine(cgen, "double b = stack[--sp];")
+  emitLine(cgen, "double a = stack[--sp];")
+  emitLine(cgen, "stack[sp++] = (a < b) ? 1.0 : 0.0;")
+}
+
+/**
+ * GT: 초과 비교 (>)
+ * IR: {op: "GT"}
+ * C:  double b = stack[--sp];
+ *     double a = stack[--sp];
+ *     stack[sp++] = a > b ? 1.0 : 0.0;
+ */
+fn convertGt(cgen) {
+  emitLine(cgen, "double b = stack[--sp];")
+  emitLine(cgen, "double a = stack[--sp];")
+  emitLine(cgen, "stack[sp++] = (a > b) ? 1.0 : 0.0;")
+}
+
+/**
+ * LE: 이하 비교 (<=)
+ * IR: {op: "LE"}
+ * C:  double b = stack[--sp];
+ *     double a = stack[--sp];
+ *     stack[sp++] = a <= b ? 1.0 : 0.0;
+ */
+fn convertLe(cgen) {
+  emitLine(cgen, "double b = stack[--sp];")
+  emitLine(cgen, "double a = stack[--sp];")
+  emitLine(cgen, "stack[sp++] = (a <= b) ? 1.0 : 0.0;")
+}
+
+/**
+ * GE: 이상 비교 (>=)
+ * IR: {op: "GE"}
+ * C:  double b = stack[--sp];
+ *     double a = stack[--sp];
+ *     stack[sp++] = a >= b ? 1.0 : 0.0;
+ */
+fn convertGe(cgen) {
+  emitLine(cgen, "double b = stack[--sp];")
+  emitLine(cgen, "double a = stack[--sp];")
+  emitLine(cgen, "stack[sp++] = (a >= b) ? 1.0 : 0.0;")
+}
+
+// ============================================
+// 7. 변수 저장/로드
+// ============================================
+
+/**
+ * STORE: 스택 최상단을 변수에 저장
+ * IR: {op: "STORE", arg: "x"}
+ * C:  vars[0] = stack[--sp];
+ */
+fn convertStore(cgen, varName) {
+  let idx = getVarIndex(cgen, varName)
+  emitLine(cgen, "vars[" + str(idx) + "] = stack[--sp];")
+}
+
+/**
+ * LOAD: 변수값을 스택에 로드
+ * IR: {op: "LOAD", arg: "x"}
+ * C:  stack[sp++] = vars[0];
+ */
+fn convertLoad(cgen, varName) {
+  let idx = getVarIndex(cgen, varName)
+  emitLine(cgen, "stack[sp++] = vars[" + str(idx) + "];")
+}
+
+// ============================================
+// 8. 제어 흐름 (점프, 레이블)
+// ============================================
+
+/**
+ * LABEL: 점프 대상 레이블
+ * IR: {op: "LABEL", arg: "L0"}
+ * C:  L0:
+ */
+fn convertLabel(cgen, label) {
+  emitLine(cgen, label + ":")
+}
+
+/**
+ * JMP: 무조건 점프
+ * IR: {op: "JMP", arg: "L0"}
+ * C:  goto L0;
+ */
+fn convertJmp(cgen, label) {
+  emitLine(cgen, "goto " + label + ";")
+}
+
+/**
+ * JMP_NOT: 조건부 점프 (0이면 점프)
+ * IR: {op: "JMP_NOT", arg: "L0"}
+ * C:  if (stack[--sp] == 0) goto L0;
+ */
+fn convertJmpNot(cgen, label) {
+  emitLine(cgen, "if (stack[--sp] == 0.0) goto " + label + ";")
+}
+
+/**
+ * JMP_TRUE: 조건부 점프 (1이면 점프)
+ * IR: {op: "JMP_TRUE", arg: "L0"}
+ * C:  if (stack[--sp] != 0) goto L0;
+ */
+fn convertJmpTrue(cgen, label) {
+  emitLine(cgen, "if (stack[--sp] != 0.0) goto " + label + ";")
+}
+
+// ============================================
+// 9. 함수 호출
+// ============================================
+
+/**
+ * CALL: 내장 함수 호출
+ * IR: {op: "CALL", arg: "println"}
+ * 지원 함수:
+ *   - println: 스택 최상단 출력
+ *   - print: 스택 최상단 출력 (줄바꿈 없음)
+ *   - pop_print: 스택에서 팝하고 출력
+ */
+fn convertCall(cgen, funcName) {
+  if (funcName == "println") {
+    emitLine(cgen, "printf(\"%g\\n\", stack[sp > 0 ? sp - 1 : 0]);")
+    emitLine(cgen, "sp--;")
+  } else if (funcName == "print") {
+    emitLine(cgen, "printf(\"%g\", stack[sp > 0 ? sp - 1 : 0]);")
+  } else if (funcName == "pop_print") {
+    emitLine(cgen, "printf(\"%g\\n\", stack[--sp]);")
+  }
+}
+
+// ============================================
+// 10. 수학 함수들
+// ============================================
+
+/**
+ * SQRT: 제곱근
+ * IR: {op: "SQRT"}
+ * C:  stack[sp - 1] = sqrt(stack[sp - 1]);
+ */
+fn convertSqrt(cgen) {
+  emitLine(cgen, "stack[sp - 1] = sqrt(stack[sp - 1]);")
+}
+
+/**
+ * POW: 거듭제곱
+ * IR: {op: "POW"}
+ * C:  double exp = stack[--sp];
+ *     stack[sp - 1] = pow(stack[sp - 1], exp);
+ */
+fn convertPow(cgen) {
+  emitLine(cgen, "double exp = stack[--sp];")
+  emitLine(cgen, "stack[sp - 1] = pow(stack[sp - 1], exp);")
+}
+
+/**
+ * NEG: 부호 반전
+ * IR: {op: "NEG"}
+ * C:  stack[sp - 1] = -stack[sp - 1];
+ */
+fn convertNeg(cgen) {
+  emitLine(cgen, "stack[sp - 1] = -stack[sp - 1];")
+}
+
+/**
+ * ABS: 절댓값
+ * IR: {op: "ABS"}
+ * C:  stack[sp - 1] = fabs(stack[sp - 1]);
+ */
+fn convertAbs(cgen) {
+  emitLine(cgen, "stack[sp - 1] = fabs(stack[sp - 1]);")
+}
+
+/**
+ * MOD: 나머지
+ * IR: {op: "MOD"}
+ * C:  double b = stack[--sp];
+ *     double a = stack[--sp];
+ *     stack[sp++] = fmod(a, b);
+ */
+fn convertMod(cgen) {
+  emitLine(cgen, "double b = stack[--sp];")
+  emitLine(cgen, "double a = stack[--sp];")
+  emitLine(cgen, "stack[sp++] = fmod(a, b);")
+}
+
+// ============================================
+// 11. 논리 연산자
+// ============================================
+
+/**
+ * AND: 논리 AND
+ * IR: {op: "AND"}
+ * C:  double b = stack[--sp];
+ *     double a = stack[--sp];
+ *     stack[sp++] = (a != 0 && b != 0) ? 1.0 : 0.0;
+ */
+fn convertAnd(cgen) {
+  emitLine(cgen, "double b = stack[--sp];")
+  emitLine(cgen, "double a = stack[--sp];")
+  emitLine(cgen, "stack[sp++] = ((a != 0) && (b != 0)) ? 1.0 : 0.0;")
+}
+
+/**
+ * OR: 논리 OR
+ * IR: {op: "OR"}
+ * C:  double b = stack[--sp];
+ *     double a = stack[--sp];
+ *     stack[sp++] = (a != 0 || b != 0) ? 1.0 : 0.0;
+ */
+fn convertOr(cgen) {
+  emitLine(cgen, "double b = stack[--sp];")
+  emitLine(cgen, "double a = stack[--sp];")
+  emitLine(cgen, "stack[sp++] = ((a != 0) || (b != 0)) ? 1.0 : 0.0;")
+}
+
+/**
+ * NOT: 논리 NOT
+ * IR: {op: "NOT"}
+ * C:  stack[sp - 1] = (stack[sp - 1] == 0) ? 1.0 : 0.0;
+ */
+fn convertNot(cgen) {
+  emitLine(cgen, "stack[sp - 1] = (stack[sp - 1] == 0.0) ? 1.0 : 0.0;")
+}
+
+// ============================================
+// 12. 종료 명령어
+// ============================================
+
+/**
+ * HALT: 프로그램 종료
+ * IR: {op: "HALT"}
+ * C:  return 0;
+ */
+fn convertHalt(cgen) {
+  emitLine(cgen, "return 0;")
+}
+
+// ============================================
+// 13. 메인 IR 변환 함수
+// ============================================
+
+/**
+ * IR 명령어 하나를 C 코드로 변환
+ * inst: {op, arg?}
+ */
+fn convertInst(cgen, inst) {
+  let op = map_get(inst, "op")
+  let arg = ""
+
+  // arg 필드 존재 확인 후 추출
+  if (map_has(inst, "arg")) {
+    arg = map_get(inst, "arg")
+  }
+
+  // 연산 명령어
+  if (op == "PUSH") {
+    convertPush(cgen, arg)
+  } else if (op == "POP") {
+    convertPop(cgen)
+  } else if (op == "ADD") {
+    convertAdd(cgen)
+  } else if (op == "SUB") {
+    convertSub(cgen)
+  } else if (op == "MUL") {
+    convertMul(cgen)
+  } else if (op == "DIV") {
+    convertDiv(cgen)
+  } else if (op == "MOD") {
+    convertMod(cgen)
+  }
+
+  // 비교 명령어
+  else if (op == "EQ") {
+    convertEq(cgen)
+  } else if (op == "NE") {
+    convertNe(cgen)
+  } else if (op == "LT") {
+    convertLt(cgen)
+  } else if (op == "GT") {
+    convertGt(cgen)
+  } else if (op == "LE") {
+    convertLe(cgen)
+  } else if (op == "GE") {
+    convertGe(cgen)
+  }
+
+  // 변수 명령어
+  else if (op == "STORE") {
+    convertStore(cgen, arg)
+  } else if (op == "LOAD") {
+    convertLoad(cgen, arg)
+  }
+
+  // 제어 흐름
+  else if (op == "LABEL") {
+    convertLabel(cgen, arg)
+  } else if (op == "JMP") {
+    convertJmp(cgen, arg)
+  } else if (op == "JMP_NOT") {
+    convertJmpNot(cgen, arg)
+  } else if (op == "JMP_TRUE") {
+    convertJmpTrue(cgen, arg)
+  }
+
+  // 함수 호출
+  else if (op == "CALL") {
+    convertCall(cgen, arg)
+  }
+
+  // 수학 함수
+  else if (op == "SQRT") {
+    convertSqrt(cgen)
+  } else if (op == "POW") {
+    convertPow(cgen)
+  } else if (op == "NEG") {
+    convertNeg(cgen)
+  } else if (op == "ABS") {
+    convertAbs(cgen)
+  }
+
+  // 논리 연산
+  else if (op == "AND") {
+    convertAnd(cgen)
+  } else if (op == "OR") {
+    convertOr(cgen)
+  } else if (op == "NOT") {
+    convertNot(cgen)
+  }
+
+  // 종료
+  else if (op == "HALT") {
+    convertHalt(cgen)
+  }
+}
+
+// ============================================
+// 14. C 코드 생성 메인 함수
+// ============================================
+
+/**
+ * IR 명령어 배열을 C 코드 문자열로 변환
+ *
+ * 인자:
+ *   insts: [{op: "PUSH", arg: 42}, {op: "ADD"}, ...] 형식의 배열
+ *
+ * 반환:
+ *   C 언어 소스 코드 문자열
+ *
+ * 예시:
+ *   let insts = [
+ *     {op: "PUSH", arg: 10},
+ *     {op: "PUSH", arg: 20},
+ *     {op: "ADD"},
+ *     {op: "CALL", arg: "println"},
+ *     {op: "HALT"}
+ *   ]
+ *   let ccode = generateCCode(insts)
+ *   // #include <stdio.h>
+ *   // double stack[10240];
+ *   // int main() {
+ *   //   stack[sp++] = 10.0;
+ *   //   stack[sp++] = 20.0;
+ *   //   double b = stack[--sp];
+ *   //   double a = stack[--sp];
+ *   //   stack[sp++] = a + b;
+ *   //   printf("%g\n", stack[sp > 0 ? sp - 1 : 0]);
+ *   //   sp--;
+ *   //   return 0;
+ *   // }
+ */
+fn generateCCode(insts) {
+  let cgen = createCGenerator()
+
+  // ─────────────────────────────────────────────
+  // 1. 헤더 및 전역 선언
+  // ─────────────────────────────────────────────
+
+  emitLine(cgen, "#include <stdio.h>")
+  emitLine(cgen, "#include <stdlib.h>")
+  emitLine(cgen, "#include <string.h>")
+  emitLine(cgen, "#include <math.h>")
+  emitBlank(cgen)
+
+  emitLine(cgen, "double stack[10240];")
+  emitLine(cgen, "int sp = 0;")
+  emitLine(cgen, "double vars[256];")
+  emitBlank(cgen)
+
+  // ─────────────────────────────────────────────
+  // 2. main 함수 시작
+  // ─────────────────────────────────────────────
+
+  emitLine(cgen, "int main() {")
+  increaseIndent(cgen)
+
+  // ─────────────────────────────────────────────
+  // 3. IR 명령어 변환
+  // ─────────────────────────────────────────────
+
+  let i = 0
+  while (i < arr_len(insts)) {
+    let inst = arr_get(insts, i)
+    convertInst(cgen, inst)
+    i = i + 1
+  }
+
+  // ─────────────────────────────────────────────
+  // 4. main 함수 종료
+  // ─────────────────────────────────────────────
+
+  decreaseIndent(cgen)
+  emitLine(cgen, "}")
+  emitBlank(cgen)
+
+  // ─────────────────────────────────────────────
+  // 5. 라인 배열을 하나의 문자열로 조인
+  // ─────────────────────────────────────────────
+
+  let result = ""
+  let j = 0
+  while (j < arr_len(cgen.lines)) {
+    let line = arr_get(cgen.lines, j)
+    result = result + line + "\n"
+    j = j + 1
+  }
+
+  return result
+}
+
+// ============================================
+// 15. 디버깅 및 유틸리티
+// ============================================
+
+/**
+ * IR 명령어를 문자열로 표현 (디버깅용)
+ */
+fn instToString(inst) {
+  let op = map_get(inst, "op")
+  let result = "[" + op
+
+  if (map_has(inst, "arg")) {
+    let arg = map_get(inst, "arg")
+    result = result + " " + str(arg)
+  }
+
+  result = result + "]"
+  return result
+}
+
+/**
+ * IR 명령어 배열 출력 (디버깅용)
+ */
+fn printInsts(insts) {
+  let i = 0
+  while (i < arr_len(insts)) {
+    let inst = arr_get(insts, i)
+    println(instToString(inst))
+    i = i + 1
+  }
+}
+
+/**
+ * 생성된 C 코드 출력
+ */
+fn printCCode(code) {
+  println(code)
+}
+
+/**
+ * C 코드를 파일에 저장
+ */
+fn saveCCode(code, filename) {
+  file_write(filename, code)
+}
+
+/**
+ * 간단한 테스트: 10 + 20 = 30
+ */
+fn testSimpleAdd() {
+  let insts = [
+    {op: "PUSH", arg: 10},
+    {op: "PUSH", arg: 20},
+    {op: "ADD"},
+    {op: "CALL", arg: "println"},
+    {op: "HALT"}
+  ]
+
+  let code = generateCCode(insts)
+  println("=== Generated C Code ===")
+  println(code)
+  println("=== End Generated Code ===")
+
+  return code
+}
+
+/**
+ * 테스트: 변수 저장/로드
+ */
+fn testStoreLoad() {
+  let insts = [
+    {op: "PUSH", arg: 42},
+    {op: "STORE", arg: "x"},
+    {op: "LOAD", arg: "x"},
+    {op: "CALL", arg: "println"},
+    {op: "HALT"}
+  ]
+
+  let code = generateCCode(insts)
+  println("=== Variable Store/Load Test ===")
+  println(code)
+
+  return code
+}
+
+/**
+ * 테스트: 조건문 (x > 10)
+ */
+fn testCondition() {
+  let insts = [
+    {op: "PUSH", arg: 15},
+    {op: "PUSH", arg: 10},
+    {op: "GT"},
+    {op: "JMP_NOT", arg: "L0"},
+    {op: "PUSH", arg: 1},
+    {op: "CALL", arg: "println"},
+    {op: "JMP", arg: "L1"},
+    {op: "LABEL", arg: "L0"},
+    {op: "PUSH", arg: 0},
+    {op: "CALL", arg: "println"},
+    {op: "LABEL", arg: "L1"},
+    {op: "HALT"}
+  ]
+
+  let code = generateCCode(insts)
+  println("=== Condition Test ===")
+  println(code)
+
+  return code
+}

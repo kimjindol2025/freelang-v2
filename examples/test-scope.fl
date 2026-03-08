@@ -1,0 +1,13 @@
+fn main() {
+  println("Test 1: Simple assignment")
+  let y_actual = [1, 0, 1]
+  println("Var: " + str(y_actual))
+
+  println("Test 2: Using in function")
+  let result = ml_confusion_matrix(y_actual, y_actual)
+  println("Result: " + str(result))
+
+  println("Done!")
+}
+
+main()
