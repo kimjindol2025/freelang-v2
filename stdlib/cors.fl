@@ -1,0 +1,366 @@
+/**
+ * FreeLang CORS 미들웨어
+ *
+ * Cross-Origin Resource Sharing (교차 출처 리소스 공유) 제어
+ * cors npm 패키지의 FreeLang stdlib 완전 구현
+ *
+ * 사용법:
+ *   // 전체 허용
+ *   app.use(cors())
+ *
+ *   // 단일 도메인
+ *   app.use(cors("https://myapp.com"))
+ *
+ *   // 상세 설정
+ *   app.use(corsConfig({
+ *     origin: ["https://app.com", "https://admin.app.com"],
+ *     methods: ["GET", "POST", "DELETE"],
+ *     allowedHeaders: ["Content-Type", "Authorization", "X-API-Key"],
+ *     credentials: true,
+ *     maxAge: 86400
+ *   }))
+ *
+ *   // 동적 오리진 (fn)
+ *   app.use(corsConfig({
+ *     origin: fn(origin: string) -> bool {
+ *       return str.ends_with(origin, ".mycompany.com")
+ *     },
+ *     credentials: true
+ *   }))
+ */
+
+import { Request, Response, Middleware, setStatus, setHeader, respondJson, getHeader } from "./express-compat"
+
+// ============================================
+// 기본 상수
+// ============================================
+
+let CORS_DEFAULT_METHODS = ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"]
+let CORS_DEFAULT_HEADERS = ["Content-Type", "Authorization"]
+let CORS_DEFAULT_MAX_AGE  = 0       // 0 = 헤더 미포함
+let CORS_DEFAULT_STATUS   = 204     // preflight 성공 상태코드
+
+// ============================================
+// 설정 구조체
+// ============================================
+
+struct CorsConfig {
+  origin: any,              // "*" | string | array | fn(string)->bool
+  methods: array,           // 허용 HTTP 메서드
+  allowedHeaders: array,    // 허용 요청 헤더
+  exposedHeaders: array,    // 클라이언트에 노출할 응답 헤더
+  credentials: bool,        // Access-Control-Allow-Credentials
+  maxAge: int,              // preflight 캐시 시간 (초), 0 = 미포함
+  preflightContinue: bool,  // OPTIONS 요청을 다음 미들웨어로 넘길지 여부
+  optionsSuccessStatus: int // preflight 성공 상태코드 (기본 204)
+}
+
+// ============================================
+// 기본 설정 생성 헬퍼
+// ============================================
+
+fn _defaultConfig() -> CorsConfig {
+  return {
+    origin: "*",
+    methods: CORS_DEFAULT_METHODS,
+    allowedHeaders: CORS_DEFAULT_HEADERS,
+    exposedHeaders: [],
+    credentials: false,
+    maxAge: CORS_DEFAULT_MAX_AGE,
+    preflightContinue: false,
+    optionsSuccessStatus: CORS_DEFAULT_STATUS
+  }
+}
+
+// ============================================
+// isOriginAllowed: origin 허용 여부 판별
+// allowed 값 타입에 따라 처리:
+//   "*"      → 항상 허용
+//   string   → 완전 일치
+//   array    → 배열 내 일치 여부
+//   fn       → fn(string)->bool 호출
+// ============================================
+
+fn isOriginAllowed(origin: string, allowed: any) -> bool {
+  // 와일드카드
+  if allowed == "*" {
+    return true
+  }
+
+  // null / 빈 origin → 비브라우저 요청, 허용
+  if origin == null || origin == "" {
+    return true
+  }
+
+  // 단일 문자열
+  if type(allowed) == "string" {
+    return origin == allowed
+  }
+
+  // 배열: 하나라도 일치하면 허용
+  if type(allowed) == "array" {
+    let i = 0
+    while i < arr.length(allowed) {
+      if allowed[i] == origin {
+        return true
+      }
+      i = i + 1
+    }
+    return false
+  }
+
+  // 함수: fn(origin: string) -> bool 호출
+  if type(allowed) == "function" {
+    return allowed(origin)
+  }
+
+  return false
+}
+
+// ============================================
+// buildCorsHeaders: 설정과 요청 origin을 바탕으로
+// 응답 헤더 맵 생성
+// ============================================
+
+fn buildCorsHeaders(config: CorsConfig, origin: string) -> map {
+  let headers = {}
+
+  // Access-Control-Allow-Origin
+  if config.origin == "*" && !config.credentials {
+    // 와일드카드 + credentials 없을 때만 * 사용 가능
+    headers["Access-Control-Allow-Origin"] = "*"
+  } else {
+    // 특정 origin 반영 (Vary 헤더 필요)
+    if origin != null && origin != "" {
+      headers["Access-Control-Allow-Origin"] = origin
+    } else {
+      headers["Access-Control-Allow-Origin"] = "*"
+    }
+    headers["Vary"] = "Origin"
+  }
+
+  // Access-Control-Allow-Credentials
+  if config.credentials {
+    headers["Access-Control-Allow-Credentials"] = "true"
+  }
+
+  // Access-Control-Expose-Headers
+  if arr.length(config.exposedHeaders) > 0 {
+    headers["Access-Control-Expose-Headers"] = arr.join(config.exposedHeaders, ", ")
+  }
+
+  return headers
+}
+
+// ============================================
+// _buildPreflightHeaders: preflight 전용 헤더 맵
+// ============================================
+
+fn _buildPreflightHeaders(config: CorsConfig, origin: string) -> map {
+  let headers = buildCorsHeaders(config, origin)
+
+  // Access-Control-Allow-Methods
+  if arr.length(config.methods) > 0 {
+    headers["Access-Control-Allow-Methods"] = arr.join(config.methods, ", ")
+  }
+
+  // Access-Control-Allow-Headers
+  if arr.length(config.allowedHeaders) > 0 {
+    headers["Access-Control-Allow-Headers"] = arr.join(config.allowedHeaders, ", ")
+  }
+
+  // Access-Control-Max-Age
+  if config.maxAge > 0 {
+    headers["Access-Control-Max-Age"] = str(config.maxAge)
+  }
+
+  return headers
+}
+
+// ============================================
+// _applyHeaders: 헤더 맵을 Response에 일괄 적용
+// ============================================
+
+fn _applyHeaders(res: Response, headers: map) -> void {
+  let keys = map.keys(headers)
+  let i = 0
+  while i < arr.length(keys) {
+    let k = keys[i]
+    setHeader(res, k, headers[k])
+    i = i + 1
+  }
+}
+
+// ============================================
+// handlePreflight: OPTIONS preflight 전용 미들웨어
+// preflightContinue = false → 즉시 204 응답
+// preflightContinue = true  → 다음 미들웨어로 진행
+// ============================================
+
+fn handlePreflight(config: CorsConfig) -> Middleware {
+  return fn(req: Request, res: Response) -> bool {
+    let origin = getHeader(req, "Origin")
+
+    if !isOriginAllowed(origin, config.origin) {
+      // origin 불허 → 403
+      setStatus(res, 403)
+      respondJson(res, { error: "CORS: Origin not allowed" })
+      return false
+    }
+
+    let headers = _buildPreflightHeaders(config, origin)
+    _applyHeaders(res, headers)
+
+    if config.preflightContinue {
+      // 다음 핸들러로 위임
+      return true
+    }
+
+    // 즉시 응답 (204 또는 설정값)
+    setStatus(res, config.optionsSuccessStatus)
+    res.isSent = true
+    return false
+  }
+}
+
+// ============================================
+// corsConfig: 완전한 설정 기반 CORS 미들웨어
+// - 일반 요청: 기본 CORS 헤더 추가 후 통과
+// - OPTIONS 요청: preflight 처리
+// ============================================
+
+fn corsConfig(config: CorsConfig) -> Middleware {
+  // 미설정 필드에 기본값 채우기
+  if config.methods == null || arr.length(config.methods) == 0 {
+    config.methods = CORS_DEFAULT_METHODS
+  }
+  if config.allowedHeaders == null || arr.length(config.allowedHeaders) == 0 {
+    config.allowedHeaders = CORS_DEFAULT_HEADERS
+  }
+  if config.exposedHeaders == null {
+    config.exposedHeaders = []
+  }
+  if config.optionsSuccessStatus == 0 {
+    config.optionsSuccessStatus = CORS_DEFAULT_STATUS
+  }
+
+  let preflightHandler = handlePreflight(config)
+
+  return fn(req: Request, res: Response) -> bool {
+    let origin = getHeader(req, "Origin")
+
+    // OPTIONS → preflight 처리
+    if req.method == "OPTIONS" {
+      return preflightHandler(req, res)
+    }
+
+    // origin 허용 검사
+    if !isOriginAllowed(origin, config.origin) {
+      // 불허용 origin이라도 non-browser 요청은 통과
+      // (origin 헤더 없으면 통과)
+      if origin != null && origin != "" {
+        setStatus(res, 403)
+        respondJson(res, { error: "CORS: Origin not allowed" })
+        return false
+      }
+    }
+
+    // 기본 CORS 헤더 주입 후 계속
+    let headers = buildCorsHeaders(config, origin)
+    _applyHeaders(res, headers)
+    return true
+  }
+}
+
+// ============================================
+// cors(): 전체 허용 — 인자 없음
+// ============================================
+
+fn cors() -> Middleware {
+  let config = _defaultConfig()
+  return corsConfig(config)
+}
+
+// ============================================
+// cors(origin): 단일 오리진 허용
+// ============================================
+
+fn corsOrigin(origin: string) -> Middleware {
+  let config = _defaultConfig()
+  config.origin = origin
+  return corsConfig(config)
+}
+
+// ============================================
+// corsWithOptions: origin + 부분 옵션 편의 함수
+// ============================================
+
+fn corsWithOptions(origin: any, credentials: bool, maxAge: int) -> Middleware {
+  let config = _defaultConfig()
+  config.origin = origin
+  config.credentials = credentials
+  config.maxAge = maxAge
+  return corsConfig(config)
+}
+
+// ============================================
+// 사전 정의 프리셋
+// ============================================
+
+// 개발용: 모든 출처, credentials 허용
+fn corsDevelopment() -> Middleware {
+  let config = _defaultConfig()
+  config.origin = "*"
+  config.credentials = false
+  config.maxAge = 0
+  return corsConfig(config)
+}
+
+// 운영용: 명시적 오리진 목록 + credentials + 캐시
+fn corsProduction(origins: array) -> Middleware {
+  let config = _defaultConfig()
+  config.origin = origins
+  config.credentials = true
+  config.maxAge = 86400
+  config.methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+  config.allowedHeaders = ["Content-Type", "Authorization", "X-API-Key", "X-Request-ID"]
+  config.exposedHeaders = ["X-Total-Count", "X-RateLimit-Remaining"]
+  config.optionsSuccessStatus = 204
+  return corsConfig(config)
+}
+
+// API 전용: credentials 없이 공개 API 허용
+fn corsPublicApi() -> Middleware {
+  let config = _defaultConfig()
+  config.origin = "*"
+  config.methods = ["GET", "OPTIONS"]
+  config.allowedHeaders = ["Content-Type", "Accept"]
+  config.credentials = false
+  config.maxAge = 3600
+  return corsConfig(config)
+}
+
+// ============================================
+// Export
+// ============================================
+
+export {
+  // 구조체
+  CorsConfig,
+
+  // 핵심 함수
+  isOriginAllowed,
+  buildCorsHeaders,
+  handlePreflight,
+
+  // 메인 미들웨어 API
+  cors,
+  corsOrigin,
+  corsConfig,
+  corsWithOptions,
+
+  // 프리셋
+  corsDevelopment,
+  corsProduction,
+  corsPublicApi
+}
