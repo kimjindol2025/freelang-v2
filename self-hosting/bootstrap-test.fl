@@ -179,14 +179,15 @@ fn adv(p) {
   return tok;
 }
 
-fn chk(p, type) {
-  return peek(p).type == type;
+fn chk(p, tp) {
+  if peek(p).type == tp { return true; }
+  return false;
 }
 
-fn expect(p, type) {
+fn expect(p, tp) {
   let tok = peek(p);
-  if tok.type != type {
-    println("PARSE ERROR: expected " + type + " got " + tok.type + " (" + tok.value + ") line " + str(tok.line));
+  if tok.type != tp {
+    println("PARSE ERROR: expected " + tp + " got " + tok.type + " (" + tok.value + ") line " + str(tok.line));
   }
   return adv(p);
 }
@@ -196,7 +197,8 @@ fn skipSemi(p) {
 }
 
 fn atEnd(p) {
-  return peek(p).type == "EOF";
+  if peek(p).type == "EOF" { return true; }
+  return false;
 }
 
 // ── Program ──
@@ -204,7 +206,7 @@ fn atEnd(p) {
 fn parseProgram(tokens) {
   let p = createParser(tokens);
   let stmts = [];
-  while atEnd(p) == false {
+  while atEnd(p) != true {
     skipSemi(p);
     if atEnd(p) { break; }
     let stmt = parseStmt(p);
@@ -240,7 +242,7 @@ fn parseFnDecl(p) {
   if chk(p, "LPAREN") {
     adv(p); // (
     let params = [];
-    while chk(p, "RPAREN") == false && atEnd(p) == false {
+    while chk(p, "RPAREN") != true && atEnd(p) != true {
       let pname = expect(p, "IDENT").value;
       if chk(p, "COLON") { adv(p); skipType(p); }
       push(params, pname);
@@ -254,7 +256,7 @@ fn parseFnDecl(p) {
   let name = expect(p, "IDENT").value;
   expect(p, "LPAREN");
   let params = [];
-  while chk(p, "RPAREN") == false && atEnd(p) == false {
+  while chk(p, "RPAREN") != true && atEnd(p) != true {
     let pname = expect(p, "IDENT").value;
     if chk(p, "COLON") { adv(p); skipType(p); }
     push(params, pname);
@@ -322,7 +324,7 @@ fn parseForStmt(p) {
 fn parseReturnStmt(p) {
   expect(p, "RETURN");
   let val = null;
-  if chk(p, "SEMICOLON") == false && chk(p, "RBRACE") == false && atEnd(p) == false {
+  if chk(p, "SEMICOLON") != true && chk(p, "RBRACE") != true && atEnd(p) != true {
     val = parseExpr(p);
   }
   skipSemi(p);
@@ -334,7 +336,7 @@ fn parseReturnStmt(p) {
 fn parseBlock(p) {
   expect(p, "LBRACE");
   let stmts = [];
-  while chk(p, "RBRACE") == false && atEnd(p) == false {
+  while chk(p, "RBRACE") != true && atEnd(p) != true {
     skipSemi(p);
     if chk(p, "RBRACE") { break; }
     let stmt = parseStmt(p);
@@ -353,7 +355,7 @@ fn skipType(p) {
     if chk(p, "LT") {
       adv(p);
       let depth = 1;
-      while depth > 0 && atEnd(p) == false {
+      while depth > 0 && atEnd(p) != true {
         if chk(p, "LT") { depth = depth + 1; }
         if chk(p, "GT") { depth = depth - 1; }
         adv(p);
@@ -458,7 +460,7 @@ fn parsePostfix(p) {
 
 fn parseArgs(p) {
   let args = [];
-  while chk(p, "RPAREN") == false && atEnd(p) == false {
+  while chk(p, "RPAREN") != true && atEnd(p) != true {
     push(args, parseExpr(p));
     if chk(p, "COMMA") { adv(p); }
   }
@@ -489,7 +491,7 @@ fn parsePrimary(p) {
   if tok.type == "LBRACKET" {
     adv(p);
     let elems = [];
-    while chk(p, "RBRACKET") == false && atEnd(p) == false {
+    while chk(p, "RBRACKET") != true && atEnd(p) != true {
       push(elems, parseExpr(p));
       if chk(p, "COMMA") { adv(p); }
     }
@@ -500,7 +502,7 @@ fn parsePrimary(p) {
   if tok.type == "LBRACE" {
     adv(p);
     let props = [];
-    while chk(p, "RBRACE") == false && atEnd(p) == false {
+    while chk(p, "RBRACE") != true && atEnd(p) != true {
       let key = adv(p).value;
       expect(p, "COLON");
       let val = parseExpr(p);

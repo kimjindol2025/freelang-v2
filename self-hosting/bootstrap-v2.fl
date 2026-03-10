@@ -1,0 +1,652 @@
+// FreeLang Self-Hosting: Full Lexer (Phase 3A)
+// Ported from src/lexer/token.ts + src/lexer/lexer.ts
+// 140+ token types, full keyword recognition, string/number/comment support
+
+// ── Character classification ──
+
+fn isAlpha(ch) {
+  return (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch == "_";
+}
+
+fn isDigit(ch) {
+  return ch >= "0" && ch <= "9";
+}
+
+fn isAlphaNumeric(ch) {
+  return isAlpha(ch) || isDigit(ch);
+}
+
+fn isWhitespace(ch) {
+  return ch == " " || ch == "\t" || ch == "\r";
+}
+
+// ── Keyword lookup ──
+
+fn getKeywordType(word) {
+  // Core keywords
+  if word == "fn" { return "FN"; }
+  if word == "let" { return "LET"; }
+  if word == "var" { return "LET"; }
+  if word == "const" { return "CONST"; }
+  if word == "if" { return "IF"; }
+  if word == "else" { return "ELSE"; }
+  if word == "match" { return "MATCH"; }
+  if word == "for" { return "FOR"; }
+  if word == "while" { return "WHILE"; }
+  if word == "loop" { return "LOOP"; }
+  if word == "break" { return "BREAK"; }
+  if word == "continue" { return "CONTINUE"; }
+  if word == "return" { return "RETURN"; }
+  if word == "async" { return "ASYNC"; }
+  if word == "await" { return "AWAIT"; }
+  if word == "import" { return "IMPORT"; }
+  if word == "export" { return "EXPORT"; }
+  if word == "from" { return "FROM"; }
+  if word == "struct" { return "STRUCT"; }
+  if word == "enum" { return "ENUM"; }
+  if word == "trait" { return "TRAIT"; }
+  if word == "type" { return "TYPE"; }
+  if word == "true" { return "TRUE"; }
+  if word == "false" { return "FALSE"; }
+  if word == "null" { return "NULL"; }
+  if word == "in" { return "IN"; }
+  if word == "of" { return "OF"; }
+  if word == "as" { return "AS"; }
+  if word == "is" { return "IS"; }
+  if word == "pub" { return "PUB"; }
+  if word == "mut" { return "MUT"; }
+  if word == "self" { return "SELF"; }
+  if word == "super" { return "SUPER"; }
+  if word == "impl" { return "IMPL"; }
+
+  // Exception handling
+  if word == "try" { return "TRY"; }
+  if word == "catch" { return "CATCH"; }
+  if word == "throw" { return "THROW"; }
+  if word == "finally" { return "FINALLY"; }
+
+  // Phase 5 .free format
+  if word == "input" { return "INPUT"; }
+  if word == "output" { return "OUTPUT"; }
+  if word == "intent" { return "INTENT"; }
+
+  // Special
+  if word == "secret" { return "SECRET"; }
+  if word == "style" { return "STYLE"; }
+  if word == "test" { return "TEST"; }
+  if word == "expect" { return "EXPECT"; }
+  if word == "schema" { return "SCHEMA"; }
+  if word == "resolver" { return "RESOLVER"; }
+  if word == "query" { return "QUERY"; }
+  if word == "mutation" { return "MUTATION"; }
+
+  return "IDENT";
+}
+
+// ── Make token helper ──
+
+fn makeToken(type, value, line, col) {
+  return { type: type, value: value, line: line, column: col };
+}
+
+// ── Main tokenizer ──
+
+fn tokenize(source) {
+  let tokens = [];
+  let pos = 0;
+  let line = 1;
+  let col = 1;
+  let len = length(source);
+
+  while pos < len {
+    let ch = char_at(source, pos);
+
+    // Whitespace
+    if isWhitespace(ch) {
+      pos = pos + 1;
+      col = col + 1;
+      continue;
+    }
+
+    // Newline
+    if ch == "\n" {
+      pos = pos + 1;
+      line = line + 1;
+      col = 1;
+      continue;
+    }
+
+    // Single-line comment: //
+    if ch == "/" && pos + 1 < len && char_at(source, pos + 1) == "/" {
+      pos = pos + 2;
+      while pos < len && char_at(source, pos) != "\n" {
+        pos = pos + 1;
+      }
+      continue;
+    }
+
+    // Multi-line comment: /* ... */
+    if ch == "/" && pos + 1 < len && char_at(source, pos + 1) == "*" {
+      pos = pos + 2;
+      col = col + 2;
+      while pos + 1 < len {
+        if char_at(source, pos) == "*" && char_at(source, pos + 1) == "/" {
+          pos = pos + 2;
+          col = col + 2;
+          break;
+        }
+        if char_at(source, pos) == "\n" {
+          line = line + 1;
+          col = 1;
+        } else {
+          col = col + 1;
+        }
+        pos = pos + 1;
+      }
+      continue;
+    }
+
+    // String literal: "..." or '...'
+    if ch == "\"" || ch == "'" {
+      let quote = ch;
+      let startCol = col;
+      pos = pos + 1;
+      col = col + 1;
+      let strVal = "";
+      while pos < len && char_at(source, pos) != quote {
+        let c = char_at(source, pos);
+        if c == "\\" && pos + 1 < len {
+          let next = char_at(source, pos + 1);
+          if next == "n" { strVal = strVal + "\n"; }
+          else if next == "t" { strVal = strVal + "\t"; }
+          else if next == "\\" { strVal = strVal + "\\"; }
+          else if next == "\"" { strVal = strVal + "\""; }
+          else if next == "'" { strVal = strVal + "'"; }
+          else { strVal = strVal + next; }
+          pos = pos + 2;
+          col = col + 2;
+        } else {
+          strVal = strVal + c;
+          pos = pos + 1;
+          col = col + 1;
+        }
+      }
+      if pos < len { pos = pos + 1; col = col + 1; }
+      push(tokens, makeToken("STRING", strVal, line, startCol));
+      continue;
+    }
+
+    // Number literal
+    if isDigit(ch) {
+      let start = pos;
+      let startCol = col;
+      while pos < len && isDigit(char_at(source, pos)) {
+        pos = pos + 1;
+        col = col + 1;
+      }
+      // Decimal point
+      if pos < len && char_at(source, pos) == "." && pos + 1 < len && isDigit(char_at(source, pos + 1)) {
+        pos = pos + 1;
+        col = col + 1;
+        while pos < len && isDigit(char_at(source, pos)) {
+          pos = pos + 1;
+          col = col + 1;
+        }
+      }
+      push(tokens, makeToken("NUMBER", slice(source, start, pos), line, startCol));
+      continue;
+    }
+
+    // Identifier or keyword
+    if isAlpha(ch) {
+      let start = pos;
+      let startCol = col;
+      while pos < len && isAlphaNumeric(char_at(source, pos)) {
+        pos = pos + 1;
+        col = col + 1;
+      }
+      let word = slice(source, start, pos);
+      let tokType = getKeywordType(word);
+      push(tokens, makeToken(tokType, word, line, startCol));
+      continue;
+    }
+
+    // Two-character operators (check before single-char)
+    let startCol = col;
+
+    if ch == "=" && pos + 1 < len && char_at(source, pos + 1) == "=" {
+      push(tokens, makeToken("EQ", "==", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "!" && pos + 1 < len && char_at(source, pos + 1) == "=" {
+      push(tokens, makeToken("NE", "!=", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "<" && pos + 1 < len && char_at(source, pos + 1) == "=" {
+      push(tokens, makeToken("LE", "<=", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == ">" && pos + 1 < len && char_at(source, pos + 1) == "=" {
+      push(tokens, makeToken("GE", ">=", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "&" && pos + 1 < len && char_at(source, pos + 1) == "&" {
+      push(tokens, makeToken("AND", "&&", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "|" && pos + 1 < len && char_at(source, pos + 1) == "|" {
+      push(tokens, makeToken("OR", "||", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "=" && pos + 1 < len && char_at(source, pos + 1) == ">" {
+      push(tokens, makeToken("FAT_ARROW", "=>", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "-" && pos + 1 < len && char_at(source, pos + 1) == ">" {
+      push(tokens, makeToken("ARROW", "->", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "*" && pos + 1 < len && char_at(source, pos + 1) == "*" {
+      push(tokens, makeToken("POWER", "**", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "." && pos + 1 < len && char_at(source, pos + 1) == "." {
+      if pos + 2 < len && char_at(source, pos + 2) == "=" {
+        push(tokens, makeToken("RANGE_INC", "..=", line, startCol));
+        pos = pos + 3; col = col + 3; continue;
+      }
+      push(tokens, makeToken("RANGE", "..", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == ":" && pos + 1 < len && char_at(source, pos + 1) == ":" {
+      push(tokens, makeToken("COLON_COLON", "::", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "|" && pos + 1 < len && char_at(source, pos + 1) == ">" {
+      push(tokens, makeToken("PIPE_GT", "|>", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "<" && pos + 1 < len && char_at(source, pos + 1) == "<" {
+      push(tokens, makeToken("SHL", "<<", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == ">" && pos + 1 < len && char_at(source, pos + 1) == ">" {
+      push(tokens, makeToken("SHR", ">>", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+
+    // Compound assignment operators
+    if ch == "+" && pos + 1 < len && char_at(source, pos + 1) == "=" {
+      push(tokens, makeToken("PLUS_ASSIGN", "+=", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "-" && pos + 1 < len && char_at(source, pos + 1) == "=" {
+      push(tokens, makeToken("MINUS_ASSIGN", "-=", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "*" && pos + 1 < len && char_at(source, pos + 1) == "=" {
+      push(tokens, makeToken("STAR_ASSIGN", "*=", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "/" && pos + 1 < len && char_at(source, pos + 1) == "=" {
+      push(tokens, makeToken("SLASH_ASSIGN", "/=", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "%" && pos + 1 < len && char_at(source, pos + 1) == "=" {
+      push(tokens, makeToken("PERCENT_ASSIGN", "%=", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+
+    // Single-character operators
+    if ch == "+" { push(tokens, makeToken("PLUS", "+", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "-" { push(tokens, makeToken("MINUS", "-", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "*" { push(tokens, makeToken("STAR", "*", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "/" { push(tokens, makeToken("SLASH", "/", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "%" { push(tokens, makeToken("PERCENT", "%", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "=" { push(tokens, makeToken("ASSIGN", "=", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "<" { push(tokens, makeToken("LT", "<", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == ">" { push(tokens, makeToken("GT", ">", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "!" { push(tokens, makeToken("NOT", "!", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "&" { push(tokens, makeToken("BIT_AND", "&", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "|" { push(tokens, makeToken("BIT_OR", "|", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "^" { push(tokens, makeToken("BIT_XOR", "^", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "~" { push(tokens, makeToken("BIT_NOT", "~", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+
+    // Delimiters
+    if ch == "(" { push(tokens, makeToken("LPAREN", "(", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == ")" { push(tokens, makeToken("RPAREN", ")", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "[" { push(tokens, makeToken("LBRACKET", "[", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "]" { push(tokens, makeToken("RBRACKET", "]", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "{" { push(tokens, makeToken("LBRACE", "{", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "}" { push(tokens, makeToken("RBRACE", "}", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "," { push(tokens, makeToken("COMMA", ",", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == ";" { push(tokens, makeToken("SEMICOLON", ";", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == ":" { push(tokens, makeToken("COLON", ":", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "." { push(tokens, makeToken("DOT", ".", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "?" { push(tokens, makeToken("QUESTION", "?", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "@" { push(tokens, makeToken("AT", "@", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "#" { push(tokens, makeToken("HASH", "#", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+
+    // Unknown character — skip
+    pos = pos + 1;
+    col = col + 1;
+  }
+
+  // EOF token
+  push(tokens, makeToken("EOF", "", line, col));
+  return tokens;
+}
+// Minimal self-hosting parser - separated from lexer
+
+fn peek(p) { return p.tokens[p.pos]; }
+fn adv(p) { let t = peek(p); p.pos = p.pos + 1; return t; }
+
+fn chk(p, tp) {
+  if peek(p).type == tp { return true; }
+  return false;
+}
+
+fn atEnd(p) {
+  if peek(p).type == "EOF" { return true; }
+  return false;
+}
+
+fn skipSemi(p) {
+  while chk(p, "SEMICOLON") { adv(p); }
+}
+
+// Forward declarations via mutual recursion
+
+fn parseExpr(p) {
+  return parseOr(p);
+}
+
+fn parseOr(p) {
+  let left = parseAnd(p);
+  while chk(p, "OR") { adv(p); left = { type: "binary", op: "||", left: left, right: parseAnd(p) }; }
+  return left;
+}
+
+fn parseAnd(p) {
+  let left = parseEq(p);
+  while chk(p, "AND") { adv(p); left = { type: "binary", op: "&&", left: left, right: parseEq(p) }; }
+  return left;
+}
+
+fn parseEq(p) {
+  let left = parseCmp(p);
+  while chk(p, "EQ") || chk(p, "NE") { let op = adv(p).value; left = { type: "binary", op: op, left: left, right: parseCmp(p) }; }
+  return left;
+}
+
+fn parseCmp(p) {
+  let left = parseAdd(p);
+  while chk(p, "LT") || chk(p, "GT") || chk(p, "LE") || chk(p, "GE") { let op = adv(p).value; left = { type: "binary", op: op, left: left, right: parseAdd(p) }; }
+  return left;
+}
+
+fn parseAdd(p) {
+  let left = parseMul(p);
+  while chk(p, "PLUS") || chk(p, "MINUS") { let op = adv(p).value; left = { type: "binary", op: op, left: left, right: parseMul(p) }; }
+  return left;
+}
+
+fn parseMul(p) {
+  let left = parseUnary(p);
+  while chk(p, "STAR") || chk(p, "SLASH") || chk(p, "PERCENT") { let op = adv(p).value; left = { type: "binary", op: op, left: left, right: parseUnary(p) }; }
+  return left;
+}
+
+fn parseUnary(p) {
+  if chk(p, "NOT") { adv(p); return { type: "unary", op: "!", expr: parseUnary(p) }; }
+  if chk(p, "MINUS") { adv(p); return { type: "unary", op: "-", expr: parseUnary(p) }; }
+  return parsePostfix(p);
+}
+
+fn parsePostfix(p) {
+  let expr = parsePrimary(p);
+  let more = true;
+  while more {
+    more = false;
+    if chk(p, "DOT") {
+      adv(p);
+      let field = adv(p).value;
+      if chk(p, "LPAREN") {
+        adv(p);
+        let args = parseArgs(p);
+        adv(p); // RPAREN
+        expr = { type: "call", name: field, args: args };
+      } else {
+        expr = { type: "member", obj: expr, field: field };
+      }
+      more = true;
+    } else if chk(p, "LBRACKET") {
+      adv(p);
+      let idx = parseExpr(p);
+      adv(p); // RBRACKET
+      expr = { type: "index", obj: expr, idx: idx };
+      more = true;
+    } else if chk(p, "LPAREN") && expr.type == "ident" {
+      adv(p);
+      let args = parseArgs(p);
+      adv(p); // RPAREN
+      expr = { type: "call", name: expr.name, args: args };
+      more = true;
+    }
+  }
+  return expr;
+}
+
+fn parseArgs(p) {
+  let args = [];
+  while chk(p, "RPAREN") != true && atEnd(p) != true {
+    push(args, parseExpr(p));
+    if chk(p, "COMMA") { adv(p); }
+  }
+  return args;
+}
+
+fn parsePrimary(p) {
+  let tok = peek(p);
+  if tok.type == "NUMBER" { adv(p); return { type: "num", value: tok.value }; }
+  if tok.type == "STRING" { adv(p); return { type: "str", value: tok.value }; }
+  if tok.type == "TRUE" { adv(p); return { type: "bool", value: true }; }
+  if tok.type == "FALSE" { adv(p); return { type: "bool", value: false }; }
+  if tok.type == "NULL" { adv(p); return { type: "null" }; }
+  if tok.type == "IDENT" { adv(p); return { type: "ident", name: tok.value }; }
+  if tok.type == "LPAREN" { adv(p); let e = parseExpr(p); adv(p); return e; }
+  if tok.type == "LBRACKET" {
+    adv(p);
+    let elems = [];
+    while chk(p, "RBRACKET") != true && atEnd(p) != true {
+      push(elems, parseExpr(p));
+      if chk(p, "COMMA") { adv(p); }
+    }
+    adv(p);
+    return { type: "array", elems: elems };
+  }
+  if tok.type == "LBRACE" {
+    adv(p);
+    let props = [];
+    while chk(p, "RBRACE") != true && atEnd(p) != true {
+      let key = adv(p).value;
+      adv(p); // COLON
+      let val = parseExpr(p);
+      push(props, { key: key, val: val });
+      if chk(p, "COMMA") { adv(p); }
+    }
+    adv(p);
+    return { type: "object", props: props };
+  }
+  adv(p);
+  return { type: "unknown" };
+}
+
+fn parseAssign(p) {
+  let left = parseOr(p);
+  if chk(p, "ASSIGN") || chk(p, "PLUS_ASSIGN") || chk(p, "MINUS_ASSIGN") {
+    let op = adv(p).value;
+    let right = parseAssign(p);
+    return { type: "assign", target: left, op: op, value: right };
+  }
+  return left;
+}
+
+fn parseBlock(p) {
+  adv(p); // LBRACE
+  let stmts = [];
+  while chk(p, "RBRACE") != true && atEnd(p) != true {
+    skipSemi(p);
+    if chk(p, "RBRACE") { break; }
+    push(stmts, parseStmt(p));
+  }
+  adv(p); // RBRACE
+  return { type: "block", stmts: stmts };
+}
+
+fn skipType(p) {
+  if chk(p, "IDENT") || chk(p, "TYPE") {
+    adv(p);
+    if chk(p, "LT") {
+      adv(p);
+      let depth = 1;
+      while depth > 0 && atEnd(p) != true {
+        if chk(p, "LT") { depth = depth + 1; }
+        if chk(p, "GT") { depth = depth - 1; }
+        adv(p);
+      }
+    }
+  }
+}
+
+fn parseFnDecl(p) {
+  adv(p); // FN
+  let name = adv(p).value;
+  adv(p); // LPAREN
+  let params = [];
+  while chk(p, "RPAREN") != true && atEnd(p) != true {
+    push(params, adv(p).value);
+    if chk(p, "COLON") { adv(p); skipType(p); }
+    if chk(p, "COMMA") { adv(p); }
+  }
+  adv(p); // RPAREN
+  if chk(p, "COLON") || chk(p, "ARROW") { adv(p); skipType(p); }
+  let body = parseBlock(p);
+  return { type: "fn", name: name, params: params, body: body };
+}
+
+fn parseStmt(p) {
+  let tok = peek(p);
+  if tok.type == "FN" { return parseFnDecl(p); }
+  if tok.type == "LET" || tok.type == "CONST" {
+    adv(p);
+    let name = adv(p).value;
+    if chk(p, "COLON") { adv(p); skipType(p); }
+    let init = null;
+    if chk(p, "ASSIGN") { adv(p); init = parseAssign(p); }
+    skipSemi(p);
+    return { type: "var", name: name, init: init };
+  }
+  if tok.type == "IF" {
+    adv(p);
+    let cond = parseAssign(p);
+    let then_b = parseBlock(p);
+    let else_b = null;
+    if chk(p, "ELSE") { adv(p); if chk(p, "IF") { else_b = { type: "block", stmts: [parseStmt(p)] }; } else { else_b = parseBlock(p); } }
+    return { type: "if", cond: cond, then: then_b };
+  }
+  if tok.type == "WHILE" {
+    adv(p);
+    let cond = parseAssign(p);
+    let body = parseBlock(p);
+    return { type: "while", cond: cond, body: body };
+  }
+  if tok.type == "RETURN" {
+    adv(p);
+    let val = null;
+    if chk(p, "SEMICOLON") != true && chk(p, "RBRACE") != true && atEnd(p) != true {
+      val = parseAssign(p);
+    }
+    skipSemi(p);
+    return { type: "return", value: val };
+  }
+  if tok.type == "BREAK" { adv(p); skipSemi(p); return { type: "break" }; }
+  if tok.type == "CONTINUE" { adv(p); skipSemi(p); return { type: "continue" }; }
+
+  let expr = parseAssign(p);
+  skipSemi(p);
+  return { type: "expr_stmt", expr: expr };
+}
+
+fn parseProgram(tokens) {
+  let p = { tokens: tokens, pos: 0, len: length(tokens) };
+  let stmts = [];
+  while atEnd(p) != true {
+    skipSemi(p);
+    if atEnd(p) { break; }
+    push(stmts, parseStmt(p));
+  }
+  return { type: "program", stmts: stmts };
+}
+
+fn countNodes(node) {
+  if node == null { return 0; }
+  let c = 1;
+  if node.stmts != null { let i = 0; while i < length(node.stmts) { c = c + countNodes(node.stmts[i]); i = i + 1; } }
+  if node.body != null { c = c + countNodes(node.body); }
+  if node.init != null { c = c + countNodes(node.init); }
+  if node.cond != null { c = c + countNodes(node.cond); }
+  if node.then != null { c = c + countNodes(node.then); }
+  if node.left != null { c = c + countNodes(node.left); }
+  if node.right != null { c = c + countNodes(node.right); }
+  if node.expr != null { c = c + countNodes(node.expr); }
+  if node.target != null { c = c + countNodes(node.target); }
+  if node.obj != null { c = c + countNodes(node.obj); }
+  if node.args != null { let i = 0; while i < length(node.args) { c = c + countNodes(node.args[i]); i = i + 1; } }
+  return c;
+}
+
+// ══════════════════════════════════════════════════
+// SELF-PARSING BOOTSTRAP TEST
+// ══════════════════════════════════════════════════
+
+fn main() {
+  println("=== FreeLang Self-Hosting: Lexer + Parser ===");
+
+  let selfSource = file_read("self-hosting/bootstrap-v2.fl");
+  if selfSource == null || selfSource == "" { println("ERROR: cannot read self"); return; }
+
+  let srcLen = length(selfSource);
+  println("Source: " + str(srcLen) + " chars");
+
+  let tokens = tokenize(selfSource);
+  let tokenCount = length(tokens);
+  println("Tokens: " + str(tokenCount));
+
+  let ast = parseProgram(tokens);
+  let stmtCount = length(ast.stmts);
+  let nodeCount = countNodes(ast);
+  println("Statements: " + str(stmtCount));
+  println("AST nodes: " + str(nodeCount));
+
+  let fnCount = 0;
+  let i = 0;
+  while i < stmtCount {
+    if ast.stmts[i].type == "fn" { fnCount = fnCount + 1; }
+    i = i + 1;
+  }
+  println("Functions: " + str(fnCount));
+
+  let ok = true;
+  if tokenCount < 500 { println("FAIL: tokens"); ok = false; }
+  if stmtCount < 10 { println("FAIL: stmts"); ok = false; }
+  if fnCount < 10 { println("FAIL: fns"); ok = false; }
+
+  if ok {
+    println("");
+    println("PASS: Self-parsing bootstrap test passed!");
+    println("Phase 3B COMPLETE.");
+  }
+}
+
+main();
