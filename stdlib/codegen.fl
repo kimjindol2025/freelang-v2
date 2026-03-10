@@ -1,0 +1,3 @@
+// FreeLang codegen module
+// Native functions are registered via stdlib-codegen.ts
+// This file enables the import system to recognize "stdlib/codegen"

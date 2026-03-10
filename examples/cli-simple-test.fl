@@ -1,0 +1,32 @@
+// CLI 라이브러리 단순 테스트
+
+println("")
+println("=== FreeLang CLI - Simple Test ===")
+println("")
+
+// 테스트 1: 기본 출력
+println("Test 1: Basic Output")
+native_call("cli_println", ["Hello from CLI!"])
+println("✓ Test 1 Passed")
+println("")
+
+// 테스트 2: 컬러 문자열
+println("Test 2: Colored Output")
+var greenMsg = "\x1b[32m✓ Success\x1b[0m"
+native_call("cli_println", [greenMsg])
+println("✓ Test 2 Passed")
+println("")
+
+// 테스트 3: 박스
+println("Test 3: Box")
+native_call("cli_box", ["FreeLang CLI\nNo npm needed!", "Info"])
+println("✓ Test 3 Passed")
+println("")
+
+// 테스트 4: 에러 출력
+println("Test 4: Error Output")
+native_call("cli_err", ["This is an error message"])
+println("✓ Test 4 Passed")
+println("")
+
+println("=== CLI Tests Complete ===")

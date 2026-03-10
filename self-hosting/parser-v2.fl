@@ -1,0 +1,620 @@
+// FreeLang Self-Hosting: Parser Phase 3B
+// Supports 17 AST node types needed for self-compilation:
+//   identifier, literal, binary, expression, call, block, assignment,
+//   if, variable, return, continue, member, while, function, object, array, break
+
+// ── Parser State ──
+
+fn createParser(tokens) {
+  return { tokens: tokens, pos: 0, length: length(tokens) };
+}
+
+fn peek(p) {
+  if p.pos >= p.length { return p.tokens[p.length - 1]; }
+  return p.tokens[p.pos];
+}
+
+fn peekAt(p, offset) {
+  let idx = p.pos + offset;
+  if idx >= p.length { return p.tokens[p.length - 1]; }
+  return p.tokens[idx];
+}
+
+fn advance(p) {
+  let tok = peek(p);
+  p.pos = p.pos + 1;
+  return tok;
+}
+
+fn check(p, type) {
+  return peek(p).type == type;
+}
+
+fn expect(p, type) {
+  let tok = peek(p);
+  if tok.type != type {
+    println("Parse error: expected " + type + " but got " + tok.type + " (" + tok.value + ") at line " + str(tok.line));
+    return tok;
+  }
+  return advance(p);
+}
+
+fn skipSemicolons(p) {
+  while check(p, "SEMICOLON") {
+    advance(p);
+  }
+}
+
+fn isAtEnd(p) {
+  return peek(p).type == "EOF";
+}
+
+// ── Parse Program ──
+
+fn parseProgram(tokens) {
+  let p = createParser(tokens);
+  let stmts = [];
+
+  while isAtEnd(p) == false {
+    skipSemicolons(p);
+    if isAtEnd(p) { break; }
+    let stmt = parseStatement(p);
+    if stmt != null {
+      push(stmts, stmt);
+    }
+  }
+
+  return { type: "program", statements: stmts };
+}
+
+// ── Statement Parsing ──
+
+fn parseStatement(p) {
+  let tok = peek(p);
+
+  if tok.type == "FN" { return parseFunctionDecl(p); }
+  if tok.type == "LET" || tok.type == "CONST" { return parseVarDecl(p); }
+  if tok.type == "IF" { return parseIfStmt(p); }
+  if tok.type == "WHILE" { return parseWhileStmt(p); }
+  if tok.type == "FOR" { return parseForStmt(p); }
+  if tok.type == "RETURN" { return parseReturnStmt(p); }
+  if tok.type == "BREAK" { advance(p); skipSemicolons(p); return { type: "break" }; }
+  if tok.type == "CONTINUE" { advance(p); skipSemicolons(p); return { type: "continue" }; }
+  if tok.type == "IMPORT" { return parseImportStmt(p); }
+  if tok.type == "STRUCT" { return parseStructDecl(p); }
+
+  // Expression statement
+  let expr = parseExpression(p);
+  skipSemicolons(p);
+  return { type: "expression", expression: expr };
+}
+
+// ── Function Declaration ──
+
+fn parseFunctionDecl(p) {
+  expect(p, "FN");
+  let name = expect(p, "IDENT").value;
+  expect(p, "LPAREN");
+
+  let params = [];
+  while check(p, "RPAREN") == false && isAtEnd(p) == false {
+    let paramName = expect(p, "IDENT").value;
+    // Optional type annotation
+    if check(p, "COLON") {
+      advance(p); // :
+      parseTypeAnnotation(p); // skip type
+    }
+    push(params, { name: paramName });
+    if check(p, "COMMA") { advance(p); }
+  }
+  expect(p, "RPAREN");
+
+  // Optional return type
+  if check(p, "COLON") || check(p, "ARROW") {
+    advance(p);
+    parseTypeAnnotation(p);
+  }
+
+  let body = parseBlock(p);
+  return { type: "function", name: name, params: params, body: body };
+}
+
+// ── Variable Declaration ──
+
+fn parseVarDecl(p) {
+  let kind = advance(p).value; // let or const
+  let name = expect(p, "IDENT").value;
+
+  // Optional type annotation
+  if check(p, "COLON") {
+    advance(p);
+    parseTypeAnnotation(p);
+  }
+
+  let init = null;
+  if check(p, "ASSIGN") {
+    advance(p);
+    init = parseExpression(p);
+  }
+  skipSemicolons(p);
+  return { type: "variable", kind: kind, name: name, init: init };
+}
+
+// ── If Statement ──
+
+fn parseIfStmt(p) {
+  expect(p, "IF");
+  let condition = parseExpression(p);
+  let thenBlock = parseBlock(p);
+  let elseBlock = null;
+
+  if check(p, "ELSE") {
+    advance(p);
+    if check(p, "IF") {
+      elseBlock = { type: "block", statements: [parseIfStmt(p)] };
+    } else {
+      elseBlock = parseBlock(p);
+    }
+  }
+
+  return { type: "if", condition: condition, then: thenBlock, else: elseBlock };
+}
+
+// ── While Statement ──
+
+fn parseWhileStmt(p) {
+  expect(p, "WHILE");
+  let condition = parseExpression(p);
+  let body = parseBlock(p);
+  return { type: "while", condition: condition, body: body };
+}
+
+// ── For Statement ──
+
+fn parseForStmt(p) {
+  expect(p, "FOR");
+
+  // for x in expr { ... }
+  let varName = expect(p, "IDENT").value;
+  expect(p, "IN");
+  let iter = parseExpression(p);
+  let body = parseBlock(p);
+  return { type: "for_in", variable: varName, iterable: iter, body: body };
+}
+
+// ── Return Statement ──
+
+fn parseReturnStmt(p) {
+  expect(p, "RETURN");
+  let value = null;
+  if check(p, "SEMICOLON") == false && check(p, "RBRACE") == false && isAtEnd(p) == false {
+    value = parseExpression(p);
+  }
+  skipSemicolons(p);
+  return { type: "return", value: value };
+}
+
+// ── Import Statement ──
+
+fn parseImportStmt(p) {
+  expect(p, "IMPORT");
+  let path = expect(p, "STRING").value;
+  skipSemicolons(p);
+  return { type: "import", path: path };
+}
+
+// ── Struct Declaration ──
+
+fn parseStructDecl(p) {
+  expect(p, "STRUCT");
+  let name = expect(p, "IDENT").value;
+  expect(p, "LBRACE");
+  let fields = [];
+  while check(p, "RBRACE") == false && isAtEnd(p) == false {
+    let fieldName = expect(p, "IDENT").value;
+    if check(p, "COLON") {
+      advance(p);
+      parseTypeAnnotation(p);
+    }
+    push(fields, fieldName);
+    if check(p, "COMMA") { advance(p); }
+  }
+  expect(p, "RBRACE");
+  return { type: "struct", name: name, fields: fields };
+}
+
+// ── Block ──
+
+fn parseBlock(p) {
+  expect(p, "LBRACE");
+  let stmts = [];
+  while check(p, "RBRACE") == false && isAtEnd(p) == false {
+    skipSemicolons(p);
+    if check(p, "RBRACE") { break; }
+    let stmt = parseStatement(p);
+    if stmt != null {
+      push(stmts, stmt);
+    }
+  }
+  expect(p, "RBRACE");
+  return { type: "block", statements: stmts };
+}
+
+// ── Type Annotation (skip) ──
+
+fn parseTypeAnnotation(p) {
+  // Simple: int, string, bool, any, void
+  // Generic: array<T>, Map<K,V>
+  let tok = peek(p);
+  if tok.type == "IDENT" || tok.type == "TYPE" {
+    advance(p);
+    if check(p, "LT") {
+      advance(p); // <
+      let depth = 1;
+      while depth > 0 && isAtEnd(p) == false {
+        if check(p, "LT") { depth = depth + 1; }
+        if check(p, "GT") { depth = depth - 1; }
+        advance(p);
+      }
+    }
+  }
+}
+
+// ── Expression Parsing (Pratt parser) ──
+
+fn parseExpression(p) {
+  return parseAssignment(p);
+}
+
+fn parseAssignment(p) {
+  let left = parseOr(p);
+
+  if check(p, "ASSIGN") || check(p, "PLUS_ASSIGN") || check(p, "MINUS_ASSIGN") {
+    let op = advance(p).value;
+    let right = parseAssignment(p);
+    return { type: "assignment", target: left, op: op, value: right };
+  }
+
+  return left;
+}
+
+fn parseOr(p) {
+  let left = parseAnd(p);
+  while check(p, "OR") {
+    advance(p);
+    let right = parseAnd(p);
+    left = { type: "binary", op: "||", left: left, right: right };
+  }
+  return left;
+}
+
+fn parseAnd(p) {
+  let left = parseEquality(p);
+  while check(p, "AND") {
+    advance(p);
+    let right = parseEquality(p);
+    left = { type: "binary", op: "&&", left: left, right: right };
+  }
+  return left;
+}
+
+fn parseEquality(p) {
+  let left = parseComparison(p);
+  while check(p, "EQ") || check(p, "NE") {
+    let op = advance(p).value;
+    let right = parseComparison(p);
+    left = { type: "binary", op: op, left: left, right: right };
+  }
+  return left;
+}
+
+fn parseComparison(p) {
+  let left = parseAdditive(p);
+  while check(p, "LT") || check(p, "GT") || check(p, "LE") || check(p, "GE") {
+    let op = advance(p).value;
+    let right = parseAdditive(p);
+    left = { type: "binary", op: op, left: left, right: right };
+  }
+  return left;
+}
+
+fn parseAdditive(p) {
+  let left = parseMultiplicative(p);
+  while check(p, "PLUS") || check(p, "MINUS") {
+    let op = advance(p).value;
+    let right = parseMultiplicative(p);
+    left = { type: "binary", op: op, left: left, right: right };
+  }
+  return left;
+}
+
+fn parseMultiplicative(p) {
+  let left = parseUnary(p);
+  while check(p, "STAR") || check(p, "SLASH") || check(p, "PERCENT") {
+    let op = advance(p).value;
+    let right = parseUnary(p);
+    left = { type: "binary", op: op, left: left, right: right };
+  }
+  return left;
+}
+
+fn parseUnary(p) {
+  if check(p, "NOT") {
+    advance(p);
+    let operand = parseUnary(p);
+    return { type: "unary", op: "!", operand: operand };
+  }
+  if check(p, "MINUS") {
+    advance(p);
+    let operand = parseUnary(p);
+    return { type: "unary", op: "-", operand: operand };
+  }
+  return parsePostfix(p);
+}
+
+// ── Postfix: member access, index, call ──
+
+fn parsePostfix(p) {
+  let expr = parsePrimary(p);
+
+  while true {
+    // Member access: expr.field
+    if check(p, "DOT") {
+      advance(p);
+      let field = advance(p).value;
+
+      // Method call: expr.field(args)
+      if check(p, "LPAREN") {
+        advance(p);
+        let args = parseArgList(p);
+        expect(p, "RPAREN");
+        expr = { type: "call", callee: { type: "member", object: expr, property: field }, args: args };
+      } else {
+        expr = { type: "member", object: expr, property: field };
+      }
+      continue;
+    }
+
+    // Index access: expr[index]
+    if check(p, "LBRACKET") {
+      advance(p);
+      let index = parseExpression(p);
+      expect(p, "RBRACKET");
+      expr = { type: "index", object: expr, index: index };
+      continue;
+    }
+
+    // Function call: expr(args)
+    if check(p, "LPAREN") && expr.type == "identifier" {
+      advance(p);
+      let args = parseArgList(p);
+      expect(p, "RPAREN");
+      expr = { type: "call", callee: expr, args: args };
+      continue;
+    }
+
+    break;
+  }
+
+  return expr;
+}
+
+// ── Argument list ──
+
+fn parseArgList(p) {
+  let args = [];
+  while check(p, "RPAREN") == false && isAtEnd(p) == false {
+    push(args, parseExpression(p));
+    if check(p, "COMMA") { advance(p); }
+  }
+  return args;
+}
+
+// ── Primary expressions ──
+
+fn parsePrimary(p) {
+  let tok = peek(p);
+
+  // Number literal
+  if tok.type == "NUMBER" {
+    advance(p);
+    return { type: "literal", value: tok.value, kind: "number" };
+  }
+
+  // String literal
+  if tok.type == "STRING" {
+    advance(p);
+    return { type: "literal", value: tok.value, kind: "string" };
+  }
+
+  // Boolean literals
+  if tok.type == "TRUE" {
+    advance(p);
+    return { type: "literal", value: "true", kind: "boolean" };
+  }
+  if tok.type == "FALSE" {
+    advance(p);
+    return { type: "literal", value: "false", kind: "boolean" };
+  }
+
+  // Null
+  if tok.type == "NULL" {
+    advance(p);
+    return { type: "literal", value: "null", kind: "null" };
+  }
+
+  // Identifier
+  if tok.type == "IDENT" {
+    advance(p);
+    return { type: "identifier", name: tok.value };
+  }
+
+  // Parenthesized expression
+  if tok.type == "LPAREN" {
+    advance(p);
+    let expr = parseExpression(p);
+    expect(p, "RPAREN");
+    return expr;
+  }
+
+  // Array literal: [expr, expr, ...]
+  if tok.type == "LBRACKET" {
+    advance(p);
+    let elements = [];
+    while check(p, "RBRACKET") == false && isAtEnd(p) == false {
+      push(elements, parseExpression(p));
+      if check(p, "COMMA") { advance(p); }
+    }
+    expect(p, "RBRACKET");
+    return { type: "array", elements: elements };
+  }
+
+  // Object literal: { key: value, ... }
+  if tok.type == "LBRACE" {
+    advance(p);
+    let properties = [];
+    while check(p, "RBRACE") == false && isAtEnd(p) == false {
+      let key = advance(p).value;
+      expect(p, "COLON");
+      let value = parseExpression(p);
+      push(properties, { key: key, value: value });
+      if check(p, "COMMA") { advance(p); }
+    }
+    expect(p, "RBRACE");
+    return { type: "object", properties: properties };
+  }
+
+  // Lambda: fn(params) { body }
+  if tok.type == "FN" && peekAt(p, 1).type == "LPAREN" {
+    advance(p); // fn
+    advance(p); // (
+    let params = [];
+    while check(p, "RPAREN") == false && isAtEnd(p) == false {
+      let paramName = expect(p, "IDENT").value;
+      if check(p, "COLON") { advance(p); parseTypeAnnotation(p); }
+      push(params, { name: paramName });
+      if check(p, "COMMA") { advance(p); }
+    }
+    expect(p, "RPAREN");
+    let body = parseBlock(p);
+    return { type: "lambda", params: params, body: body };
+  }
+
+  // Fallback: consume and return unknown
+  advance(p);
+  return { type: "literal", value: tok.value, kind: "unknown" };
+}
+
+// ── AST Printer (for debugging) ──
+
+fn printAST(node, indent) {
+  let prefix = "";
+  let i = 0;
+  while i < indent { prefix = prefix + "  "; i = i + 1; }
+
+  if node == null {
+    println(prefix + "(null)");
+    return;
+  }
+
+  if node.type == "program" {
+    println(prefix + "Program (" + str(length(node.statements)) + " statements)");
+    let j = 0;
+    while j < length(node.statements) {
+      printAST(node.statements[j], indent + 1);
+      j = j + 1;
+    }
+    return;
+  }
+
+  if node.type == "function" {
+    println(prefix + "Function: " + node.name + " (" + str(length(node.params)) + " params)");
+    printAST(node.body, indent + 1);
+    return;
+  }
+
+  if node.type == "variable" {
+    let initStr = "";
+    if node.init != null { initStr = " = ..."; }
+    println(prefix + "Variable: " + node.name + initStr);
+    return;
+  }
+
+  if node.type == "if" {
+    println(prefix + "If");
+    return;
+  }
+
+  if node.type == "while" {
+    println(prefix + "While");
+    return;
+  }
+
+  if node.type == "return" {
+    println(prefix + "Return");
+    return;
+  }
+
+  if node.type == "expression" {
+    println(prefix + "ExprStmt");
+    return;
+  }
+
+  if node.type == "block" {
+    println(prefix + "Block (" + str(length(node.statements)) + " stmts)");
+    return;
+  }
+
+  println(prefix + node.type);
+}
+
+// ── Self-Parsing Test ──
+
+fn main() {
+  println("=== FreeLang Self-Hosting Parser v2 ===");
+
+  // Test 1: Simple expression
+  let test1 = "let x = 1 + 2;";
+  println("");
+  println("Test 1: " + test1);
+  let tokens1 = tokenize(test1);
+  let ast1 = parseProgram(tokens1);
+  printAST(ast1, 0);
+
+  // Test 2: Function
+  let test2 = "fn add(a, b) { return a + b; }";
+  println("");
+  println("Test 2: " + test2);
+  let tokens2 = tokenize(test2);
+  let ast2 = parseProgram(tokens2);
+  printAST(ast2, 0);
+
+  // Test 3: If/while
+  let test3 = "if x > 0 { let y = x + 1; } while i < 10 { i = i + 1; }";
+  println("");
+  println("Test 3: " + test3);
+  let tokens3 = tokenize(test3);
+  let ast3 = parseProgram(tokens3);
+  printAST(ast3, 0);
+
+  // Test 4: Member access + call
+  let test4 = "push(tokens, makeToken(\"PLUS\", ch, line, col));";
+  println("");
+  println("Test 4: " + test4);
+  let tokens4 = tokenize(test4);
+  let ast4 = parseProgram(tokens4);
+  printAST(ast4, 0);
+
+  // Test 5: Object literal
+  let test5 = "let tok = { type: \"FN\", value: word };";
+  println("");
+  println("Test 5: " + test5);
+  let tokens5 = tokenize(test5);
+  let ast5 = parseProgram(tokens5);
+  printAST(ast5, 0);
+
+  println("");
+  println("=== Parser v2 Tests Complete ===");
+}
+
+main();

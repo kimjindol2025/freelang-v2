@@ -1,0 +1,3 @@
+// FreeLang compression module
+// Native functions are registered via stdlib-compression.ts
+// This file enables the import system to recognize "stdlib/compression"

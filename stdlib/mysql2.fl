@@ -1,0 +1,3 @@
+// FreeLang mysql2 module
+// Native functions are registered via stdlib-mysql2.ts
+// This file enables the import system to recognize "stdlib/mysql2"

@@ -1,0 +1,3 @@
+// FreeLang commander module
+// Native functions are registered via stdlib-commander.ts
+// This file enables the import system to recognize "stdlib/commander"
