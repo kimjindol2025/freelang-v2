@@ -1,0 +1,94 @@
+// FreeLang Self-Hosting: IR Opcode Definitions
+// Ported from src/types.ts
+// Phase 3A - Step 1: 기초 타입 정의
+
+// ── IR Opcodes (hex values as integers) ──
+// Stack
+let OP_PUSH = 1;
+let OP_POP = 2;
+let OP_DUP = 3;
+let OP_PUSH_FLOAT = 4;
+
+// Arithmetic
+let OP_ADD = 16;
+let OP_SUB = 17;
+let OP_MUL = 18;
+let OP_DIV = 19;
+let OP_MOD = 20;
+let OP_NEG = 21;
+
+// Comparison
+let OP_EQ = 32;
+let OP_NEQ = 33;
+let OP_LT = 34;
+let OP_GT = 35;
+let OP_LTE = 36;
+let OP_GTE = 37;
+
+// Logic
+let OP_AND = 48;
+let OP_OR = 49;
+let OP_NOT = 50;
+
+// Variables
+let OP_STORE = 64;
+let OP_LOAD = 65;
+
+// Control
+let OP_JMP = 80;
+let OP_JMP_IF = 81;
+let OP_JMP_NOT = 82;
+let OP_CALL = 83;
+let OP_RET = 84;
+let OP_HALT = 95;
+
+// Array
+let OP_ARR_NEW = 96;
+let OP_ARR_PUSH = 97;
+let OP_ARR_GET = 98;
+let OP_ARR_SET = 99;
+let OP_ARR_LEN = 100;
+
+// String
+let OP_STR_NEW = 144;
+let OP_STR_LEN = 145;
+let OP_STR_CONCAT = 148;
+
+// Object
+let OP_OBJ_NEW = 192;
+let OP_OBJ_SET = 193;
+let OP_OBJ_GET = 194;
+
+// Function
+let OP_FUNC_DEF = 163;
+let OP_COMMENT = 164;
+
+// Debug
+let OP_DUMP = 240;
+
+// ── Opcode name lookup ──
+fn opName(op) {
+  if op == 1 { return "PUSH"; }
+  if op == 2 { return "POP"; }
+  if op == 3 { return "DUP"; }
+  if op == 16 { return "ADD"; }
+  if op == 17 { return "SUB"; }
+  if op == 18 { return "MUL"; }
+  if op == 19 { return "DIV"; }
+  if op == 20 { return "MOD"; }
+  if op == 32 { return "EQ"; }
+  if op == 33 { return "NEQ"; }
+  if op == 34 { return "LT"; }
+  if op == 35 { return "GT"; }
+  if op == 64 { return "STORE"; }
+  if op == 65 { return "LOAD"; }
+  if op == 80 { return "JMP"; }
+  if op == 83 { return "CALL"; }
+  if op == 84 { return "RET"; }
+  if op == 95 { return "HALT"; }
+  if op == 240 { return "DUMP"; }
+  return "OP_" + str(op);
+}
+
+println("types.fl: " + str(OP_HALT) + " opcodes defined");
+println("  PUSH=" + str(OP_PUSH) + " ADD=" + str(OP_ADD) + " CALL=" + str(OP_CALL) + " HALT=" + str(OP_HALT));

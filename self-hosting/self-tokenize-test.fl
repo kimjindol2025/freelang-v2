@@ -1,0 +1,216 @@
+// Self-Hosting Bootstrap Test: Lexer가 자기 자신을 토큰화
+// Phase 3A 검증 — "자기 자신의 소스코드를 먹을 수 있는가?"
+
+// ── Lexer 함수들 (lexer-v2.fl에서 인라인) ──
+
+fn isAlpha(ch) {
+  return (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch == "_";
+}
+
+fn isDigit(ch) {
+  return ch >= "0" && ch <= "9";
+}
+
+fn isAlphaNumeric(ch) {
+  return isAlpha(ch) || isDigit(ch);
+}
+
+fn getKeywordType(word) {
+  if word == "fn" { return "FN"; }
+  if word == "let" { return "LET"; }
+  if word == "var" { return "LET"; }
+  if word == "const" { return "CONST"; }
+  if word == "if" { return "IF"; }
+  if word == "else" { return "ELSE"; }
+  if word == "for" { return "FOR"; }
+  if word == "while" { return "WHILE"; }
+  if word == "return" { return "RETURN"; }
+  if word == "import" { return "IMPORT"; }
+  if word == "struct" { return "STRUCT"; }
+  if word == "true" { return "TRUE"; }
+  if word == "false" { return "FALSE"; }
+  if word == "null" { return "NULL"; }
+  if word == "continue" { return "CONTINUE"; }
+  if word == "break" { return "BREAK"; }
+  return "IDENT";
+}
+
+fn makeToken(type, value, line, col) {
+  return { type: type, value: value, line: line, column: col };
+}
+
+fn tokenize(source) {
+  let tokens = [];
+  let pos = 0;
+  let line = 1;
+  let col = 1;
+  let len = length(source);
+
+  while pos < len {
+    let ch = char_at(source, pos);
+
+    if ch == " " || ch == "\t" || ch == "\r" {
+      pos = pos + 1; col = col + 1; continue;
+    }
+    if ch == "\n" {
+      pos = pos + 1; line = line + 1; col = 1; continue;
+    }
+
+    // Comments
+    if ch == "/" && pos + 1 < len && char_at(source, pos + 1) == "/" {
+      pos = pos + 2;
+      while pos < len && char_at(source, pos) != "\n" { pos = pos + 1; }
+      continue;
+    }
+
+    // Strings
+    if ch == "\"" {
+      let startCol = col;
+      pos = pos + 1; col = col + 1;
+      let strVal = "";
+      while pos < len && char_at(source, pos) != "\"" {
+        let c = char_at(source, pos);
+        if c == "\\" && pos + 1 < len {
+          let next = char_at(source, pos + 1);
+          if next == "n" { strVal = strVal + "\n"; }
+          else if next == "t" { strVal = strVal + "\t"; }
+          else if next == "\\" { strVal = strVal + "\\"; }
+          else if next == "\"" { strVal = strVal + "\""; }
+          else { strVal = strVal + next; }
+          pos = pos + 2; col = col + 2;
+        } else {
+          strVal = strVal + c;
+          pos = pos + 1; col = col + 1;
+        }
+      }
+      if pos < len { pos = pos + 1; col = col + 1; }
+      push(tokens, makeToken("STRING", strVal, line, startCol));
+      continue;
+    }
+
+    // Numbers
+    if isDigit(ch) {
+      let start = pos;
+      let startCol = col;
+      while pos < len && isDigit(char_at(source, pos)) { pos = pos + 1; col = col + 1; }
+      push(tokens, makeToken("NUMBER", slice(source, start, pos), line, startCol));
+      continue;
+    }
+
+    // Identifiers/Keywords
+    if isAlpha(ch) {
+      let start = pos;
+      let startCol = col;
+      while pos < len && isAlphaNumeric(char_at(source, pos)) { pos = pos + 1; col = col + 1; }
+      let word = slice(source, start, pos);
+      push(tokens, makeToken(getKeywordType(word), word, line, startCol));
+      continue;
+    }
+
+    // Two-char operators
+    let startCol = col;
+    if ch == "=" && pos + 1 < len && char_at(source, pos + 1) == "=" { push(tokens, makeToken("EQ", "==", line, startCol)); pos = pos + 2; col = col + 2; continue; }
+    if ch == "!" && pos + 1 < len && char_at(source, pos + 1) == "=" { push(tokens, makeToken("NE", "!=", line, startCol)); pos = pos + 2; col = col + 2; continue; }
+    if ch == "&" && pos + 1 < len && char_at(source, pos + 1) == "&" { push(tokens, makeToken("AND", "&&", line, startCol)); pos = pos + 2; col = col + 2; continue; }
+    if ch == "|" && pos + 1 < len && char_at(source, pos + 1) == "|" { push(tokens, makeToken("OR", "||", line, startCol)); pos = pos + 2; col = col + 2; continue; }
+    if ch == "<" && pos + 1 < len && char_at(source, pos + 1) == "=" { push(tokens, makeToken("LE", "<=", line, startCol)); pos = pos + 2; col = col + 2; continue; }
+    if ch == ">" && pos + 1 < len && char_at(source, pos + 1) == "=" { push(tokens, makeToken("GE", ">=", line, startCol)); pos = pos + 2; col = col + 2; continue; }
+
+    // Single-char
+    if ch == "+" { push(tokens, makeToken("PLUS", "+", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "-" { push(tokens, makeToken("MINUS", "-", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "*" { push(tokens, makeToken("STAR", "*", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "/" { push(tokens, makeToken("SLASH", "/", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "=" { push(tokens, makeToken("ASSIGN", "=", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "<" { push(tokens, makeToken("LT", "<", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == ">" { push(tokens, makeToken("GT", ">", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "!" { push(tokens, makeToken("NOT", "!", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "(" { push(tokens, makeToken("LPAREN", "(", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == ")" { push(tokens, makeToken("RPAREN", ")", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "[" { push(tokens, makeToken("LBRACKET", "[", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "]" { push(tokens, makeToken("RBRACKET", "]", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "{" { push(tokens, makeToken("LBRACE", "{", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "}" { push(tokens, makeToken("RBRACE", "}", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "," { push(tokens, makeToken("COMMA", ",", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == ";" { push(tokens, makeToken("SEMICOLON", ";", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == ":" { push(tokens, makeToken("COLON", ":", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "." { push(tokens, makeToken("DOT", ".", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+
+    pos = pos + 1; col = col + 1;
+  }
+
+  push(tokens, makeToken("EOF", "", line, col));
+  return tokens;
+}
+
+// ── Bootstrap Test ──
+
+fn main() {
+  // Read our own source code
+  let selfSource = file_read("self-hosting/self-tokenize-test.fl");
+
+  if selfSource == null || selfSource == "" {
+    println("ERROR: Cannot read self source file");
+    return;
+  }
+
+  let srcLen = length(selfSource);
+  println("=== Self-Tokenization Bootstrap Test ===");
+  println("Source size: " + str(srcLen) + " chars");
+
+  // Tokenize ourselves
+  let tokens = tokenize(selfSource);
+  let tokenCount = length(tokens);
+  println("Token count: " + str(tokenCount));
+
+  // Count by type
+  let fnCount = 0;
+  let identCount = 0;
+  let stringCount = 0;
+  let numberCount = 0;
+  let keywordCount = 0;
+  let opCount = 0;
+  let delimCount = 0;
+
+  let i = 0;
+  while i < tokenCount {
+    let t = tokens[i];
+    if t.type == "FN" || t.type == "LET" || t.type == "CONST" || t.type == "IF" || t.type == "ELSE" || t.type == "WHILE" || t.type == "RETURN" || t.type == "FOR" || t.type == "CONTINUE" || t.type == "BREAK" || t.type == "TRUE" || t.type == "FALSE" || t.type == "NULL" {
+      keywordCount = keywordCount + 1;
+    }
+    if t.type == "IDENT" { identCount = identCount + 1; }
+    if t.type == "STRING" { stringCount = stringCount + 1; }
+    if t.type == "NUMBER" { numberCount = numberCount + 1; }
+    if t.type == "PLUS" || t.type == "MINUS" || t.type == "STAR" || t.type == "ASSIGN" || t.type == "EQ" || t.type == "NE" || t.type == "AND" || t.type == "OR" || t.type == "LT" || t.type == "GT" || t.type == "LE" || t.type == "GE" || t.type == "NOT" {
+      opCount = opCount + 1;
+    }
+    if t.type == "LPAREN" || t.type == "RPAREN" || t.type == "LBRACE" || t.type == "RBRACE" || t.type == "LBRACKET" || t.type == "RBRACKET" || t.type == "COMMA" || t.type == "SEMICOLON" || t.type == "COLON" || t.type == "DOT" {
+      delimCount = delimCount + 1;
+    }
+    i = i + 1;
+  }
+
+  println("");
+  println("Token breakdown:");
+  println("  Keywords:    " + str(keywordCount));
+  println("  Identifiers: " + str(identCount));
+  println("  Strings:     " + str(stringCount));
+  println("  Numbers:     " + str(numberCount));
+  println("  Operators:   " + str(opCount));
+  println("  Delimiters:  " + str(delimCount));
+
+  // Verification: expect reasonable counts
+  let ok = true;
+  if tokenCount < 100 { println("FAIL: Too few tokens"); ok = false; }
+  if keywordCount < 20 { println("FAIL: Too few keywords"); ok = false; }
+  if identCount < 50 { println("FAIL: Too few identifiers"); ok = false; }
+  if stringCount < 10 { println("FAIL: Too few strings"); ok = false; }
+
+  if ok {
+    println("");
+    println("PASS: Self-tokenization bootstrap test passed!");
+    println("The lexer successfully tokenized its own source code.");
+  }
+}
+
+main();
