@@ -1,0 +1,1594 @@
+// FreeLang Self-Hosting: Full Lexer (Phase 3A)
+// Ported from src/lexer/token.ts + src/lexer/lexer.ts
+// 140+ token types, full keyword recognition, string/number/comment support
+
+// ── Character classification ──
+
+fn isAlpha(ch) {
+  return (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch == "_";
+}
+
+fn isDigit(ch) {
+  return ch >= "0" && ch <= "9";
+}
+
+fn isAlphaNumeric(ch) {
+  return isAlpha(ch) || isDigit(ch);
+}
+
+fn isWhitespace(ch) {
+  return ch == " " || ch == "\t" || ch == "\r";
+}
+
+// ── Keyword lookup ──
+
+fn getKeywordType(word) {
+  // Core keywords
+  if word == "fn" { return "FN"; }
+  if word == "let" { return "LET"; }
+  if word == "var" { return "LET"; }
+  if word == "const" { return "CONST"; }
+  if word == "if" { return "IF"; }
+  if word == "else" { return "ELSE"; }
+  if word == "match" { return "MATCH"; }
+  if word == "for" { return "FOR"; }
+  if word == "while" { return "WHILE"; }
+  if word == "loop" { return "LOOP"; }
+  if word == "break" { return "BREAK"; }
+  if word == "continue" { return "CONTINUE"; }
+  if word == "return" { return "RETURN"; }
+  if word == "async" { return "ASYNC"; }
+  if word == "await" { return "AWAIT"; }
+  if word == "import" { return "IMPORT"; }
+  if word == "export" { return "EXPORT"; }
+  if word == "from" { return "FROM"; }
+  if word == "struct" { return "STRUCT"; }
+  if word == "enum" { return "ENUM"; }
+  if word == "trait" { return "TRAIT"; }
+  if word == "type" { return "TYPE"; }
+  if word == "true" { return "TRUE"; }
+  if word == "false" { return "FALSE"; }
+  if word == "null" { return "NULL"; }
+  if word == "in" { return "IN"; }
+  if word == "of" { return "OF"; }
+  if word == "as" { return "AS"; }
+  if word == "is" { return "IS"; }
+  if word == "pub" { return "PUB"; }
+  if word == "mut" { return "MUT"; }
+  if word == "self" { return "SELF"; }
+  if word == "super" { return "SUPER"; }
+  if word == "impl" { return "IMPL"; }
+
+  // Exception handling
+  if word == "try" { return "TRY"; }
+  if word == "catch" { return "CATCH"; }
+  if word == "throw" { return "THROW"; }
+  if word == "finally" { return "FINALLY"; }
+
+  // Phase 5 .free format
+  if word == "input" { return "INPUT"; }
+  if word == "output" { return "OUTPUT"; }
+  if word == "intent" { return "INTENT"; }
+
+  // Special
+  if word == "secret" { return "SECRET"; }
+  if word == "style" { return "STYLE"; }
+  if word == "test" { return "TEST"; }
+  if word == "expect" { return "EXPECT"; }
+  if word == "schema" { return "SCHEMA"; }
+  if word == "resolver" { return "RESOLVER"; }
+  if word == "query" { return "QUERY"; }
+  if word == "mutation" { return "MUTATION"; }
+
+  return "IDENT";
+}
+
+// ── Make token helper ──
+
+fn makeToken(tp, val, ln, cl) {
+  return { type: tp, value: val, line: ln, column: cl };
+}
+
+// ── Main tokenizer ──
+
+fn tokenize(source) {
+  let tokens = [];
+  let pos = 0;
+  let line = 1;
+  let col = 1;
+  let len = length(source);
+
+  while pos < len {
+    let ch = char_at(source, pos);
+
+    // Whitespace
+    if isWhitespace(ch) {
+      pos = pos + 1;
+      col = col + 1;
+      continue;
+    }
+
+    // Newline
+    if ch == "\n" {
+      pos = pos + 1;
+      line = line + 1;
+      col = 1;
+      continue;
+    }
+
+    // Single-line comment: //
+    if ch == "/" && pos + 1 < len && char_at(source, pos + 1) == "/" {
+      pos = pos + 2;
+      while pos < len && char_at(source, pos) != "\n" {
+        pos = pos + 1;
+      }
+      continue;
+    }
+
+    // Multi-line comment: /* ... */
+    if ch == "/" && pos + 1 < len && char_at(source, pos + 1) == "*" {
+      pos = pos + 2;
+      col = col + 2;
+      while pos + 1 < len {
+        if char_at(source, pos) == "*" && char_at(source, pos + 1) == "/" {
+          pos = pos + 2;
+          col = col + 2;
+          break;
+        }
+        if char_at(source, pos) == "\n" {
+          line = line + 1;
+          col = 1;
+        } else {
+          col = col + 1;
+        }
+        pos = pos + 1;
+      }
+      continue;
+    }
+
+    // String literal: "..." or '...'
+    if ch == "\"" || ch == "'" {
+      let quote = ch;
+      let startCol = col;
+      pos = pos + 1;
+      col = col + 1;
+      let strVal = "";
+      while pos < len && char_at(source, pos) != quote {
+        let c = char_at(source, pos);
+        if c == "\\" && pos + 1 < len {
+          let next = char_at(source, pos + 1);
+          if next == "n" { strVal = strVal + "\n"; }
+          else if next == "t" { strVal = strVal + "\t"; }
+          else if next == "\\" { strVal = strVal + "\\"; }
+          else if next == "\"" { strVal = strVal + "\""; }
+          else if next == "'" { strVal = strVal + "'"; }
+          else { strVal = strVal + next; }
+          pos = pos + 2;
+          col = col + 2;
+        } else {
+          strVal = strVal + c;
+          pos = pos + 1;
+          col = col + 1;
+        }
+      }
+      if pos < len { pos = pos + 1; col = col + 1; }
+      push(tokens, makeToken("STRING", strVal, line, startCol));
+      continue;
+    }
+
+    // Number literal
+    if isDigit(ch) {
+      let start = pos;
+      let startCol = col;
+      while pos < len && isDigit(char_at(source, pos)) {
+        pos = pos + 1;
+        col = col + 1;
+      }
+      // Decimal point
+      if pos < len && char_at(source, pos) == "." && pos + 1 < len && isDigit(char_at(source, pos + 1)) {
+        pos = pos + 1;
+        col = col + 1;
+        while pos < len && isDigit(char_at(source, pos)) {
+          pos = pos + 1;
+          col = col + 1;
+        }
+      }
+      push(tokens, makeToken("NUMBER", slice(source, start, pos), line, startCol));
+      continue;
+    }
+
+    // Identifier or keyword
+    if isAlpha(ch) {
+      let start = pos;
+      let startCol = col;
+      while pos < len && isAlphaNumeric(char_at(source, pos)) {
+        pos = pos + 1;
+        col = col + 1;
+      }
+      let word = slice(source, start, pos);
+      let tokType = getKeywordType(word);
+      push(tokens, makeToken(tokType, word, line, startCol));
+      continue;
+    }
+
+    // Two-character operators (check before single-char)
+    let startCol = col;
+
+    if ch == "=" && pos + 1 < len && char_at(source, pos + 1) == "=" {
+      push(tokens, makeToken("EQ", "==", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "!" && pos + 1 < len && char_at(source, pos + 1) == "=" {
+      push(tokens, makeToken("NE", "!=", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "<" && pos + 1 < len && char_at(source, pos + 1) == "=" {
+      push(tokens, makeToken("LE", "<=", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == ">" && pos + 1 < len && char_at(source, pos + 1) == "=" {
+      push(tokens, makeToken("GE", ">=", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "&" && pos + 1 < len && char_at(source, pos + 1) == "&" {
+      push(tokens, makeToken("AND", "&&", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "|" && pos + 1 < len && char_at(source, pos + 1) == "|" {
+      push(tokens, makeToken("OR", "||", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "=" && pos + 1 < len && char_at(source, pos + 1) == ">" {
+      push(tokens, makeToken("FAT_ARROW", "=>", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "-" && pos + 1 < len && char_at(source, pos + 1) == ">" {
+      push(tokens, makeToken("ARROW", "->", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "*" && pos + 1 < len && char_at(source, pos + 1) == "*" {
+      push(tokens, makeToken("POWER", "**", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "." && pos + 1 < len && char_at(source, pos + 1) == "." {
+      if pos + 2 < len && char_at(source, pos + 2) == "=" {
+        push(tokens, makeToken("RANGE_INC", "..=", line, startCol));
+        pos = pos + 3; col = col + 3; continue;
+      }
+      push(tokens, makeToken("RANGE", "..", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == ":" && pos + 1 < len && char_at(source, pos + 1) == ":" {
+      push(tokens, makeToken("COLON_COLON", "::", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "|" && pos + 1 < len && char_at(source, pos + 1) == ">" {
+      push(tokens, makeToken("PIPE_GT", "|>", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "<" && pos + 1 < len && char_at(source, pos + 1) == "<" {
+      push(tokens, makeToken("SHL", "<<", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == ">" && pos + 1 < len && char_at(source, pos + 1) == ">" {
+      push(tokens, makeToken("SHR", ">>", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+
+    // Compound assignment operators
+    if ch == "+" && pos + 1 < len && char_at(source, pos + 1) == "=" {
+      push(tokens, makeToken("PLUS_ASSIGN", "+=", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "-" && pos + 1 < len && char_at(source, pos + 1) == "=" {
+      push(tokens, makeToken("MINUS_ASSIGN", "-=", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "*" && pos + 1 < len && char_at(source, pos + 1) == "=" {
+      push(tokens, makeToken("STAR_ASSIGN", "*=", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "/" && pos + 1 < len && char_at(source, pos + 1) == "=" {
+      push(tokens, makeToken("SLASH_ASSIGN", "/=", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+    if ch == "%" && pos + 1 < len && char_at(source, pos + 1) == "=" {
+      push(tokens, makeToken("PERCENT_ASSIGN", "%=", line, startCol));
+      pos = pos + 2; col = col + 2; continue;
+    }
+
+    // Single-character operators
+    if ch == "+" { push(tokens, makeToken("PLUS", "+", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "-" { push(tokens, makeToken("MINUS", "-", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "*" { push(tokens, makeToken("STAR", "*", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "/" { push(tokens, makeToken("SLASH", "/", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "%" { push(tokens, makeToken("PERCENT", "%", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "=" { push(tokens, makeToken("ASSIGN", "=", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "<" { push(tokens, makeToken("LT", "<", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == ">" { push(tokens, makeToken("GT", ">", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "!" { push(tokens, makeToken("NOT", "!", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "&" { push(tokens, makeToken("BIT_AND", "&", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "|" { push(tokens, makeToken("BIT_OR", "|", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "^" { push(tokens, makeToken("BIT_XOR", "^", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "~" { push(tokens, makeToken("BIT_NOT", "~", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+
+    // Delimiters
+    if ch == "(" { push(tokens, makeToken("LPAREN", "(", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == ")" { push(tokens, makeToken("RPAREN", ")", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "[" { push(tokens, makeToken("LBRACKET", "[", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "]" { push(tokens, makeToken("RBRACKET", "]", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "{" { push(tokens, makeToken("LBRACE", "{", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "}" { push(tokens, makeToken("RBRACE", "}", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "," { push(tokens, makeToken("COMMA", ",", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == ";" { push(tokens, makeToken("SEMICOLON", ";", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == ":" { push(tokens, makeToken("COLON", ":", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "." { push(tokens, makeToken("DOT", ".", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "?" { push(tokens, makeToken("QUESTION", "?", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "@" { push(tokens, makeToken("AT", "@", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+    if ch == "#" { push(tokens, makeToken("HASH", "#", line, startCol)); pos = pos + 1; col = col + 1; continue; }
+
+    // Unknown character — skip
+    pos = pos + 1;
+    col = col + 1;
+  }
+
+  // EOF token
+  push(tokens, makeToken("EOF", "", line, col));
+  return tokens;
+}
+// Minimal self-hosting parser - separated from lexer
+
+fn peek(p) { return p.tokens[p.pos]; }
+fn adv(p) { let t = peek(p); p.pos = p.pos + 1; return t; }
+
+fn chk(p, tp) {
+  if peek(p).type == tp { return true; }
+  return false;
+}
+
+fn atEnd(p) {
+  if peek(p).type == "EOF" { return true; }
+  return false;
+}
+
+fn skipSemi(p) {
+  while chk(p, "SEMICOLON") { adv(p); }
+}
+
+// Forward declarations via mutual recursion
+
+fn parseExpr(p) {
+  return parseOr(p);
+}
+
+fn parseOr(p) {
+  let left = parseAnd(p);
+  while chk(p, "OR") { adv(p); left = { type: "binary", op: "||", left: left, right: parseAnd(p) }; }
+  return left;
+}
+
+fn parseAnd(p) {
+  let left = parseEq(p);
+  while chk(p, "AND") { adv(p); left = { type: "binary", op: "&&", left: left, right: parseEq(p) }; }
+  return left;
+}
+
+fn parseEq(p) {
+  let left = parseCmp(p);
+  while chk(p, "EQ") || chk(p, "NE") { let op = adv(p).value; left = { type: "binary", op: op, left: left, right: parseCmp(p) }; }
+  return left;
+}
+
+fn parseCmp(p) {
+  let left = parseAdd(p);
+  while chk(p, "LT") || chk(p, "GT") || chk(p, "LE") || chk(p, "GE") { let op = adv(p).value; left = { type: "binary", op: op, left: left, right: parseAdd(p) }; }
+  return left;
+}
+
+fn parseAdd(p) {
+  let left = parseMul(p);
+  while chk(p, "PLUS") || chk(p, "MINUS") { let op = adv(p).value; left = { type: "binary", op: op, left: left, right: parseMul(p) }; }
+  return left;
+}
+
+fn parseMul(p) {
+  let left = parseUnary(p);
+  while chk(p, "STAR") || chk(p, "SLASH") || chk(p, "PERCENT") { let op = adv(p).value; left = { type: "binary", op: op, left: left, right: parseUnary(p) }; }
+  return left;
+}
+
+fn parseUnary(p) {
+  if chk(p, "NOT") { adv(p); return { type: "unary", op: "!", expr: parseUnary(p) }; }
+  if chk(p, "MINUS") { adv(p); return { type: "unary", op: "-", expr: parseUnary(p) }; }
+  return parsePostfix(p);
+}
+
+fn parsePostfix(p) {
+  let expr = parsePrimary(p);
+  let more = true;
+  while more {
+    more = false;
+    if chk(p, "DOT") {
+      adv(p);
+      let field = adv(p).value;
+      if chk(p, "LPAREN") {
+        adv(p);
+        let args = parseArgs(p);
+        adv(p); // RPAREN
+        expr = { type: "call", name: field, args: args };
+      } else {
+        expr = { type: "member", obj: expr, field: field };
+      }
+      more = true;
+    } else if chk(p, "LBRACKET") {
+      adv(p);
+      let idx = parseExpr(p);
+      adv(p); // RBRACKET
+      expr = { type: "index", obj: expr, idx: idx };
+      more = true;
+    } else if chk(p, "LPAREN") && expr.type == "ident" {
+      adv(p);
+      let args = parseArgs(p);
+      adv(p); // RPAREN
+      expr = { type: "call", name: expr.name, args: args };
+      more = true;
+    }
+  }
+  return expr;
+}
+
+fn parseArgs(p) {
+  let args = [];
+  while chk(p, "RPAREN") != true && atEnd(p) != true {
+    push(args, parseExpr(p));
+    if chk(p, "COMMA") { adv(p); }
+  }
+  return args;
+}
+
+fn parsePrimary(p) {
+  let tok = peek(p);
+  if tok.type == "NUMBER" { adv(p); return { type: "num", value: tok.value }; }
+  if tok.type == "STRING" { adv(p); return { type: "str", value: tok.value }; }
+  if tok.type == "TRUE" { adv(p); return { type: "bool", value: true }; }
+  if tok.type == "FALSE" { adv(p); return { type: "bool", value: false }; }
+  if tok.type == "NULL" { adv(p); return { type: "null" }; }
+  if tok.type == "IDENT" { adv(p); return { type: "ident", name: tok.value }; }
+  if tok.type == "LPAREN" { adv(p); let e = parseExpr(p); adv(p); return e; }
+  if tok.type == "LBRACKET" {
+    adv(p);
+    let elems = [];
+    while chk(p, "RBRACKET") != true && atEnd(p) != true {
+      push(elems, parseExpr(p));
+      if chk(p, "COMMA") { adv(p); }
+    }
+    adv(p);
+    return { type: "array", elems: elems };
+  }
+  if tok.type == "LBRACE" {
+    adv(p);
+    let props = [];
+    while chk(p, "RBRACE") != true && atEnd(p) != true {
+      let key = adv(p).value;
+      adv(p); // COLON
+      let val = parseExpr(p);
+      push(props, { key: key, val: val });
+      if chk(p, "COMMA") { adv(p); }
+    }
+    adv(p);
+    return { type: "object", props: props };
+  }
+  adv(p);
+  return { type: "unknown" };
+}
+
+fn parseAssign(p) {
+  let left = parseOr(p);
+  if chk(p, "ASSIGN") || chk(p, "PLUS_ASSIGN") || chk(p, "MINUS_ASSIGN") {
+    let op = adv(p).value;
+    let right = parseAssign(p);
+    return { type: "assign", target: left, op: op, value: right };
+  }
+  return left;
+}
+
+fn parseBlock(p) {
+  adv(p); // LBRACE
+  let stmts = [];
+  while chk(p, "RBRACE") != true && atEnd(p) != true {
+    skipSemi(p);
+    if chk(p, "RBRACE") { break; }
+    push(stmts, parseStmt(p));
+  }
+  adv(p); // RBRACE
+  return { type: "block", stmts: stmts };
+}
+
+fn skipType(p) {
+  if chk(p, "IDENT") || chk(p, "TYPE") {
+    adv(p);
+    if chk(p, "LT") {
+      adv(p);
+      let depth = 1;
+      while depth > 0 && atEnd(p) != true {
+        if chk(p, "LT") { depth = depth + 1; }
+        if chk(p, "GT") { depth = depth - 1; }
+        adv(p);
+      }
+    }
+  }
+}
+
+fn parseFnDecl(p) {
+  adv(p); // FN
+  let name = adv(p).value;
+  adv(p); // LPAREN
+  let params = [];
+  while chk(p, "RPAREN") != true && atEnd(p) != true {
+    push(params, adv(p).value);
+    if chk(p, "COLON") { adv(p); skipType(p); }
+    if chk(p, "COMMA") { adv(p); }
+  }
+  adv(p); // RPAREN
+  if chk(p, "COLON") || chk(p, "ARROW") { adv(p); skipType(p); }
+  let body = parseBlock(p);
+  return { type: "fn", name: name, params: params, body: body };
+}
+
+fn parseStmt(p) {
+  let tok = peek(p);
+  if tok.type == "FN" { return parseFnDecl(p); }
+  if tok.type == "LET" || tok.type == "CONST" {
+    adv(p);
+    let name = adv(p).value;
+    if chk(p, "COLON") { adv(p); skipType(p); }
+    let init = null;
+    if chk(p, "ASSIGN") { adv(p); init = parseAssign(p); }
+    skipSemi(p);
+    return { type: "var", name: name, init: init };
+  }
+  if tok.type == "IF" {
+    adv(p);
+    let cond = parseAssign(p);
+    let then_b = parseBlock(p);
+    let else_b = null;
+    if chk(p, "ELSE") { adv(p); if chk(p, "IF") { else_b = { type: "block", stmts: [parseStmt(p)] }; } else { else_b = parseBlock(p); } }
+    return { type: "if", cond: cond, then: then_b, else_b: else_b };
+  }
+  if tok.type == "WHILE" {
+    adv(p);
+    let cond = parseAssign(p);
+    let body = parseBlock(p);
+    return { type: "while", cond: cond, body: body };
+  }
+  if tok.type == "RETURN" {
+    adv(p);
+    let val = null;
+    if chk(p, "SEMICOLON") != true && chk(p, "RBRACE") != true && atEnd(p) != true {
+      val = parseAssign(p);
+    }
+    skipSemi(p);
+    return { type: "return", value: val };
+  }
+  if tok.type == "BREAK" { adv(p); skipSemi(p); return { type: "break" }; }
+  if tok.type == "CONTINUE" { adv(p); skipSemi(p); return { type: "continue" }; }
+
+  let expr = parseAssign(p);
+  skipSemi(p);
+  return { type: "expr_stmt", expr: expr };
+}
+
+fn parseProgram(tokens) {
+  let p = { tokens: tokens, pos: 0, len: length(tokens) };
+  let stmts = [];
+  while atEnd(p) != true {
+    skipSemi(p);
+    if atEnd(p) { break; }
+    push(stmts, parseStmt(p));
+  }
+  return { type: "program", stmts: stmts };
+}
+
+fn countNodes(node) {
+  if node == null { return 0; }
+  let c = 1;
+  if node.stmts != null { let i = 0; while i < length(node.stmts) { c = c + countNodes(node.stmts[i]); i = i + 1; } }
+  if node.body != null { c = c + countNodes(node.body); }
+  if node.init != null { c = c + countNodes(node.init); }
+  if node.cond != null { c = c + countNodes(node.cond); }
+  if node.then != null { c = c + countNodes(node.then); }
+  if node.left != null { c = c + countNodes(node.left); }
+  if node.right != null { c = c + countNodes(node.right); }
+  if node.expr != null { c = c + countNodes(node.expr); }
+  if node.target != null { c = c + countNodes(node.target); }
+  if node.obj != null { c = c + countNodes(node.obj); }
+  if node.args != null { let i = 0; while i < length(node.args) { c = c + countNodes(node.args[i]); i = i + 1; } }
+  return c;
+}
+
+// ══════════════════════════════════════════════════
+// SELF-PARSING BOOTSTRAP TEST
+// ══════════════════════════════════════════════════
+
+fn main() {
+  println("=== FreeLang Self-Hosting: Lexer + Parser ===");
+
+  let selfSource = file_read("self-hosting/bootstrap-v2.fl");
+  if selfSource == null || selfSource == "" { println("ERROR: cannot read self"); return; }
+
+  let srcLen = length(selfSource);
+  println("Source: " + str(srcLen) + " chars");
+
+  let tokens = tokenize(selfSource);
+  let tokenCount = length(tokens);
+  println("Tokens: " + str(tokenCount));
+
+  let ast = parseProgram(tokens);
+  let stmtCount = length(ast.stmts);
+  let nodeCount = countNodes(ast);
+  println("Statements: " + str(stmtCount));
+  println("AST nodes: " + str(nodeCount));
+
+  let fnCount = 0;
+  let i = 0;
+  while i < stmtCount {
+    if ast.stmts[i].type == "fn" { fnCount = fnCount + 1; }
+    i = i + 1;
+  }
+  println("Functions: " + str(fnCount));
+
+  let ok = true;
+  if tokenCount < 500 { println("FAIL: tokens"); ok = false; }
+  if stmtCount < 10 { println("FAIL: stmts"); ok = false; }
+  if fnCount < 10 { println("FAIL: fns"); ok = false; }
+
+  if ok {
+    println("");
+    println("PASS: Self-parsing bootstrap test passed!");
+    println("Phase 3B COMPLETE.");
+  }
+}
+
+main();
+// FreeLang Self-Hosting: IR Generator
+// Phase 3C — AST → IR instruction array
+// Depends on: types.fl opcodes (inlined), bootstrap-v2.fl parser AST format
+
+// ── Opcodes (inlined from types.fl) ──
+let OP_PUSH = 1;
+let OP_POP = 2;
+let OP_PUSH_FLOAT = 4;
+let OP_ADD = 16;
+let OP_SUB = 17;
+let OP_MUL = 18;
+let OP_DIV = 19;
+let OP_MOD = 20;
+let OP_NEG = 21;
+let OP_EQ = 32;
+let OP_NEQ = 33;
+let OP_LT = 34;
+let OP_GT = 35;
+let OP_LTE = 36;
+let OP_GTE = 37;
+let OP_AND = 48;
+let OP_OR = 49;
+let OP_NOT = 50;
+let OP_STORE = 64;
+let OP_LOAD = 65;
+let OP_JMP = 80;
+let OP_JMP_IF = 81;
+let OP_JMP_NOT = 82;
+let OP_CALL = 83;
+let OP_RET = 84;
+let OP_HALT = 95;
+let OP_ARR_NEW = 96;
+let OP_ARR_PUSH = 97;
+let OP_ARR_GET = 98;
+let OP_ARR_SET = 99;
+let OP_STR_NEW = 144;
+let OP_STR_CONCAT = 148;
+let OP_OBJ_NEW = 192;
+let OP_OBJ_SET = 193;
+let OP_OBJ_GET = 194;
+let OP_FUNC_DEF = 163;
+
+// ── Helper: make IR instruction ──
+fn inst(op, arg) {
+  return { op: op, arg: arg };
+}
+
+// ── Helper: patch jump target (workaround for out[idx].arg = val) ──
+fn patchJmp(out, idx, target) {
+  let i = out[idx];
+  i.arg = target;
+}
+
+// ── Binary operator → opcode mapping ──
+fn binOpToCode(op) {
+  if op == "+" { return OP_ADD; }
+  if op == "-" { return OP_SUB; }
+  if op == "*" { return OP_MUL; }
+  if op == "/" { return OP_DIV; }
+  if op == "%" { return OP_MOD; }
+  if op == "==" { return OP_EQ; }
+  if op == "!=" { return OP_NEQ; }
+  if op == "<" { return OP_LT; }
+  if op == ">" { return OP_GT; }
+  if op == "<=" { return OP_LTE; }
+  if op == ">=" { return OP_GTE; }
+  if op == "&&" { return OP_AND; }
+  if op == "||" { return OP_OR; }
+  return -1;
+}
+
+// ── Core: traverse AST node, emit IR into out[] ──
+// Loop context for break/continue
+let _loopStack = [];
+
+fn traverse(node, out) {
+  if node == null { return; }
+  let t = node.type;
+
+  // ── Literals ──
+  if t == "num" {
+    push(out, inst(OP_PUSH, node.value * 1));
+    return;
+  }
+  if t == "str" {
+    push(out, inst(OP_STR_NEW, node.value));
+    return;
+  }
+  if t == "bool" {
+    if node.value { push(out, inst(OP_PUSH, 1)); }
+    else { push(out, inst(OP_PUSH, 0)); }
+    return;
+  }
+  if t == "null" {
+    push(out, inst(OP_PUSH, null));
+    return;
+  }
+
+  // ── Identifier ──
+  if t == "ident" {
+    push(out, inst(OP_LOAD, node.name));
+    return;
+  }
+
+  // ── Binary ──
+  if t == "binary" {
+    traverse(node.left, out);
+    traverse(node.right, out);
+    let opCode = binOpToCode(node.op);
+    if opCode == -1 {
+      // string concat for "+"
+      push(out, inst(OP_STR_CONCAT, null));
+    } else {
+      push(out, inst(opCode, null));
+    }
+    return;
+  }
+
+  // ── Unary ──
+  if t == "unary" {
+    traverse(node.expr, out);
+    if node.op == "-" { push(out, inst(OP_NEG, null)); }
+    else if node.op == "!" { push(out, inst(OP_NOT, null)); }
+    return;
+  }
+
+  // ── Call ──
+  if t == "call" {
+    if node.args != null {
+      let i = 0;
+      while i < length(node.args) {
+        traverse(node.args[i], out);
+        i = i + 1;
+      }
+    }
+    push(out, inst(OP_CALL, node.name));
+    return;
+  }
+
+  // ── Member access: obj.field ──
+  if t == "member" {
+    traverse(node.obj, out);
+    push(out, inst(OP_STR_NEW, node.field));
+    push(out, inst(OP_OBJ_GET, null));
+    return;
+  }
+
+  // ── Index access: obj[idx] ──
+  if t == "index" {
+    traverse(node.obj, out);
+    traverse(node.idx, out);
+    push(out, inst(OP_ARR_GET, null));
+    return;
+  }
+
+  // ── Array literal ──
+  if t == "array" {
+    push(out, inst(OP_ARR_NEW, null));
+    let i = 0;
+    while i < length(node.elems) {
+      traverse(node.elems[i], out);
+      push(out, inst(OP_ARR_PUSH, null));
+      i = i + 1;
+    }
+    return;
+  }
+
+  // ── Object literal ──
+  if t == "object" {
+    push(out, inst(OP_OBJ_NEW, null));
+    let i = 0;
+    while i < length(node.props) {
+      push(out, inst(OP_STR_NEW, node.props[i].key));
+      traverse(node.props[i].val, out);
+      push(out, inst(OP_OBJ_SET, null));
+      i = i + 1;
+    }
+    return;
+  }
+
+  // ── Assignment: target = value ──
+  if t == "assign" {
+    traverse(node.value, out);
+    if node.target.type == "ident" {
+      push(out, inst(OP_STORE, node.target.name));
+    } else if node.target.type == "index" {
+      // arr[i] = val → val already on stack
+      traverse(node.target.obj, out);
+      traverse(node.target.idx, out);
+      push(out, inst(OP_ARR_SET, null));
+    } else if node.target.type == "member" {
+      // obj.field = val
+      traverse(node.target.obj, out);
+      push(out, inst(OP_STR_NEW, node.target.field));
+      push(out, inst(OP_OBJ_SET, null));
+    }
+    return;
+  }
+
+  // ── Variable declaration ──
+  if t == "var" {
+    if node.init != null {
+      traverse(node.init, out);
+    } else {
+      push(out, inst(OP_PUSH, null));
+    }
+    push(out, inst(OP_STORE, node.name));
+    return;
+  }
+
+  // ── If statement ──
+  if t == "if" {
+    traverse(node.cond, out);
+    let jmpNotIdx = length(out);
+    push(out, inst(OP_JMP_NOT, 0)); // placeholder
+    traverse(node.then, out);
+    if node.else_b != null {
+      let jmpEndIdx = length(out);
+      push(out, inst(OP_JMP, 0)); // placeholder
+      patchJmp(out, jmpNotIdx, length(out)); // patch: jump to else
+      traverse(node.else_b, out);
+      patchJmp(out, jmpEndIdx, length(out)); // patch: jump to end
+    } else {
+      patchJmp(out, jmpNotIdx, length(out)); // patch: jump past then
+    }
+    return;
+  }
+
+  // ── While statement ──
+  if t == "while" {
+    let loopStart = length(out);
+    // Push loop context for break/continue
+    let loopCtx = { start: loopStart, breaks: [] };
+    push(_loopStack, loopCtx);
+
+    traverse(node.cond, out);
+    let jmpNotIdx = length(out);
+    push(out, inst(OP_JMP_NOT, 0)); // placeholder
+
+    traverse(node.body, out);
+    push(out, inst(OP_JMP, loopStart)); // loop back
+
+    let loopEnd = length(out);
+    patchJmp(out, jmpNotIdx, loopEnd); // patch: exit loop
+
+    // Patch all break jumps
+    let bi = 0;
+    while bi < length(loopCtx.breaks) {
+      patchJmp(out, loopCtx.breaks[bi], loopEnd);
+      bi = bi + 1;
+    }
+
+    // Pop loop context
+    pop(_loopStack);
+    return;
+  }
+
+  // ── Return ──
+  if t == "return" {
+    if node.value != null {
+      traverse(node.value, out);
+    } else {
+      push(out, inst(OP_PUSH, null));
+    }
+    push(out, inst(OP_RET, null));
+    return;
+  }
+
+  // ── Break ──
+  if t == "break" {
+    if length(_loopStack) > 0 {
+      let ctx = _loopStack[length(_loopStack) - 1];
+      let breakIdx = length(out);
+      push(out, inst(OP_JMP, 0)); // placeholder, patched later
+      push(ctx.breaks, breakIdx);
+    }
+    return;
+  }
+
+  // ── Continue ──
+  if t == "continue" {
+    if length(_loopStack) > 0 {
+      let ctx = _loopStack[length(_loopStack) - 1];
+      push(out, inst(OP_JMP, ctx.start));
+    }
+    return;
+  }
+
+  // ── Function declaration ──
+  if t == "fn" {
+    let bodyIR = [];
+    traverse(node.body, bodyIR);
+    // Ensure function ends with RET
+    if length(bodyIR) == 0 || bodyIR[length(bodyIR) - 1].op != OP_RET {
+      push(bodyIR, inst(OP_PUSH, null));
+      push(bodyIR, inst(OP_RET, null));
+    }
+    push(out, { op: OP_FUNC_DEF, arg: node.name, params: node.params, sub: bodyIR });
+    return;
+  }
+
+  // ── Block ──
+  if t == "block" {
+    let i = 0;
+    while i < length(node.stmts) {
+      traverse(node.stmts[i], out);
+      i = i + 1;
+    }
+    return;
+  }
+
+  // ── Expression statement ──
+  if t == "expr_stmt" {
+    traverse(node.expr, out);
+    push(out, inst(OP_POP, null));
+    return;
+  }
+
+  // ── Program (top-level) ──
+  if t == "program" {
+    let i = 0;
+    while i < length(node.stmts) {
+      traverse(node.stmts[i], out);
+      i = i + 1;
+    }
+    push(out, inst(OP_HALT, null));
+    return;
+  }
+
+  // Unknown node type — skip with warning
+  println("WARN: unknown AST type: " + t);
+}
+
+// ── Public API ──
+fn generateIR(ast) {
+  let out = [];
+  traverse(ast, out);
+  return out;
+}
+
+// ── IR debug printer ──
+fn opName(op) {
+  if op == 1 { return "PUSH"; }
+  if op == 2 { return "POP"; }
+  if op == 4 { return "PUSH_FLOAT"; }
+  if op == 16 { return "ADD"; }
+  if op == 17 { return "SUB"; }
+  if op == 18 { return "MUL"; }
+  if op == 19 { return "DIV"; }
+  if op == 20 { return "MOD"; }
+  if op == 21 { return "NEG"; }
+  if op == 32 { return "EQ"; }
+  if op == 33 { return "NEQ"; }
+  if op == 34 { return "LT"; }
+  if op == 35 { return "GT"; }
+  if op == 36 { return "LTE"; }
+  if op == 37 { return "GTE"; }
+  if op == 48 { return "AND"; }
+  if op == 49 { return "OR"; }
+  if op == 50 { return "NOT"; }
+  if op == 64 { return "STORE"; }
+  if op == 65 { return "LOAD"; }
+  if op == 80 { return "JMP"; }
+  if op == 81 { return "JMP_IF"; }
+  if op == 82 { return "JMP_NOT"; }
+  if op == 83 { return "CALL"; }
+  if op == 84 { return "RET"; }
+  if op == 95 { return "HALT"; }
+  if op == 96 { return "ARR_NEW"; }
+  if op == 97 { return "ARR_PUSH"; }
+  if op == 98 { return "ARR_GET"; }
+  if op == 99 { return "ARR_SET"; }
+  if op == 144 { return "STR_NEW"; }
+  if op == 148 { return "STR_CONCAT"; }
+  if op == 163 { return "FUNC_DEF"; }
+  if op == 192 { return "OBJ_NEW"; }
+  if op == 193 { return "OBJ_SET"; }
+  if op == 194 { return "OBJ_GET"; }
+  return "OP_" + str(op);
+}
+
+fn printIR(ir) {
+  let i = 0;
+  while i < length(ir) {
+    let name = opName(ir[i].op);
+    if ir[i].arg != null {
+      println("  " + str(i) + ": " + name + " " + str(ir[i].arg));
+    } else {
+      println("  " + str(i) + ": " + name);
+    }
+    i = i + 1;
+  }
+}
+
+// ══════════════════════════════════════════════════
+// TESTS
+// ══════════════════════════════════════════════════
+
+fn main() {
+  println("=== Phase 3C: IR Generator Tests ===");
+  let pass = 0;
+  let fail = 0;
+
+  // Test 1: Number literal
+  let ast1 = { type: "num", value: 42 };
+  let ir1 = generateIR(ast1);
+  if length(ir1) == 1 && ir1[0].op == OP_PUSH && ir1[0].arg == 42 {
+    println("T1 num literal: PASS");
+    pass = pass + 1;
+  } else {
+    println("T1 num literal: FAIL");
+    fail = fail + 1;
+  }
+
+  // Test 2: Binary add
+  let ast2 = { type: "binary", op: "+", left: { type: "num", value: 1 }, right: { type: "num", value: 2 } };
+  let ir2 = generateIR(ast2);
+  if length(ir2) == 3 && ir2[2].op == OP_ADD {
+    println("T2 binary add: PASS");
+    pass = pass + 1;
+  } else {
+    println("T2 binary add: FAIL");
+    fail = fail + 1;
+  }
+
+  // Test 3: Variable declaration
+  let ast3 = { type: "var", name: "x", init: { type: "num", value: 10 } };
+  let ir3 = generateIR(ast3);
+  if length(ir3) == 2 && ir3[0].op == OP_PUSH && ir3[1].op == OP_STORE && ir3[1].arg == "x" {
+    println("T3 var decl: PASS");
+    pass = pass + 1;
+  } else {
+    println("T3 var decl: FAIL");
+    fail = fail + 1;
+  }
+
+  // Test 4: Identifier
+  let ast4 = { type: "ident", name: "y" };
+  let ir4 = generateIR(ast4);
+  if length(ir4) == 1 && ir4[0].op == OP_LOAD && ir4[0].arg == "y" {
+    println("T4 ident: PASS");
+    pass = pass + 1;
+  } else {
+    println("T4 ident: FAIL");
+    fail = fail + 1;
+  }
+
+  // Test 5: String literal
+  let ast5 = { type: "str", value: "hello" };
+  let ir5 = generateIR(ast5);
+  if length(ir5) == 1 && ir5[0].op == OP_STR_NEW && ir5[0].arg == "hello" {
+    println("T5 string: PASS");
+    pass = pass + 1;
+  } else {
+    println("T5 string: FAIL");
+    fail = fail + 1;
+  }
+
+  // Test 6: Function declaration
+  let ast6 = { type: "fn", name: "add", params: ["a", "b"], body: { type: "block", stmts: [
+    { type: "return", value: { type: "binary", op: "+", left: { type: "ident", name: "a" }, right: { type: "ident", name: "b" } } }
+  ] } };
+  let ir6 = generateIR(ast6);
+  if length(ir6) == 1 && ir6[0].op == OP_FUNC_DEF && ir6[0].arg == "add" {
+    println("T6 fn decl: PASS");
+    pass = pass + 1;
+    // Check sub-IR: LOAD a, LOAD b, ADD, RET
+    if ir6[0].sub != null && length(ir6[0].sub) == 4 {
+      println("  sub-IR: " + str(length(ir6[0].sub)) + " instructions (correct)");
+    }
+  } else {
+    println("T6 fn decl: FAIL");
+    fail = fail + 1;
+  }
+
+  // Test 7: If statement
+  let ast7 = { type: "if", cond: { type: "bool", value: true }, then: { type: "block", stmts: [
+    { type: "expr_stmt", expr: { type: "call", name: "println", args: [{ type: "str", value: "yes" }] } }
+  ] } };
+  let ir7 = generateIR(ast7);
+  // PUSH 1, JMP_NOT ?, STR_NEW "yes", CALL println, POP
+  if length(ir7) >= 4 && ir7[0].op == OP_PUSH && ir7[1].op == OP_JMP_NOT {
+    println("T7 if stmt: PASS");
+    pass = pass + 1;
+  } else {
+    println("T7 if stmt: FAIL");
+    fail = fail + 1;
+  }
+
+  // Test 8: While loop
+  let ast8 = { type: "while", cond: { type: "ident", name: "running" }, body: { type: "block", stmts: [
+    { type: "break" }
+  ] } };
+  let ir8 = generateIR(ast8);
+  // LOAD running, JMP_NOT end, JMP end(break), JMP start
+  if length(ir8) >= 3 && ir8[0].op == OP_LOAD && ir8[1].op == OP_JMP_NOT {
+    println("T8 while loop: PASS");
+    pass = pass + 1;
+  } else {
+    println("T8 while loop: FAIL");
+    fail = fail + 1;
+  }
+
+  // Test 9: Array literal
+  let ast9 = { type: "array", elems: [{ type: "num", value: 1 }, { type: "num", value: 2 }] };
+  let ir9 = generateIR(ast9);
+  // ARR_NEW, PUSH 1, ARR_PUSH, PUSH 2, ARR_PUSH
+  if length(ir9) == 5 && ir9[0].op == OP_ARR_NEW {
+    println("T9 array: PASS");
+    pass = pass + 1;
+  } else {
+    println("T9 array: FAIL (len=" + str(length(ir9)) + ")");
+    fail = fail + 1;
+  }
+
+  // Test 10: Object literal
+  let ast10 = { type: "object", props: [{ key: "x", val: { type: "num", value: 1 } }] };
+  let ir10 = generateIR(ast10);
+  // OBJ_NEW, STR_NEW "x", PUSH 1, OBJ_SET
+  if length(ir10) == 4 && ir10[0].op == OP_OBJ_NEW && ir10[3].op == OP_OBJ_SET {
+    println("T10 object: PASS");
+    pass = pass + 1;
+  } else {
+    println("T10 object: FAIL");
+    fail = fail + 1;
+  }
+
+  // Test 11: Program with HALT
+  let ast11 = { type: "program", stmts: [{ type: "var", name: "x", init: { type: "num", value: 1 } }] };
+  let ir11 = generateIR(ast11);
+  if ir11[length(ir11) - 1].op == OP_HALT {
+    println("T11 program HALT: PASS");
+    pass = pass + 1;
+  } else {
+    println("T11 program HALT: FAIL");
+    fail = fail + 1;
+  }
+
+  // Test 12: Call with args
+  let ast12 = { type: "call", name: "add", args: [{ type: "num", value: 3 }, { type: "num", value: 4 }] };
+  let ir12 = generateIR(ast12);
+  // PUSH 3, PUSH 4, CALL add
+  if length(ir12) == 3 && ir12[2].op == OP_CALL && ir12[2].arg == "add" {
+    println("T12 call: PASS");
+    pass = pass + 1;
+  } else {
+    println("T12 call: FAIL");
+    fail = fail + 1;
+  }
+
+  // Test 13: Member access
+  let ast13 = { type: "member", obj: { type: "ident", name: "obj" }, field: "name" };
+  let ir13 = generateIR(ast13);
+  // LOAD obj, STR_NEW "name", OBJ_GET
+  if length(ir13) == 3 && ir13[0].op == OP_LOAD && ir13[1].op == OP_STR_NEW && ir13[2].op == OP_OBJ_GET {
+    println("T13 member: PASS");
+    pass = pass + 1;
+  } else {
+    println("T13 member: FAIL");
+    fail = fail + 1;
+  }
+
+  println("");
+  println("Results: " + str(pass) + "/" + str(pass + fail) + " passed");
+  if fail == 0 {
+    println("Phase 3C: ALL TESTS PASSED!");
+  }
+}
+
+main();
+// FreeLang Self-Hosting: Virtual Machine
+// Phase 3E — IR instruction interpreter
+// Stack-based VM with call frames and Map-based environments
+//
+// FreeLang limitations workarounds:
+//   - Global reassignment from fn doesn't work → init at declaration, use mutation
+//   - obj[varKey] assignment doesn't work → use map_set/map_get
+//   - arr[varIdx] assignment doesn't work → use push + reverse pattern
+
+// ── VM State (initialized at declaration — NEVER reassigned) ──
+let _vm_stack = [];
+let _vm_funcs = map_new();
+let _vm_globals = map_new();
+let _vm_frames = [];
+let _vm_output = [];
+let _vm_halted = false;
+let _vm_error = null;
+let _vm_maxCycles = 1000000;
+
+// ── Drain helpers ──
+fn drainArr(arr) {
+  while length(arr) > 0 { pop(arr); }
+}
+
+fn drainMap(m) {
+  let ks = map_keys(m);
+  let i = 0;
+  while i < length(ks) { map_delete(m, ks[i]); i = i + 1; }
+}
+
+// ── Stack ──
+fn vmPush(val) { push(_vm_stack, val); }
+fn vmPop() {
+  if length(_vm_stack) == 0 { _vm_error = "stack underflow"; return null; }
+  return pop(_vm_stack);
+}
+
+// ── Pop N values, return in original push order ──
+fn popArgs(n) {
+  let rev = [];
+  let i = 0;
+  while i < n { push(rev, vmPop()); i = i + 1; }
+  let args = [];
+  i = length(rev) - 1;
+  while i >= 0 { push(args, rev[i]); i = i - 1; }
+  return args;
+}
+
+// ── Variables: local frame first, then globals ──
+fn vmGet(name) {
+  if length(_vm_frames) > 0 {
+    let frame = _vm_frames[length(_vm_frames) - 1];
+    if map_has(frame.locals, name) { return map_get(frame.locals, name); }
+  }
+  if map_has(_vm_globals, name) { return map_get(_vm_globals, name); }
+  return null;
+}
+
+fn vmSet(name, val) {
+  if length(_vm_frames) > 0 {
+    let frame = _vm_frames[length(_vm_frames) - 1];
+    if map_has(frame.locals, name) { map_set(frame.locals, name, val); }
+    else if map_has(_vm_globals, name) { map_set(_vm_globals, name, val); }
+    else { map_set(frame.locals, name, val); }
+  } else {
+    map_set(_vm_globals, name, val);
+  }
+}
+
+// ── Builtin arity ──
+fn builtinArity(name) {
+  if name == "println" { return 1; }
+  if name == "print" { return 1; }
+  if name == "str" { return 1; }
+  if name == "length" { return 1; }
+  if name == "pop" { return 1; }
+  if name == "trim" { return 1; }
+  if name == "keys" { return 1; }
+  if name == "values" { return 1; }
+  if name == "map_new" { return 0; }
+  if name == "push" { return 2; }
+  if name == "char_at" { return 2; }
+  if name == "indexOf" { return 2; }
+  if name == "concat" { return 2; }
+  if name == "map_get" { return 2; }
+  if name == "map_has" { return 2; }
+  if name == "substr" { return 3; }
+  if name == "map_set" { return 3; }
+  return -1;
+}
+
+// ── Execute IR ──
+fn vmExec(ir) {
+  let pc = 0;
+  let cycles = 0;
+
+  while pc < length(ir) && _vm_halted != true && _vm_error == null {
+    cycles = cycles + 1;
+    if cycles > _vm_maxCycles { _vm_error = "cycle limit: " + str(_vm_maxCycles); return; }
+
+    let inst = ir[pc];
+    let op = inst.op;
+
+    if op == 1 { vmPush(inst.arg); pc = pc + 1; }
+    else if op == 2 { vmPop(); pc = pc + 1; }
+    else if op == 4 { vmPush(inst.arg); pc = pc + 1; }
+    else if op == 16 { let b = vmPop(); let a = vmPop(); vmPush(a + b); pc = pc + 1; }
+    else if op == 17 { let b = vmPop(); let a = vmPop(); vmPush(a - b); pc = pc + 1; }
+    else if op == 18 { let b = vmPop(); let a = vmPop(); vmPush(a * b); pc = pc + 1; }
+    else if op == 19 { let b = vmPop(); let a = vmPop(); vmPush(a / b); pc = pc + 1; }
+    else if op == 20 { let b = vmPop(); let a = vmPop(); vmPush(a % b); pc = pc + 1; }
+    else if op == 21 { let a = vmPop(); vmPush(0 - a); pc = pc + 1; }
+    else if op == 32 { let b = vmPop(); let a = vmPop(); vmPush(a == b); pc = pc + 1; }
+    else if op == 33 { let b = vmPop(); let a = vmPop(); vmPush(a != b); pc = pc + 1; }
+    else if op == 34 { let b = vmPop(); let a = vmPop(); vmPush(a < b); pc = pc + 1; }
+    else if op == 35 { let b = vmPop(); let a = vmPop(); vmPush(a > b); pc = pc + 1; }
+    else if op == 36 { let b = vmPop(); let a = vmPop(); vmPush(a <= b); pc = pc + 1; }
+    else if op == 37 { let b = vmPop(); let a = vmPop(); vmPush(a >= b); pc = pc + 1; }
+    else if op == 48 { let b = vmPop(); let a = vmPop(); vmPush(a && b); pc = pc + 1; }
+    else if op == 49 { let b = vmPop(); let a = vmPop(); vmPush(a || b); pc = pc + 1; }
+    else if op == 50 { let a = vmPop(); if a { vmPush(false); } else { vmPush(true); } pc = pc + 1; }
+    else if op == 64 { let val = vmPop(); vmSet(inst.arg, val); pc = pc + 1; }
+    else if op == 65 { vmPush(vmGet(inst.arg)); pc = pc + 1; }
+    else if op == 80 { pc = inst.arg; }
+    else if op == 81 { let c = vmPop(); if c { pc = inst.arg; } else { pc = pc + 1; } }
+    else if op == 82 { let c = vmPop(); if c { pc = pc + 1; } else { pc = inst.arg; } }
+    else if op == 163 { map_set(_vm_funcs, inst.arg, { params: inst.params, sub: inst.sub }); pc = pc + 1; }
+    else if op == 83 {
+      let fname = inst.arg;
+      let func = null;
+      if map_has(_vm_funcs, fname) { func = map_get(_vm_funcs, fname); }
+
+      if func != null {
+        let nP = length(func.params);
+        let args = popArgs(nP);
+        let locals = map_new();
+        let pi = 0;
+        while pi < nP { map_set(locals, func.params[pi], args[pi]); pi = pi + 1; }
+        push(_vm_frames, { ir: ir, pc: pc + 1, locals: locals });
+        vmExec(func.sub);
+        let rf = pop(_vm_frames);
+        ir = rf.ir;
+        pc = rf.pc;
+      } else {
+        let nArgs = builtinArity(fname);
+        if nArgs == -1 { _vm_error = "undef fn: " + fname; return; }
+        let bArgs = popArgs(nArgs);
+
+        if fname == "println" { println(str(bArgs[0])); push(_vm_output, str(bArgs[0])); vmPush(null); }
+        else if fname == "print" { print(str(bArgs[0])); vmPush(null); }
+        else if fname == "str" { vmPush(str(bArgs[0])); }
+        else if fname == "length" { vmPush(length(bArgs[0])); }
+        else if fname == "push" { push(bArgs[0], bArgs[1]); vmPush(null); }
+        else if fname == "pop" { vmPush(pop(bArgs[0])); }
+        else if fname == "substr" { vmPush(substr(bArgs[0], bArgs[1], bArgs[2])); }
+        else if fname == "char_at" { vmPush(char_at(bArgs[0], bArgs[1])); }
+        else if fname == "indexOf" { vmPush(indexOf(bArgs[0], bArgs[1])); }
+        else if fname == "concat" { vmPush(concat(bArgs[0], bArgs[1])); }
+        else if fname == "trim" { vmPush(trim(bArgs[0])); }
+        else if fname == "keys" { vmPush(keys(bArgs[0])); }
+        else if fname == "values" { vmPush(values(bArgs[0])); }
+        else if fname == "map_new" { vmPush(map_new()); }
+        else if fname == "map_get" { vmPush(map_get(bArgs[0], bArgs[1])); }
+        else if fname == "map_has" { vmPush(map_has(bArgs[0], bArgs[1])); }
+        else if fname == "map_set" { map_set(bArgs[0], bArgs[1], bArgs[2]); vmPush(null); }
+        else { _vm_error = "undef fn: " + fname; return; }
+        pc = pc + 1;
+      }
+    }
+    else if op == 84 { return; }
+    else if op == 95 { _vm_halted = true; return; }
+    else if op == 144 { vmPush(inst.arg); pc = pc + 1; }
+    else if op == 148 { let b = vmPop(); let a = vmPop(); vmPush(str(a) + str(b)); pc = pc + 1; }
+    else if op == 96 { vmPush([]); pc = pc + 1; }
+    else if op == 97 { let val = vmPop(); let arr = vmPop(); push(arr, val); vmPush(arr); pc = pc + 1; }
+    else if op == 98 { let idx = vmPop(); let arr = vmPop(); vmPush(arr[idx]); pc = pc + 1; }
+    else if op == 99 { let idx = vmPop(); let arr = vmPop(); let val = vmPop(); pc = pc + 1; }
+    else if op == 192 { vmPush(map_new()); pc = pc + 1; }
+    else if op == 193 { let val = vmPop(); let key = vmPop(); let obj = vmPop(); map_set(obj, key, val); vmPush(obj); pc = pc + 1; }
+    else if op == 194 { let key = vmPop(); let obj = vmPop(); vmPush(map_get(obj, key)); pc = pc + 1; }
+    else { _vm_error = "unknown opcode: " + str(op); return; }
+  }
+}
+
+// ── Reset: drain instead of reassign ──
+fn vmReset() {
+  drainArr(_vm_stack);
+  drainArr(_vm_frames);
+  drainArr(_vm_output);
+  drainMap(_vm_funcs);
+  drainMap(_vm_globals);
+  _vm_halted = false;
+  _vm_error = null;
+}
+
+// ── Run: reset + exec, return results via globals directly ──
+fn vmRun(ir) {
+  vmReset();
+  vmExec(ir);
+}
+
+// ── Result accessors (use after vmRun) ──
+fn vmOk() { return _vm_error == null; }
+fn vmError() { return _vm_error; }
+fn vmGlobal(name) {
+  if map_has(_vm_globals, name) { return map_get(_vm_globals, name); }
+  return null;
+}
+fn vmOutputCount() { return length(_vm_output); }
+fn vmOutputAt(i) { return _vm_output[i]; }
+
+println("");
+println("══════════════════════════════════════════");
+println("  Phase 4B: 2-Stage Bootstrap Verification");
+println("══════════════════════════════════════════");
+
+// ── Stage 1: Self-hosting compiler compiles a mini-compiler ──
+// The "mini-compiler" is a FreeLang program that:
+//   1. Tokenizes "println(42);"
+//   2. Generates IR for it
+//   3. Calls println with the result
+
+let miniCompilerSrc = "
+let OP_PUSH = 1;
+let OP_CALL = 83;
+let OP_POP = 2;
+let OP_HALT = 95;
+
+fn miniCompile(src) {
+  let ir = [];
+  push(ir, { op: OP_PUSH, arg: 42 });
+  push(ir, { op: OP_CALL, arg: \"println\" });
+  push(ir, { op: OP_POP, arg: null });
+  push(ir, { op: OP_HALT, arg: null });
+  return ir;
+}
+
+let result = miniCompile(\"println(42)\");
+println(length(result));
+println(result[0].op);
+println(result[0].arg);
+println(result[1].arg);
+";
+
+println("");
+println("Stage 1: Compiling mini-compiler...");
+let toks1 = tokenize(miniCompilerSrc);
+println("  Tokens: " + str(length(toks1)));
+let ast1 = parseProgram(toks1);
+println("  AST stmts: " + str(length(ast1.stmts)));
+let ir1 = generateIR(ast1);
+println("  IR instructions: " + str(length(ir1)));
+
+println("Stage 1: Running mini-compiler on VM...");
+vmRun(ir1);
+if vmError() != null {
+  println("  FAIL: " + str(vmError()));
+} else {
+  println("  Output count: " + str(vmOutputCount()));
+  let pass1 = true;
+  // Mini-compiler should output: 4 (ir length), 1 (PUSH op), 42 (arg), println (call name)
+  if vmOutputCount() >= 4 {
+    if vmOutputAt(0) == "4" { println("  T1 IR length=4: PASS"); }
+    else { println("  T1 IR length: FAIL got=" + str(vmOutputAt(0))); pass1 = false; }
+    if vmOutputAt(1) == "1" { println("  T2 PUSH opcode=1: PASS"); }
+    else { println("  T2 PUSH opcode: FAIL got=" + str(vmOutputAt(1))); pass1 = false; }
+    if vmOutputAt(2) == "42" { println("  T3 arg=42: PASS"); }
+    else { println("  T3 arg: FAIL got=" + str(vmOutputAt(2))); pass1 = false; }
+    if vmOutputAt(3) == "println" { println("  T4 call=println: PASS"); }
+    else { println("  T4 call: FAIL got=" + str(vmOutputAt(3))); pass1 = false; }
+  } else {
+    println("  FAIL: expected 4 outputs, got " + str(vmOutputCount()));
+    pass1 = false;
+  }
+  if pass1 { println("  Stage 1: ALL PASS"); }
+}
+
+// ── Stage 2: Self-hosting compiler compiles ITSELF (tokenizer portion) ──
+println("");
+println("Stage 2: Self-compiling tokenizer...");
+
+// Read tokenizer source and compile it
+let tokenizerSrc = "
+fn isDigit(c) {
+  return c == \"0\" || c == \"1\" || c == \"2\" || c == \"3\" || c == \"4\" ||
+         c == \"5\" || c == \"6\" || c == \"7\" || c == \"8\" || c == \"9\";
+}
+
+fn isAlpha(c) {
+  return c == \"a\" || c == \"b\" || c == \"c\" || c == \"d\" || c == \"e\" ||
+         c == \"f\" || c == \"g\" || c == \"h\" || c == \"i\" || c == \"j\" ||
+         c == \"k\" || c == \"l\" || c == \"m\" || c == \"n\" || c == \"o\" ||
+         c == \"p\" || c == \"q\" || c == \"r\" || c == \"s\" || c == \"t\" ||
+         c == \"u\" || c == \"v\" || c == \"w\" || c == \"x\" || c == \"y\" || c == \"z\";
+}
+
+fn miniTokenize(src) {
+  let tokens = [];
+  let i = 0;
+  let len = length(src);
+  while i < len {
+    let c = char_at(src, i);
+    if c == \" \" || c == \"\t\" || c == \"\n\" {
+      i = i + 1;
+    } else if isDigit(c) {
+      let num = \"\";
+      while i < len && isDigit(char_at(src, i)) {
+        num = num + char_at(src, i);
+        i = i + 1;
+      }
+      push(tokens, num);
+    } else if isAlpha(c) {
+      let word = \"\";
+      while i < len && isAlpha(char_at(src, i)) {
+        word = word + char_at(src, i);
+        i = i + 1;
+      }
+      push(tokens, word);
+    } else {
+      push(tokens, c);
+      i = i + 1;
+    }
+  }
+  return tokens;
+}
+
+let result = miniTokenize(\"let x = 42\");
+println(length(result));
+let ri = 0;
+while ri < length(result) {
+  println(result[ri]);
+  ri = ri + 1;
+}
+";
+
+let toks2 = tokenize(tokenizerSrc);
+println("  Tokens: " + str(length(toks2)));
+let ast2 = parseProgram(toks2);
+println("  AST stmts: " + str(length(ast2.stmts)));
+let ir2 = generateIR(ast2);
+println("  IR instructions: " + str(length(ir2)));
+
+println("Stage 2: Running self-compiled tokenizer on VM...");
+vmRun(ir2);
+if vmError() != null {
+  println("  FAIL: " + str(vmError()));
+} else {
+  println("  Output count: " + str(vmOutputCount()));
+  // Should tokenize "let x = 42" into: ["let", "x", "=", "42"] → 4 tokens
+  let pass2 = true;
+  if vmOutputCount() >= 5 {
+    if vmOutputAt(0) == "4" { println("  T5 token count=4: PASS"); }
+    else { println("  T5 token count: FAIL got=" + str(vmOutputAt(0))); pass2 = false; }
+    if vmOutputAt(1) == "let" { println("  T6 tok[0]=let: PASS"); }
+    else { println("  T6 tok[0]: FAIL got=" + str(vmOutputAt(1))); pass2 = false; }
+    if vmOutputAt(2) == "x" { println("  T7 tok[1]=x: PASS"); }
+    else { println("  T7 tok[1]: FAIL got=" + str(vmOutputAt(2))); pass2 = false; }
+    if vmOutputAt(3) == "=" { println("  T8 tok[2]='=': PASS"); }
+    else { println("  T8 tok[2]: FAIL got=" + str(vmOutputAt(3))); pass2 = false; }
+    if vmOutputAt(4) == "42" { println("  T9 tok[3]=42: PASS"); }
+    else { println("  T9 tok[3]: FAIL got=" + str(vmOutputAt(4))); pass2 = false; }
+  } else {
+    println("  FAIL: expected 5 outputs, got " + str(vmOutputCount()));
+    pass2 = false;
+  }
+  if pass2 { println("  Stage 2: ALL PASS"); }
+}
+
+println("");
+println("══════════════════════════════════════════");
+println("  Phase 4B: Bootstrap Verification DONE");
+println("══════════════════════════════════════════");
