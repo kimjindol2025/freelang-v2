@@ -1,0 +1,11 @@
+/* Dark Theme Overrides */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: #1f2937;
+    color: #f3f4f6;
+  }
+}

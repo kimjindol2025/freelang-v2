@@ -192,6 +192,13 @@ func handleEngineRequest(request: any) -> any {
     return buildResponse(200, headers, css)
   }
 
+  if method == "GET" && path == "/tailwind-runtime.js" {
+    let js = getTailwindRuntime()
+    let headers = getCorsHeaders()
+    headers["Content-Type"] = "application/javascript; charset=utf-8"
+    return buildResponse(200, headers, js)
+  }
+
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // 정적 파일
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -299,6 +306,7 @@ func getIndexHtml() -> string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>FreeLang HTTP Engine - Home</title>
     <link rel="stylesheet" href="/styles.css">
+    <script src="/tailwind-runtime.js" defer></script>
     <style>
         body { margin: 0; padding: 0; }
         .navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
@@ -440,6 +448,7 @@ func getBlogHtml() -> string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Blog - FreeLang</title>
     <link rel="stylesheet" href="/styles.css">
+    <script src="/tailwind-runtime.js" defer></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f5f5; padding: 40px 20px; }
         .container { max-width: 800px; margin: 0 auto; background: white; border-radius: 8px; padding: 40px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
@@ -481,6 +490,257 @@ func getBlogHtml() -> string {
     </script>
 </body>
 </html>`
+}
+
+func getTailwindRuntime() -> string {
+  return `// ============================================================================
+// Phase 14: Tailwind Runtime - Dynamic Class Manipulation & CSS Loading
+// ============================================================================
+
+class TailwindRuntime {
+  constructor() {
+    this.config = null;
+    this.theme = this.getStoredTheme() || 'light';
+    this.breakpoint = this.getCurrentBreakpoint();
+    this.styleSheet = null;
+    this.classList = new Set();
+    this.init();
+  }
+
+  async init() {
+    try {
+      await this.loadTailwindCSS();
+      this.observeDOM();
+      this.setupResponsiveListener();
+      this.applyTheme();
+      console.log('[Tailwind] Runtime initialized successfully');
+    } catch (error) {
+      console.error('[Tailwind] Initialization failed:', error);
+    }
+  }
+
+  async loadTailwindCSS() {
+    const cssPath = this.theme === 'dark' ? '/styles-dark.css' : '/styles.css';
+    if (!document.getElementById('tailwind-css')) {
+      const link = document.createElement('link');
+      link.id = 'tailwind-css';
+      link.rel = 'stylesheet';
+      link.href = cssPath;
+      document.head.appendChild(link);
+      return new Promise((resolve) => {
+        link.onload = resolve;
+        setTimeout(resolve, 2000);
+      });
+    }
+  }
+
+  getCurrentTheme() {
+    return this.theme;
+  }
+
+  async switchTheme(theme) {
+    if (theme !== 'light' && theme !== 'dark') return;
+    this.theme = theme;
+    this.saveTheme(theme);
+    await this.loadTailwindCSS();
+    this.applyTheme();
+    document.dispatchEvent(new CustomEvent('tailwind:themechange', { detail: { theme } }));
+  }
+
+  applyTheme() {
+    const root = document.documentElement;
+    if (this.theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    this.saveTheme(this.theme);
+  }
+
+  getStoredTheme() {
+    try {
+      return localStorage.getItem('tailwind-theme');
+    } catch {
+      return null;
+    }
+  }
+
+  saveTheme(theme) {
+    try {
+      localStorage.setItem('tailwind-theme', theme);
+    } catch {}
+  }
+
+  getCurrentBreakpoint() {
+    const width = window.innerWidth;
+    if (width >= 1280) return 'xl';
+    if (width >= 1024) return 'lg';
+    if (width >= 768) return 'md';
+    if (width >= 640) return 'sm';
+    return 'xs';
+  }
+
+  setupResponsiveListener() {
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        const newBreakpoint = this.getCurrentBreakpoint();
+        if (newBreakpoint !== this.breakpoint) {
+          this.breakpoint = newBreakpoint;
+          document.dispatchEvent(new CustomEvent('tailwind:breakpoint', {
+            detail: { breakpoint: newBreakpoint }
+          }));
+        }
+      }, 200);
+    });
+  }
+
+  addClass(element, className) {
+    if (typeof element === 'string') element = document.querySelector(element);
+    if (!element) return;
+    const classes = className.split(' ').filter(c => c.trim());
+    classes.forEach(cls => {
+      element.classList.add(cls);
+      this.classList.add(cls);
+    });
+    return element;
+  }
+
+  removeClass(element, className) {
+    if (typeof element === 'string') element = document.querySelector(element);
+    if (!element) return;
+    const classes = className.split(' ').filter(c => c.trim());
+    classes.forEach(cls => element.classList.remove(cls));
+    return element;
+  }
+
+  toggleClass(element, className) {
+    if (typeof element === 'string') element = document.querySelector(element);
+    if (!element) return;
+    element.classList.toggle(className);
+    if (element.classList.contains(className)) this.classList.add(className);
+    return element;
+  }
+
+  applyClass(element, className, condition) {
+    if (typeof element === 'string') element = document.querySelector(element);
+    if (!element) return;
+    if (condition) {
+      this.addClass(element, className);
+    } else {
+      this.removeClass(element, className);
+    }
+    return element;
+  }
+
+  observeDOM() {
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'childList') {
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === 1) this.scanElementClasses(node);
+          });
+        }
+      });
+    });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: false,
+      characterData: false
+    });
+  }
+
+  scanElementClasses(element) {
+    if (element.classList) {
+      element.classList.forEach(cls => {
+        if (this.isTailwindClass(cls)) this.classList.add(cls);
+      });
+    }
+    if (element.children) {
+      Array.from(element.children).forEach(child => this.scanElementClasses(child));
+    }
+  }
+
+  isTailwindClass(className) {
+    const patterns = [
+      /^(sm-|md-|lg-|xl-)?flex/, /^(sm-|md-|lg-|xl-)?grid/,
+      /^(sm-|md-|lg-|xl-)?p-/, /^(sm-|md-|lg-|xl-)?m-/, /^(sm-|md-|lg-|xl-)?gap-/,
+      /^(sm-|md-|lg-|xl-)?w-/, /^(sm-|md-|lg-|xl-)?h-/, /^(sm-|md-|lg-|xl-)?text-/,
+      /^(sm-|md-|lg-|xl-)?bg-/, /^(sm-|md-|lg-|xl-)?border/, /^(sm-|md-|lg-|xl-)?rounded/,
+      /^(sm-|md-|lg-|xl-)?shadow/, /^hover-/, /^focus-/, /^active-/,
+      /^disabled-/, /^transition/, /^duration-/, /^ease-/
+    ];
+    return patterns.some(pattern => pattern.test(className));
+  }
+
+  getUsedClasses() {
+    return Array.from(this.classList);
+  }
+
+  getStats() {
+    return {
+      theme: this.theme,
+      breakpoint: this.breakpoint,
+      usedClasses: this.classList.size,
+      classes: this.getUsedClasses()
+    };
+  }
+
+  enableDebugMode() {
+    window.tailwind = {
+      theme: this.getCurrentTheme(),
+      switchTheme: (theme) => this.switchTheme(theme),
+      addClass: (el, cls) => this.addClass(el, cls),
+      removeClass: (el, cls) => this.removeClass(el, cls),
+      toggleClass: (el, cls) => this.toggleClass(el, cls),
+      getBreakpoint: () => this.breakpoint,
+      getStats: () => this.getStats(),
+      toggleDarkMode: () => this.switchTheme(this.theme === 'dark' ? 'light' : 'dark')
+    };
+    console.log('[Tailwind] Debug mode enabled. Use window.tailwind to access runtime.');
+  }
+}
+
+let tailwindRuntime = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+  tailwindRuntime = new TailwindRuntime();
+  tailwindRuntime.enableDebugMode();
+});
+
+window.tailwindSetTheme = (theme) => {
+  if (tailwindRuntime) tailwindRuntime.switchTheme(theme);
+};
+
+window.tailwindToggleDarkMode = () => {
+  if (tailwindRuntime) {
+    const newTheme = tailwindRuntime.getCurrentTheme() === 'dark' ? 'light' : 'dark';
+    tailwindRuntime.switchTheme(newTheme);
+  }
+};
+
+window.tailwindAddClass = (selector, className) => {
+  if (tailwindRuntime) tailwindRuntime.addClass(selector, className);
+};
+
+window.tailwindRemoveClass = (selector, className) => {
+  if (tailwindRuntime) tailwindRuntime.removeClass(selector, className);
+};
+
+window.tailwindToggleClass = (selector, className) => {
+  if (tailwindRuntime) tailwindRuntime.toggleClass(selector, className);
+};
+
+document.addEventListener('tailwind:themechange', (event) => {
+  console.log('[Tailwind] Theme changed to:', event.detail.theme);
+});
+
+document.addEventListener('tailwind:breakpoint', (event) => {
+  console.log('[Tailwind] Breakpoint changed to:', event.detail.breakpoint);
+});
+`
 }
 
 export {
