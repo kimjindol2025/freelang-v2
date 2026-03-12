@@ -1,0 +1,298 @@
+// Phase 7.2: Jump Table Generation (Day 9-10)
+// Switch statement → Jump table 최적화
+
+component JumpTableGenerator {
+  // 점프 테이블 정보
+  let jumpTables = []
+  let tableIndex = 0
+
+  // Switch 케이스 분석
+  fn analyzeSwitch(cases) -> object {
+    let minValue = nil
+    let maxValue = nil
+    let caseCount = 0
+    let values = []
+
+    for (let i = 0; i < cases.length; i = i + 1) {
+      let caseValue = cases[i].value
+      values = values + [caseValue]
+
+      if (minValue == nil || caseValue < minValue) {
+        minValue = caseValue
+      }
+      if (maxValue == nil || caseValue > maxValue) {
+        maxValue = caseValue
+      }
+      caseCount = caseCount + 1
+    }
+
+    return {
+      minValue: minValue,
+      maxValue: maxValue,
+      caseCount: caseCount,
+      range: maxValue - minValue + 1,
+      values: values,
+      sparse: (maxValue - minValue + 1) > (caseCount * 2)  // 희소성 판정
+    }
+  }
+
+  // 점프 테이블 생성 결정 (최적화 휴리스틱)
+  fn shouldUseJumpTable(analysis) -> bool {
+    // 규칙:
+    // - 케이스 수 < 5: 순차 cmp/je (오버헤드 큼)
+    // - 케이스 수 5-10 & 범위 < 2배: 점프 테이블 사용
+    // - 케이스 수 > 10: 범위 < 3배면 점프 테이블 사용
+    // - 희소성 높음 (>50%): 2-level 점프 테이블 고려
+
+    if (analysis.caseCount < 5) {
+      return false
+    }
+
+    if (analysis.caseCount < 10) {
+      return analysis.range <= analysis.caseCount * 2
+    }
+
+    if (analysis.caseCount > 10) {
+      return analysis.range <= analysis.caseCount * 3
+    }
+
+    return false
+  }
+
+  // 기본 점프 테이블 생성
+  fn genBasicJumpTable(cases, defaultLabel) -> object {
+    let analysis = analyzeSwitch(cases)
+
+    if (!shouldUseJumpTable(analysis)) {
+      // 순차 비교 사용
+      return {
+        type: "sequential",
+        strategy: "cmp_je"
+      }
+    }
+
+    let tableId = tableIndex
+    tableIndex = tableIndex + 1
+
+    let table = {
+      id: tableId,
+      type: "basic",
+      minValue: analysis.minValue,
+      maxValue: analysis.maxValue,
+      range: analysis.range,
+      caseCount: analysis.caseCount,
+      entries: [],
+      defaultLabel: defaultLabel,
+      sparse: analysis.sparse
+    }
+
+    // 테이블 엔트리 채우기
+    for (let i = analysis.minValue; i <= analysis.maxValue; i = i + 1) {
+      let found = false
+      for (let j = 0; j < cases.length; j = j + 1) {
+        if (cases[j].value == i) {
+          table.entries = table.entries + [cases[j].label]
+          found = true
+          break
+        }
+      }
+      if (!found) {
+        table.entries = table.entries + [defaultLabel]
+      }
+    }
+
+    jumpTables = jumpTables + [table]
+    return table
+  }
+
+  // 압축 점프 테이블 (희소한 경우)
+  fn genCompressedJumpTable(cases, defaultLabel) -> object {
+    let tableId = tableIndex
+    tableIndex = tableIndex + 1
+
+    let table = {
+      id: tableId,
+      type: "compressed",
+      entries: [],
+      defaultLabel: defaultLabel
+    }
+
+    // 직접 (value -> label) 매핑만 저장
+    for (let i = 0; i < cases.length; i = i + 1) {
+      table.entries = table.entries + [{
+        value: cases[i].value,
+        label: cases[i].label
+      }]
+    }
+
+    jumpTables = jumpTables + [table]
+    return table
+  }
+
+  // 2-level 점프 테이블 (매우 희소한 경우)
+  fn gen2LevelJumpTable(cases, defaultLabel) -> object {
+    let tableId = tableIndex
+    tableIndex = tableIndex + 1
+
+    let table = {
+      id: tableId,
+      type: "two_level",
+      firstLevel: {},    // value 범위 -> second level index
+      secondLevel: [],   // second level 테이블들
+      defaultLabel: defaultLabel
+    }
+
+    // TODO: 2-level 테이블 구현 (매우 희소한 경우에만 사용)
+
+    jumpTables = jumpTables + [table]
+    return table
+  }
+
+  // ASM 생성: 기본 점프 테이블
+  fn emitBasicJumpTableAsm(table) -> string {
+    let asm = ""
+
+    asm = asm + "; Jump table for " + str(table.caseCount) + " cases\n"
+    asm = asm + ".rodata.L__jump_table_" + str(table.id) + ":\n"
+
+    // 테이블 엔트리 (.quad = 8바이트 포인터)
+    for (let i = 0; i < table.entries.length; i = i + 1) {
+      asm = asm + "  .quad .L__case_" + table.entries[i] + "\n"
+    }
+
+    // 점프 테이블 사용 코드
+    asm = asm + ".text\n"
+    asm = asm + "; Compute index\n"
+    asm = asm + "mov eax, edi          ; switch value in RDI\n"
+    asm = asm + "sub eax, " + str(table.minValue) + "  ; normalize to 0-based\n"
+    asm = asm + "cmp eax, " + str(table.range) + "  ; check bounds\n"
+    asm = asm + "jge .L__default_case_" + str(table.id) + "\n"
+    asm = asm + "cmp eax, 0\n"
+    asm = asm + "jl .L__default_case_" + str(table.id) + "\n"
+
+    // 간접 점프
+    asm = asm + "lea rcx, [rel .L__jump_table_" + str(table.id) + "]\n"
+    asm = asm + "mov r8, [rcx + rax*8]\n"
+    asm = asm + "jmp r8\n"
+
+    // Default case
+    asm = asm + ".L__default_case_" + str(table.id) + ":\n"
+    asm = asm + "jmp " + table.defaultLabel + "\n"
+
+    return asm
+  }
+
+  // ASM 생성: 압축 점프 테이블
+  fn emitCompressedJumpTableAsm(table) -> string {
+    let asm = ""
+
+    asm = asm + "; Compressed jump table for " + str(table.entries.length) + " cases\n"
+
+    // 선형 탐색 (작은 경우에만)
+    if (table.entries.length < 10) {
+      for (let i = 0; i < table.entries.length; i = i + 1) {
+        let entry = table.entries[i]
+        asm = asm + "cmp eax, " + str(entry.value) + "\n"
+        asm = asm + "je .L__case_" + entry.label + "\n"
+      }
+      asm = asm + "jmp " + table.defaultLabel + "\n"
+    } else {
+      // 이진 탐색 (더 많은 경우)
+      asm = asm + "; Binary search compressed jump table\n"
+      // TODO: 이진 탐색 구현
+    }
+
+    return asm
+  }
+
+  // ASM 생성: 순차 비교 (fallback)
+  fn emitSequentialAsm(cases, defaultLabel) -> string {
+    let asm = ""
+
+    asm = asm + "; Sequential comparison (fallback)\n"
+    for (let i = 0; i < cases.length; i = i + 1) {
+      asm = asm + "cmp eax, " + str(cases[i].value) + "\n"
+      asm = asm + "je .L__case_" + cases[i].label + "\n"
+    }
+    asm = asm + "jmp " + defaultLabel + "\n"
+
+    return asm
+  }
+
+  // 점프 테이블 최적화 메인 함수
+  fn optimizeSwitch(switchLabel, cases, defaultLabel) -> object {
+    let table = genBasicJumpTable(cases, defaultLabel)
+
+    return {
+      switchLabel: switchLabel,
+      table: table,
+      asm: if (table.type == "sequential") {
+        emitSequentialAsm(cases, defaultLabel)
+      } else if (table.type == "basic") {
+        emitBasicJumpTableAsm(table)
+      } else {
+        emitCompressedJumpTableAsm(table)
+      }
+    }
+  }
+
+  // 통계: 점프 테이블 효율성 분석
+  fn analyzeEfficiency(originalCasesCount, originalAsmSize) -> object {
+    let totalTableSize = 0
+    let totalSavings = 0
+
+    for (let i = 0; i < jumpTables.length; i = i + 1) {
+      let table = jumpTables[i]
+      let tableSize = 0
+
+      if (table.type == "basic") {
+        tableSize = table.range * 8  // 8바이트 포인터 * 범위
+        let originalSize = table.caseCount * 15  // cmp/je = ~15바이트
+        let savings = originalSize - tableSize - 50  // 50바이트 테이블 헤더
+        totalTableSize = totalTableSize + tableSize
+        totalSavings = totalSavings + savings
+      }
+    }
+
+    return {
+      jumpTableCount: jumpTables.length,
+      totalTableSize: totalTableSize,
+      totalSavings: totalSavings,
+      averageSavingsPercent: if (totalTableSize > 0) {
+        (totalSavings * 100) / (totalTableSize + totalSavings)
+      } else {
+        0
+      }
+    }
+  }
+
+  // 디버그: 점프 테이블 정보 출력
+  fn debug() -> void {
+    println("\n=== Jump Table Generator Debug ===")
+    println("Total tables: " + str(jumpTables.length))
+    for (let i = 0; i < jumpTables.length; i = i + 1) {
+      let table = jumpTables[i]
+      println("Table " + str(table.id) + ": type=" + table.type)
+      if (table.type == "basic") {
+        println("  range: " + str(table.minValue) + ".." + str(table.maxValue))
+        println("  entries: " + str(table.range))
+      }
+    }
+    println("===================================\n")
+  }
+
+  // 내보내기
+  export {
+    analyzeSwitch,
+    shouldUseJumpTable,
+    genBasicJumpTable,
+    genCompressedJumpTable,
+    gen2LevelJumpTable,
+    optimizeSwitch,
+    emitBasicJumpTableAsm,
+    emitCompressedJumpTableAsm,
+    emitSequentialAsm,
+    analyzeEfficiency,
+    debug
+  }
+}

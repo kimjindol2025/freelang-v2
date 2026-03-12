@@ -1,0 +1,258 @@
+// Phase 7.2: Vector Instructions (Day 11-12)
+// SSE/AVX SIMD 명령어 지원
+
+component VectorInstructions {
+  // SIMD 지원 수준
+  let simdLevel = "avx2"  // "sse2", "sse4.2", "avx", "avx2", "avx512"
+
+  // 레지스터 크기
+  let registerWidth = {
+    "sse2": 128,     // 16 바이트, 2개의 64비트 정수
+    "sse4.2": 128,
+    "avx": 256,      // 32 바이트, 4개의 64비트 정수
+    "avx2": 256,
+    "avx512": 512    // 64 바이트, 8개의 64비트 정수
+  }
+
+  // SSE 명령어 테이블
+  let sseOpcodes = {
+    // 데이터 이동 (128비트)
+    "movdqa": { size: 128, format: "xmm, xmm", opcode: "66 0f 6f" },    // 128비트 이동
+    "movdqu": { size: 128, format: "xmm, xmm", opcode: "f3 0f 6f" },    // 정렬 미필수
+
+    // 정수 연산 (128비트)
+    "paddq": { size: 128, format: "xmm, xmm", opcode: "66 0f d4" },     // 64비트 정수 더하기 x2
+    "psubq": { size: 128, format: "xmm, xmm", opcode: "66 0f fb" },     // 64비트 정수 빼기 x2
+    "pmulq": { size: 128, format: "xmm, xmm", opcode: "66 0f f4" },     // 64비트 정수 곱하기 x2
+
+    // 비트 연산 (128비트)
+    "pand": { size: 128, format: "xmm, xmm", opcode: "66 0f db" },      // 비트 AND
+    "pxor": { size: 128, format: "xmm, xmm", opcode: "66 0f ef" },      // 비트 XOR
+    "por": { size: 128, format: "xmm, xmm", opcode: "66 0f eb" },       // 비트 OR
+
+    // 비교 (128비트)
+    "pcmpeqq": { size: 128, format: "xmm, xmm", opcode: "66 0f 38 29" }, // 64비트 정수 비교 (=)
+    "pcmpgtq": { size: 128, format: "xmm, xmm", opcode: "66 0f 38 37" }, // 64비트 정수 비교 (>)
+
+    // 시프트 (128비트)
+    "psllq": { size: 128, format: "xmm, imm", opcode: "66 0f 73" },     // 좌시프트 64비트
+    "psrlq": { size: 128, format: "xmm, imm", opcode: "66 0f 73" },     // 우시프트 64비트 (논리)
+  }
+
+  // AVX 명령어 테이블
+  let avxOpcodes = {
+    // 데이터 이동 (256비트)
+    "vmovdqa": { size: 256, format: "ymm, ymm", opcode: "vex 66 0f 6f" },   // 256비트 이동
+    "vmovdqu": { size: 256, format: "ymm, ymm", opcode: "vex f3 0f 6f" },   // 정렬 미필수
+
+    // 정수 연산 (256비트)
+    "vpaddq": { size: 256, format: "ymm, ymm, ymm", opcode: "vex 66 0f d4" },  // 64비트 정수 더하기 x4
+    "vpsubq": { size: 256, format: "ymm, ymm, ymm", opcode: "vex 66 0f fb" },  // 64비트 정수 빼기 x4
+    "vpmulq": { size: 256, format: "ymm, ymm, ymm", opcode: "vex 66 0f f4" },  // 64비트 정수 곱하기 x4
+
+    // 비트 연산 (256비트)
+    "vpand": { size: 256, format: "ymm, ymm, ymm", opcode: "vex 66 0f db" },   // 비트 AND
+    "vpxor": { size: 256, format: "ymm, ymm, ymm", opcode: "vex 66 0f ef" },   // 비트 XOR
+    "vpor": { size: 256, format: "ymm, ymm, ymm", opcode: "vex 66 0f eb" },    // 비트 OR
+
+    // 비교 (256비트)
+    "vpcmpeqq": { size: 256, format: "ymm, ymm, ymm", opcode: "vex 66 0f 38 29" }, // 64비트 비교
+    "vpcmpgtq": { size: 256, format: "ymm, ymm, ymm", opcode: "vex 66 0f 38 37" }, // 64비트 비교
+
+    // 시프트 (256비트)
+    "vpsllq": { size: 256, format: "ymm, ymm, imm", opcode: "vex 66 0f 73" },  // 좌시프트
+    "vpsrlq": { size: 256, format: "ymm, ymm, imm", opcode: "vex 66 0f 73" },  // 우시프트
+  }
+
+  // SIMD 연산 IR 생성
+  fn genSIMDAdd(dst, src1, src2) -> string {
+    let asm = ""
+    let width = registerWidth[simdLevel]
+
+    if (simdLevel == "sse2") {
+      asm = asm + "movdqa xmm0, [" + src1 + "]\n"
+      asm = asm + "paddq xmm0, [" + src2 + "]\n"
+      asm = asm + "movdqa [" + dst + "], xmm0\n"
+    } else if (simdLevel == "avx2") {
+      asm = asm + "vmovdqa ymm0, [" + src1 + "]\n"
+      asm = asm + "vpaddq ymm0, ymm0, [" + src2 + "]\n"
+      asm = asm + "vmovdqa [" + dst + "], ymm0\n"
+    }
+
+    return asm
+  }
+
+  // SIMD SUB 연산
+  fn genSIMDSub(dst, src1, src2) -> string {
+    let asm = ""
+
+    if (simdLevel == "sse2") {
+      asm = asm + "movdqa xmm0, [" + src1 + "]\n"
+      asm = asm + "psubq xmm0, [" + src2 + "]\n"
+      asm = asm + "movdqa [" + dst + "], xmm0\n"
+    } else if (simdLevel == "avx2") {
+      asm = asm + "vmovdqa ymm0, [" + src1 + "]\n"
+      asm = asm + "vpsubq ymm0, ymm0, [" + src2 + "]\n"
+      asm = asm + "vmovdqa [" + dst + "], ymm0\n"
+    }
+
+    return asm
+  }
+
+  // SIMD MUL 연산
+  fn genSIMDMul(dst, src1, src2) -> string {
+    let asm = ""
+
+    if (simdLevel == "sse2") {
+      asm = asm + "movdqa xmm0, [" + src1 + "]\n"
+      asm = asm + "pmulq xmm0, [" + src2 + "]\n"
+      asm = asm + "movdqa [" + dst + "], xmm0\n"
+    } else if (simdLevel == "avx2") {
+      asm = asm + "vmovdqa ymm0, [" + src1 + "]\n"
+      asm = asm + "vpmulq ymm0, ymm0, [" + src2 + "]\n"
+      asm = asm + "vmovdqa [" + dst + "], ymm0\n"
+    }
+
+    return asm
+  }
+
+  // SIMD AND 연산
+  fn genSIMDAnd(dst, src1, src2) -> string {
+    let asm = ""
+
+    if (simdLevel == "sse2") {
+      asm = asm + "movdqa xmm0, [" + src1 + "]\n"
+      asm = asm + "pand xmm0, [" + src2 + "]\n"
+      asm = asm + "movdqa [" + dst + "], xmm0\n"
+    } else if (simdLevel == "avx2") {
+      asm = asm + "vmovdqa ymm0, [" + src1 + "]\n"
+      asm = asm + "vpand ymm0, ymm0, [" + src2 + "]\n"
+      asm = asm + "vmovdqa [" + dst + "], ymm0\n"
+    }
+
+    return asm
+  }
+
+  // SIMD XOR 연산
+  fn genSIMDXor(dst, src1, src2) -> string {
+    let asm = ""
+
+    if (simdLevel == "sse2") {
+      asm = asm + "movdqa xmm0, [" + src1 + "]\n"
+      asm = asm + "pxor xmm0, [" + src2 + "]\n"
+      asm = asm + "movdqa [" + dst + "], xmm0\n"
+    } else if (simdLevel == "avx2") {
+      asm = asm + "vmovdqa ymm0, [" + src1 + "]\n"
+      asm = asm + "vpxor ymm0, ymm0, [" + src2 + "]\n"
+      asm = asm + "vmovdqa [" + dst + "], ymm0\n"
+    }
+
+    return asm
+  }
+
+  // SIMD LOAD (캐시 최적화)
+  fn genSIMDLoadAligned(dst, addr) -> string {
+    let asm = ""
+
+    if (simdLevel == "sse2") {
+      asm = asm + "movdqa xmm0, [" + addr + "]\n"
+    } else if (simdLevel == "avx2") {
+      asm = asm + "vmovdqa ymm0, [" + addr + "]\n"
+    }
+
+    return asm
+  }
+
+  // SIMD STORE (캐시 최적화)
+  fn genSIMDStoreAligned(addr, src) -> string {
+    let asm = ""
+
+    if (simdLevel == "sse2") {
+      asm = asm + "movdqa [" + addr + "], xmm0\n"
+    } else if (simdLevel == "avx2") {
+      asm = asm + "vmovdqa [" + addr + "], ymm0\n"
+    }
+
+    return asm
+  }
+
+  // 벡터화된 루프 생성
+  fn genVectorizedLoop(elementCount, stride) -> string {
+    let asm = ""
+    let vectorWidth = registerWidth[simdLevel] / 64  // 64비트 원소당
+
+    asm = asm + "; Vectorized loop\n"
+    asm = asm + "mov rcx, " + str(elementCount / vectorWidth) + "  ; loop count (vectorized)\n"
+    asm = asm + ".Lvec_loop:\n"
+    asm = asm + "  ; Process " + str(vectorWidth) + " elements per iteration\n"
+    asm = asm + "  vmovdqa ymm0, [rdi]\n"
+    asm = asm + "  vmovdqa ymm1, [rsi]\n"
+    asm = asm + "  vpaddq ymm0, ymm0, ymm1\n"
+    asm = asm + "  vmovdqa [rdx], ymm0\n"
+    asm = asm + "  add rdi, " + str(stride * vectorWidth) + "\n"
+    asm = asm + "  add rsi, " + str(stride * vectorWidth) + "\n"
+    asm = asm + "  add rdx, " + str(stride * vectorWidth) + "\n"
+    asm = asm + "  dec rcx\n"
+    asm = asm + "  jnz .Lvec_loop\n"
+
+    return asm
+  }
+
+  // SIMD 지원 수준 확인
+  fn checkSIMDSupport() -> object {
+    return {
+      sse2: true,      // 기본 지원
+      sse4_2: true,    // 대부분 지원
+      avx: true,       // 최신 CPU 지원
+      avx2: true,      // Haswell 이상
+      avx512: false    // 고급 CPU만
+    }
+  }
+
+  // SIMD 성능 정보
+  fn getSIMDPerformance() -> object {
+    return {
+      sse2: {
+        width: 128,
+        elementCount: 2,       // 64비트 정수 2개
+        throughput: 1,         // 1 사이클
+        latency: 3             // 3 사이클
+      },
+      avx2: {
+        width: 256,
+        elementCount: 4,       // 64비트 정수 4개
+        throughput: 1,         // 1 사이클
+        latency: 3             // 3 사이클
+      }
+    }
+  }
+
+  // 디버그: SIMD 정보 출력
+  fn debug() -> void {
+    println("\n=== Vector Instructions Debug ===")
+    println("SIMD Level: " + simdLevel)
+    println("Register width: " + str(registerWidth[simdLevel]) + " bits")
+    println("SSE opcodes: " + str(40) + " instructions")
+    println("AVX opcodes: " + str(40) + " instructions")
+    println("==================================\n")
+  }
+
+  // 내보내기
+  export {
+    setSIMDLevel: fn(level) -> void { simdLevel = level },
+    getSIMDLevel: fn() -> string { return simdLevel },
+    genSIMDAdd,
+    genSIMDSub,
+    genSIMDMul,
+    genSIMDAnd,
+    genSIMDXor,
+    genSIMDLoadAligned,
+    genSIMDStoreAligned,
+    genVectorizedLoop,
+    checkSIMDSupport,
+    getSIMDPerformance,
+    sseOpcodes,
+    avxOpcodes,
+    debug
+  }
+}

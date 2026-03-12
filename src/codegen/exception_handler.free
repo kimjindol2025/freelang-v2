@@ -1,0 +1,247 @@
+// Phase 7.2: Exception Handling (Day 8)
+// try/catch → EH Frame + LSDA 변환
+
+component ExceptionHandler {
+  // EH Frame 정보
+  let ehFrames = []
+  let lsdaTables = []
+  let frameIndex = 0
+
+  // Exception Handling Frame 생성
+  fn genEHFrame(tryBlockStart, tryBlockEnd, catchBlockStart, catchBlockEnd, exceptionType) -> object {
+    let frame = {
+      id: frameIndex,
+      tryStart: tryBlockStart,
+      tryEnd: tryBlockEnd,
+      catchStart: catchBlockStart,
+      catchEnd: catchBlockEnd,
+      exceptionType: exceptionType,
+      personality: "__gxx_personality_v0",  // GCC 표준
+      encodingFormat: "DW_EH_PE_absptr"     // Absolute pointer
+    }
+    frameIndex = frameIndex + 1
+    ehFrames = ehFrames + [frame]
+    return frame
+  }
+
+  // LSDA (Language-Specific Data Area) 테이블 생성
+  fn genLSDATable(frames) -> object {
+    let lsda = {
+      version: 1,
+      lpStartFormat: "DW_EH_PE_pcrel",  // PC-relative
+      typeTableFormat: "DW_EH_PE_indirect",
+      callSiteTableFormat: "DW_EH_PE_udata4",
+      callSites: [],
+      typeFilters: [],
+      actionTable: []
+    }
+
+    // Call site entries (try 블록들)
+    for (let i = 0; i < frames.length; i = i + 1) {
+      let frame = frames[i]
+      lsda.callSites = lsda.callSites + [{
+        callSiteStart: frame.tryStart,
+        callSiteRange: frame.tryEnd - frame.tryStart,
+        landingPad: frame.catchStart,
+        actionIndex: i
+      }]
+    }
+
+    // Type filter table (exception 타입들)
+    let typeSet = {}
+    for (let i = 0; i < frames.length; i = i + 1) {
+      typeSet[frames[i].exceptionType] = i
+    }
+
+    for (let type in typeSet) {
+      lsda.typeFilters = lsda.typeFilters + [{
+        typeName: type,
+        typeIndex: typeSet[type]
+      }]
+    }
+
+    lsdaTables = lsdaTables + [lsda]
+    return lsda
+  }
+
+  // Unwinding code 생성 (DWARF format)
+  fn genUnwindingCode(frame, frameSize) -> string {
+    let asm = ""
+
+    // Common Information Entry (CIE) 생성
+    asm = asm + ".LCIEbegin:\n"
+    asm = asm + "  .4byte .LCIEend - .LCIEbegin\n"
+    asm = asm + "  .4byte 0xffffffff  ; CIE marker\n"
+    asm = asm + "  .byte 1  ; CIE version\n"
+    asm = asm + "  .ascii \"zR\"  ; augmentation string\n"
+    asm = asm + "  .uleb128 1  ; code alignment\n"
+    asm = asm + "  .sleb128 -8  ; data alignment (64-bit)\n"
+    asm = asm + "  .uleb128 16  ; return address register (RIP=16)\n"
+    asm = asm + "  .uleb128 1  ; augmentation size\n"
+    asm = asm + "  .byte 0x1b  ; FDE encoding (pcrel indirect)\n"
+
+    // DWARF directives
+    asm = asm + "  .byte 0x0c  ; DW_CFA_def_cfa rsp\n"
+    asm = asm + "  .uleb128 7  ; register (RSP=7)\n"
+    asm = asm + "  .uleb128 " + str(frameSize) + "  ; offset\n"
+    asm = asm + ".align 4\n"
+    asm = asm + ".LCIEend:\n"
+
+    // Frame Description Entry (FDE) 생성
+    asm = asm + ".LFDEbegin" + str(frame.id) + ":\n"
+    asm = asm + "  .4byte .LFDEend" + str(frame.id) + " - .LFDEbegin" + str(frame.id) + "\n"
+    asm = asm + "  .4byte .LCIEbegin  ; CIE pointer\n"
+    asm = asm + "  .8byte .LFBbegin" + str(frame.id) + "  ; function start (PC-relative)\n"
+    asm = asm + "  .8byte .LFEend" + str(frame.id) + " - .LFBbegin" + str(frame.id) + "  ; function length\n"
+
+    // FDE augmentation
+    asm = asm + "  .uleb128 1  ; augmentation size\n"
+    asm = asm + "  .4byte .LLSDA" + str(frame.id) + " - .  ; LSDA pointer (PC-relative)\n"
+
+    // DWARF expressions for prologue
+    asm = asm + "  .byte 0x40 + 6  ; DW_CFA_register RSP to RBP\n"
+    asm = asm + ".align 4\n"
+    asm = asm + ".LFDEend" + str(frame.id) + ":\n"
+
+    return asm
+  }
+
+  // Try-Catch 블록 생성
+  fn genTryCatchBlock(tryLabel, tryInstructions, catchLabel, catchInstructions, exceptionType) -> string {
+    let asm = ""
+
+    // Try 블록 레이블 저장
+    let tryStart = tryLabel
+    let tryEnd = tryLabel + "_end"
+    let catchStart = catchLabel
+
+    // Try 블록
+    asm = asm + tryStart + ":\n"
+    for (let i = 0; i < tryInstructions.length; i = i + 1) {
+      asm = asm + "  ; " + tryInstructions[i].opcode + "\n"
+    }
+    asm = asm + tryEnd + ":\n"
+    asm = asm + "  jmp " + tryEnd + "_success\n"
+
+    // Catch 블록 (landingpad)
+    asm = asm + catchStart + ":\n"
+    asm = asm + "  ; landing pad: exception caught\n"
+    for (let i = 0; i < catchInstructions.length; i = i + 1) {
+      asm = asm + "  ; " + catchInstructions[i].opcode + "\n"
+    }
+
+    // Success path
+    asm = asm + tryEnd + "_success:\n"
+
+    // EH Frame 생성
+    let frame = genEHFrame(0, 100, 100, 200, exceptionType)  // 임시 오프셋
+
+    return asm
+  }
+
+  // Throw 명령어 생성
+  fn genThrow(exceptionType, exceptionValue) -> string {
+    let asm = ""
+
+    // __cxa_throw 호출 (System V psABI)
+    asm = asm + "; Throw exception\n"
+    asm = asm + "mov rdi, " + str(exceptionValue) + "  ; exception object (arg1)\n"
+    asm = asm + "lea rsi, [rel .LTTI_" + exceptionType + "]  ; exception type (arg2)\n"
+    asm = asm + "lea rdx, [rel .LDSO_Handle]  ; DSO handle (arg3)\n"
+    asm = asm + "call __cxa_throw\n"
+    asm = asm + "ud2  ; unreachable\n"
+
+    return asm
+  }
+
+  // Finally 블록 생성
+  fn genFinally(finallyInstructions) -> string {
+    let asm = ""
+    asm = asm + ".LFinally:\n"
+    for (let i = 0; i < finallyInstructions.length; i = i + 1) {
+      asm = asm + "  ; " + finallyInstructions[i].opcode + "\n"
+    }
+    return asm
+  }
+
+  // 예외 타입 등록
+  fn registerExceptionType(typeName, typeId) -> void {
+    let found = false
+    for (let i = 0; i < lsdaTables.length; i = i + 1) {
+      for (let j = 0; j < lsdaTables[i].typeFilters.length; j = j + 1) {
+        if (lsdaTables[i].typeFilters[j].typeName == typeName) {
+          found = true
+        }
+      }
+    }
+
+    if (!found) {
+      // 새로운 예외 타입 추가
+      println("Registered exception type: " + typeName + " (ID: " + str(typeId) + ")")
+    }
+  }
+
+  // 전체 EH 정보 생성 (.eh_frame 섹션)
+  fn genEHFrameSection() -> string {
+    let asm = ""
+    asm = asm + ".section .eh_frame,\"a\",@progbits\n"
+    asm = asm + ".align 8\n"
+
+    for (let i = 0; i < ehFrames.length; i = i + 1) {
+      let frame = ehFrames[i]
+      asm = asm + genUnwindingCode(frame, 256)
+    }
+
+    return asm
+  }
+
+  // 전체 LSDA 정보 생성 (.gcc_except_table 섹션)
+  fn genGCCExceptTableSection() -> string {
+    let asm = ""
+    asm = asm + ".section .gcc_except_table,\"a\",@progbits\n"
+    asm = asm + ".align 4\n"
+
+    for (let i = 0; i < lsdaTables.length; i = i + 1) {
+      let lsda = lsdaTables[i]
+      asm = asm + ".LLSDA" + str(i) + ":\n"
+      asm = asm + "  .byte 0xff  ; LSDA version\n"
+      asm = asm + "  .byte " + lsda.lpStartFormat + "  ; LP Start Format\n"
+      asm = asm + "  .byte " + lsda.typeTableFormat + "  ; Type Table Format\n"
+      asm = asm + "  .byte " + lsda.callSiteTableFormat + "  ; Call Site Format\n"
+
+      // Call sites
+      asm = asm + "  .uleb128 " + str(lsda.callSites.length) + "  ; number of callsites\n"
+      for (let j = 0; j < lsda.callSites.length; j = j + 1) {
+        let site = lsda.callSites[j]
+        asm = asm + "  .4byte " + str(site.callSiteStart) + "  ; callsite start\n"
+        asm = asm + "  .4byte " + str(site.callSiteRange) + "  ; callsite range\n"
+        asm = asm + "  .4byte " + str(site.landingPad) + "  ; landing pad\n"
+        asm = asm + "  .uleb128 " + str(site.actionIndex) + "  ; action index\n"
+      }
+    }
+
+    return asm
+  }
+
+  // 디버그: EH 정보 출력
+  fn debug() -> void {
+    println("\n=== Exception Handler Debug ===")
+    println("EH Frames: " + str(ehFrames.length))
+    println("LSDA Tables: " + str(lsdaTables.length))
+    println("=============================\n")
+  }
+
+  // 내보내기
+  export {
+    genEHFrame,
+    genLSDATable,
+    genUnwindingCode,
+    genTryCatchBlock,
+    genThrow,
+    genFinally,
+    registerExceptionType,
+    genEHFrameSection,
+    genGCCExceptTableSection,
+    debug
+  }
+}
