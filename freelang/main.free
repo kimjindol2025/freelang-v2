@@ -20,6 +20,9 @@ func main() {
   println("╚═══════════════════════════════════════════════════════════╝")
   println("")
 
+  // 데이터베이스 초기화
+  loadFromDatabase()
+
   // 서버 시작
   startServer()
 }

@@ -30,6 +30,33 @@ record Todo {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Blog 도메인 타입
+// ──────────────────────────────────────────────────────────────────────────
+
+type BlogStatus = enum {
+  DRAFT,
+  PUBLISHED,
+  ARCHIVED
+}
+
+record Blog {
+  id: number
+  title: string
+  slug: string                // URL-friendly ID
+  content: string             // Markdown
+  summary: string
+  status: BlogStatus
+  author: string
+  category: string
+  tags: array<string>
+  viewCount: number
+  likeCount: number
+  createdAt: timestamp
+  updatedAt: timestamp
+  publishedAt: timestamp      // nullable
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Counter 도메인 타입
 // ──────────────────────────────────────────────────────────────────────────
 
@@ -160,7 +187,11 @@ type EventType = enum {
   TODO_CREATED,
   TODO_UPDATED,
   TODO_DELETED,
-  TODO_TOGGLED
+  TODO_TOGGLED,
+  BLOG_CREATED,
+  BLOG_UPDATED,
+  BLOG_DELETED,
+  BLOG_PUBLISHED
 }
 
 record StateEvent {

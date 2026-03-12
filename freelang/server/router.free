@@ -175,6 +175,109 @@ func routeTodos(request: HttpRequest) -> HttpResponse {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Blog API
+// ──────────────────────────────────────────────────────────────────────────
+
+func routeBlogs(request: HttpRequest) -> HttpResponse {
+  match (request.method, request.path) {
+    // GET /api/blogs (발행된 블로그만)
+    ("GET", "/api/blogs") => {
+      let blogs = getBlogs(BlogStatus::PUBLISHED)
+      return {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ...getCorsHeaders()
+        },
+        body: `{"status":"success","data":{"blogs":[]}}`
+      }
+    }
+
+    // GET /api/blogs/all (모든 블로그 - 관리자용)
+    ("GET", "/api/blogs/all") => {
+      let blogs = getAllBlogs()
+      return {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ...getCorsHeaders()
+        },
+        body: `{"status":"success","data":{"count":\(blogs.length)}}`
+      }
+    }
+
+    // POST /api/blogs (블로그 생성)
+    ("POST", "/api/blogs") => {
+      // JSON 파싱 필요
+      let blog = createBlog(
+        "New Blog",
+        "new-blog",
+        "Content...",
+        "Summary...",
+        "Author",
+        "Technology",
+        []
+      )
+      return {
+        status: 201,
+        headers: {
+          "Content-Type": "application/json",
+          ...getCorsHeaders()
+        },
+        body: `{"status":"success"}`
+      }
+    }
+
+    // GET /api/blogs/:id
+    (_ , "/api/blogs/view/*") => {
+      return {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ...getCorsHeaders()
+        },
+        body: `{"status":"success"}`
+      }
+    }
+
+    // PUT /api/blogs/:id
+    ("PUT", "/api/blogs/*") => {
+      return {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ...getCorsHeaders()
+        },
+        body: `{"status":"success"}`
+      }
+    }
+
+    // DELETE /api/blogs/:id
+    ("DELETE", "/api/blogs/*") => {
+      return {
+        status: 204,
+        headers: {...getCorsHeaders()},
+        body: ""
+      }
+    }
+
+    // POST /api/blogs/:id/publish
+    ("POST", "/api/blogs/*/publish") => {
+      return {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ...getCorsHeaders()
+        },
+        body: `{"status":"success"}`
+      }
+    }
+
+    default => null
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Health Check
 // ──────────────────────────────────────────────────────────────────────────
 
@@ -226,6 +329,12 @@ func routeRequest(request: HttpRequest) -> HttpResponse {
   let todoResponse = routeTodos(request)
   if todoResponse != null {
     return todoResponse
+  }
+
+  // Blog API
+  let blogResponse = routeBlogs(request)
+  if blogResponse != null {
+    return blogResponse
   }
 
   // Health Check

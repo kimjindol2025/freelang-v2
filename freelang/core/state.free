@@ -1,9 +1,10 @@
 // ============================================================================
 // FreeLang Core: 상태 관리 + 비즈니스 로직
-// 단독 실행 가능한 서버 상태 정의
+// 단독 실행 가능한 서버 상태 정의 (DB 연동)
 // ============================================================================
 
 use "..shared/types"
+use "..db/storage"
 
 // ──────────────────────────────────────────────────────────────────────────
 // 글로벌 상태
@@ -20,10 +21,17 @@ global {
 
   todos: array<Todo> = []
 
+  blogs: array<Blog> = []
+
   nextTodoId: number = 1
+
+  nextBlogId: number = 1
 
   // 변경 이력 추적
   history: array<StateEvent> = []
+
+  // DB 초기화 플래그
+  dbInitialized: bool = false
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -202,6 +210,167 @@ func getTodoById(id: number) -> Todo? {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Blog 함수들
+// ──────────────────────────────────────────────────────────────────────────
+
+func createBlog(
+  title: string,
+  slug: string,
+  content: string,
+  summary: string,
+  author: string,
+  category: string,
+  tags: array<string>
+) -> Blog {
+  let blog: Blog = {
+    id: global.nextBlogId,
+    title: title,
+    slug: slug,
+    content: content,
+    summary: summary,
+    status: BlogStatus::DRAFT,
+    author: author,
+    category: category,
+    tags: tags,
+    viewCount: 0,
+    likeCount: 0,
+    createdAt: now(),
+    updatedAt: now(),
+    publishedAt: null
+  }
+
+  global.blogs.push(blog)
+  global.nextBlogId += 1
+
+  recordEvent(EventType::BLOG_CREATED, blog)
+  persistDatabase()
+
+  return blog
+}
+
+func publishBlog(id: number) -> Blog? {
+  for mut blog in global.blogs {
+    if blog.id == id {
+      blog.status = BlogStatus::PUBLISHED
+      blog.publishedAt = now()
+      blog.updatedAt = now()
+
+      recordEvent(EventType::BLOG_PUBLISHED, { id: id })
+      persistDatabase()
+
+      return blog
+    }
+  }
+
+  return null
+}
+
+func updateBlog(id: number, updates: record) -> Blog? {
+  for mut blog in global.blogs {
+    if blog.id == id {
+      if updates.title {
+        blog.title = updates.title
+      }
+      if updates.content {
+        blog.content = updates.content
+      }
+      if updates.summary {
+        blog.summary = updates.summary
+      }
+      if updates.category {
+        blog.category = updates.category
+      }
+      if updates.tags {
+        blog.tags = updates.tags
+      }
+
+      blog.updatedAt = now()
+
+      recordEvent(EventType::BLOG_UPDATED, { id: id, updates: updates })
+      persistDatabase()
+
+      return blog
+    }
+  }
+
+  return null
+}
+
+func deleteBlog(id: number) -> bool {
+  for i in 0..global.blogs.length {
+    if global.blogs[i].id == id {
+      let deleted = global.blogs[i]
+      global.blogs.remove(i)
+
+      recordEvent(EventType::BLOG_DELETED, { id: id })
+      persistDatabase()
+
+      return true
+    }
+  }
+
+  return false
+}
+
+func getBlogById(id: number) -> Blog? {
+  for blog in global.blogs {
+    if blog.id == id {
+      return blog
+    }
+  }
+
+  return null
+}
+
+func getBlogBySlug(slug: string) -> Blog? {
+  for blog in global.blogs {
+    if blog.slug == slug {
+      return blog
+    }
+  }
+
+  return null
+}
+
+func getBlogs(status: BlogStatus = BlogStatus::PUBLISHED) -> array<Blog> {
+  let result: array<Blog> = []
+
+  for blog in global.blogs {
+    if blog.status == status {
+      result.push(blog)
+    }
+  }
+
+  return result
+}
+
+func getAllBlogs() -> array<Blog> {
+  return global.blogs
+}
+
+func incrementBlogView(id: number) {
+  for mut blog in global.blogs {
+    if blog.id == id {
+      blog.viewCount += 1
+      persistDatabase()
+      break
+    }
+  }
+}
+
+func likeBlog(id: number) -> number? {
+  for mut blog in global.blogs {
+    if blog.id == id {
+      blog.likeCount += 1
+      persistDatabase()
+      return blog.likeCount
+    }
+  }
+
+  return null
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // 상태 조회
 // ──────────────────────────────────────────────────────────────────────────
 
@@ -284,6 +453,54 @@ func clearHistory() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// 데이터베이스 연동
+// ──────────────────────────────────────────────────────────────────────────
+
+func loadFromDatabase() {
+  if global.dbInitialized {
+    return
+  }
+
+  initializeDatabase()
+
+  let dbData = loadDatabase()
+
+  // 데이터 로드
+  global.counter = dbData.counter
+  global.todos = dbData.todos
+  global.blogs = dbData.blogs
+
+  // ID 카운터 동기화
+  if global.todos.length > 0 {
+    let maxTodoId = 0
+    for todo in global.todos {
+      if todo.id > maxTodoId {
+        maxTodoId = todo.id
+      }
+    }
+    global.nextTodoId = maxTodoId + 1
+  }
+
+  if global.blogs.length > 0 {
+    let maxBlogId = 0
+    for blog in global.blogs {
+      if blog.id > maxBlogId {
+        maxBlogId = blog.id
+      }
+    }
+    global.nextBlogId = maxBlogId + 1
+  }
+
+  global.dbInitialized = true
+
+  println("✅ 데이터베이스 로드됨 (Blogs: \(global.blogs.length), Todos: \(global.todos.length))")
+}
+
+func persistDatabase() {
+  saveDatabase(global.counter, global.todos, global.blogs)
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // 내보내기 (다른 모듈에서 사용)
 // ──────────────────────────────────────────────────────────────────────────
 
@@ -303,9 +520,25 @@ export {
   getTodos,
   getTodoById,
 
+  // Blog
+  createBlog,
+  publishBlog,
+  updateBlog,
+  deleteBlog,
+  getBlogById,
+  getBlogBySlug,
+  getBlogs,
+  getAllBlogs,
+  incrementBlogView,
+  likeBlog,
+
   // 조회
   getTodoStats,
   getSystemHealth,
+
+  // 데이터베이스
+  loadFromDatabase,
+  persistDatabase,
 
   // 이벤트
   recordEvent,
