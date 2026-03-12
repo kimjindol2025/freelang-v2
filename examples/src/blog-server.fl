@@ -16,6 +16,7 @@ use "../engine/http_handler"
 // Blog 모듈 import ✅
 use "./blog-db"
 use "./blog-api"
+use "./file-io"  // 파일 I/O 모듈
 
 // ============================================================================
 // PART 1: HTTP 요청 핸들러 (HTTP Engine과 Blog API 통합)
@@ -256,7 +257,18 @@ fn serve_index_html() -> HttpResponse {
 }
 
 // ============================================================================
-// PART 7: 유틸리티 함수
+// PART 7: 파일 작업 로깅
+// ============================================================================
+
+fn log_file_operation(operation: string, path: string, status: string) -> void
+  intent "파일 작업 로그 기록"
+  do
+    let msg = "[FILE] " + operation + ": " + path + " " + status
+    println(msg)
+  end
+
+// ============================================================================
+// PART 8: 유틸리티 함수
 // ============================================================================
 
 fn starts_with(s: string, prefix: string) -> bool {
@@ -285,7 +297,16 @@ fn extract_position(path: string) -> string {
 fn read_file(path: string) -> string {
   intent "파일 읽기"
   do
-    return ""  // TODO: 파일 시스템 I/O
+    match file_io::read_file(path)
+      Ok(content) => {
+        log_file_operation("READ", path, "✅ 성공")
+        return content
+      }
+      Err(e) => {
+        log_file_operation("READ", path, "❌ 실패: " + e.message)
+        return ""
+      }
+    end
   end
 }
 

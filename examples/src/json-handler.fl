@@ -1,0 +1,468 @@
+// ============================================================================
+// JSON Handler Module - JSON 파싱 및 직렬화
+// ============================================================================
+// 의존성: file-io, blog-db
+// 기능: JSON ↔ 구조체 변환
+
+use std::io::*
+use "./file-io"
+use "./blog-db"
+
+// ============================================================================
+// PART 1: JSON 파싱 결과 타입
+// ============================================================================
+
+pub struct JsonValue {
+  type_: string,  // "object", "array", "string", "number", "boolean", "null"
+  value: string,
+  children: map<string, JsonValue>,
+}
+
+pub struct JsonParseError {
+  line: i32,
+  column: i32,
+  message: string,
+}
+
+// ============================================================================
+// PART 2: Post → JSON 직렬화
+// ============================================================================
+
+pub fn post_to_json(post: Post) -> string
+  intent "Post 구조체를 JSON 문자열로 변환"
+  do
+    // JSON 객체 생성
+    let json = "{"
+    json = json + "\"id\": " + int_to_string(post.id) + ","
+    json = json + "\"title\": \"" + escape_json_string(post.title) + "\","
+    json = json + "\"description\": \"" + escape_json_string(post.description) + "\","
+    json = json + "\"content\": \"" + escape_json_string(post.content) + "\","
+    json = json + "\"author\": \"" + escape_json_string(post.author) + "\","
+    json = json + "\"created_at\": \"" + post.created_at + "\","
+    json = json + "\"updated_at\": \"" + post.updated_at + "\","
+    json = json + "\"views\": " + int_to_string(post.views) + ","
+    json = json + "\"likes\": " + int_to_string(post.likes) + ","
+    json = json + "\"is_published\": " + bool_to_string(post.is_published)
+    json = json + "}"
+
+    return json
+  end
+
+pub fn json_to_post(json: string) -> Result<Post, JsonParseError>
+  intent "JSON 문자열을 Post 구조체로 변환"
+  do
+    // 기본 JSON 파싱
+    match parse_json_object(json)
+      Ok(obj) => {
+        // 필드 추출
+        let id = extract_json_int(obj, "id", 0)
+        let title = extract_json_string(obj, "title", "")
+        let description = extract_json_string(obj, "description", "")
+        let content = extract_json_string(obj, "content", "")
+        let author = extract_json_string(obj, "author", "Unknown")
+        let created_at = extract_json_string(obj, "created_at", "")
+        let updated_at = extract_json_string(obj, "updated_at", "")
+        let views = extract_json_int(obj, "views", 0)
+        let likes = extract_json_int(obj, "likes", 0)
+        let is_published = extract_json_bool(obj, "is_published", false)
+
+        let post = Post {
+          id: id,
+          title: title,
+          description: description,
+          content: content,
+          author: author,
+          created_at: created_at,
+          updated_at: updated_at,
+          views: views,
+          likes: likes,
+          is_published: is_published
+        }
+
+        return Ok(post)
+      }
+      Err(e) => return Err(e)
+    end
+  end
+
+// ============================================================================
+// PART 3: 배열 직렬화
+// ============================================================================
+
+pub fn posts_to_json_array(posts: array<Post>) -> string
+  intent "Post 배열을 JSON 배열로 변환"
+  do
+    let json = "["
+    let count = length(posts)
+
+    for i = 0; i < count; i++
+      json = json + post_to_json(posts[i])
+
+      if i < count - 1
+        json = json + ","
+      end
+    end
+
+    json = json + "]"
+    return json
+  end
+
+pub fn json_array_to_posts(json: string) -> Result<array<Post>, JsonParseError>
+  intent "JSON 배열을 Post 배열로 변환"
+  do
+    // JSON 배열 파싱
+    match parse_json_array(json)
+      Ok(items) => {
+        let posts = []
+
+        for i = 0; i < length(items); i++
+          match json_to_post(items[i])
+            Ok(post) => {
+              posts = array_append(posts, post)
+            }
+            Err(e) => {
+              return Err(JsonParseError {
+                line: e.line,
+                column: e.column,
+                message: "배열 항목 파싱 실패: " + e.message
+              })
+            }
+          end
+        end
+
+        return Ok(posts)
+      }
+      Err(e) => return Err(e)
+    end
+  end
+
+// ============================================================================
+// PART 4: JSON 파일 I/O
+// ============================================================================
+
+pub fn save_posts_to_file(posts: array<Post>, path: string) -> Result<void, string>
+  intent "Post 배열을 JSON 파일로 저장"
+  do
+    // 배열을 JSON으로 변환
+    let json = posts_to_json_array(posts)
+
+    // 파일에 저장
+    match file_io::write_json_file(path, json)
+      Ok(()) => {
+        println("✅ " + int_to_string(length(posts)) + "개 포스트 저장됨: " + path)
+        return Ok(void)
+      }
+      Err(e) => {
+        return Err("포스트 저장 실패: " + e.message)
+      }
+    end
+  end
+
+pub fn load_posts_from_file(path: string) -> Result<array<Post>, string>
+  intent "JSON 파일에서 Post 배열 로드"
+  do
+    // 파일 읽기
+    match file_io::read_json_file(path)
+      Ok(json) => {
+        // JSON을 Post 배열로 변환
+        match json_array_to_posts(json)
+          Ok(posts) => {
+            println("✅ " + int_to_string(length(posts)) + "개 포스트 로드됨: " + path)
+            return Ok(posts)
+          }
+          Err(e) => {
+            return Err("JSON 파싱 실패: " + e.message)
+          }
+        end
+      }
+      Err(e) => {
+        return Err("파일 읽기 실패: " + e.message)
+      }
+    end
+  end
+
+// ============================================================================
+// PART 5: JSON 파싱 (기본 구현)
+// ============================================================================
+
+fn parse_json_object(json: string) -> Result<map<string, string>, JsonParseError>
+  intent "JSON 객체 파싱"
+  do
+    let obj: map<string, string> = {}
+    let trimmed = trim(json)
+
+    // { 와 } 제거
+    if char_at(trimmed, 0) != "{" || char_at(trimmed, length(trimmed) - 1) != "}"
+      return Err(JsonParseError {
+        line: 1,
+        column: 1,
+        message: "JSON 객체는 { }로 시작하고 끝나야 합니다"
+      })
+    end
+
+    let content = substring(trimmed, 1, length(trimmed) - 1)
+
+    // 키-값 쌍 추출
+    let pairs = split_by_comma(content)
+
+    for i = 0; i < length(pairs); i++
+      match parse_json_pair(pairs[i])
+        Ok((key, value)) => {
+          obj[key] = value
+        }
+        Err(e) => {
+          return Err(e)
+        }
+      end
+    end
+
+    return Ok(obj)
+  end
+
+fn parse_json_array(json: string) -> Result<array<string>, JsonParseError>
+  intent "JSON 배열 파싱"
+  do
+    let items: array<string> = []
+    let trimmed = trim(json)
+
+    // [ 와 ] 제거
+    if char_at(trimmed, 0) != "[" || char_at(trimmed, length(trimmed) - 1) != "]"
+      return Err(JsonParseError {
+        line: 1,
+        column: 1,
+        message: "JSON 배열은 [ ]로 시작하고 끝나야 합니다"
+      })
+    end
+
+    let content = substring(trimmed, 1, length(trimmed) - 1)
+
+    // 항목 추출
+    let elements = split_by_comma(content)
+
+    for i = 0; i < length(elements); i++
+      let item = trim(elements[i])
+      if length(item) > 0
+        items = array_append(items, item)
+      end
+    end
+
+    return Ok(items)
+  end
+
+fn parse_json_pair(pair: string) -> Result<(string, string), JsonParseError>
+  intent "JSON 키-값 쌍 파싱 ('key': 'value')"
+  do
+    let trimmed = trim(pair)
+    let colon_index = index_of(trimmed, ":")
+
+    if colon_index < 0
+      return Err(JsonParseError {
+        line: 1,
+        column: 1,
+        message: "JSON 쌍에 ':' 가 없습니다"
+      })
+    end
+
+    let key_part = substring(trimmed, 0, colon_index)
+    let value_part = substring(trimmed, colon_index + 1, length(trimmed))
+
+    // 따옴표 제거
+    let key = unquote(trim(key_part))
+    let value = unquote(trim(value_part))
+
+    return Ok((key, value))
+  end
+
+// ============================================================================
+// PART 6: JSON 유틸리티 함수
+// ============================================================================
+
+fn escape_json_string(s: string) -> string
+  intent "JSON 문자열 이스케이프"
+  do
+    let result = ""
+
+    for i = 0; i < length(s); i++
+      let ch = substring(s, i, i + 1)
+
+      match ch
+        "\"" => result = result + "\\\""
+        "\\" => result = result + "\\\\"
+        "\n" => result = result + "\\n"
+        "\r" => result = result + "\\r"
+        "\t" => result = result + "\\t"
+        _ => result = result + ch
+      end
+    end
+
+    return result
+  end
+
+fn unquote(s: string) -> string
+  intent "JSON 따옴표 제거"
+  do
+    let trimmed = trim(s)
+    let len = length(trimmed)
+
+    if len >= 2 && char_at(trimmed, 0) == "\"" && char_at(trimmed, len - 1) == "\""
+      return substring(trimmed, 1, len - 1)
+    else
+      return trimmed
+    end
+  end
+
+fn extract_json_string(obj: map<string, string>, key: string, default: string) -> string
+  intent "JSON 객체에서 문자열 값 추출"
+  do
+    if obj.has_key(key)
+      return unquote(obj[key])
+    else
+      return default
+    end
+  end
+
+fn extract_json_int(obj: map<string, string>, key: string, default: i32) -> i32
+  intent "JSON 객체에서 정수 값 추출"
+  do
+    if obj.has_key(key)
+      match string_to_int(obj[key])
+        Ok(n) => return n
+        Err(_) => return default
+      end
+    else
+      return default
+    end
+  end
+
+fn extract_json_bool(obj: map<string, string>, key: string, default: bool) -> bool
+  intent "JSON 객체에서 boolean 값 추출"
+  do
+    if obj.has_key(key)
+      let value = trim(obj[key])
+      return value == "true" || value == "1"
+    else
+      return default
+    end
+  end
+
+// ============================================================================
+// PART 7: 문자열 유틸리티
+// ============================================================================
+
+fn split_by_comma(s: string) -> array<string>
+  intent "문자열을 쉼표로 분할"
+  do
+    let parts: array<string> = []
+    let current = ""
+    let in_quotes = false
+    let in_braces = 0
+
+    for i = 0; i < length(s); i++
+      let ch = substring(s, i, i + 1)
+
+      match ch
+        "\"" => {
+          in_quotes = !in_quotes
+          current = current + ch
+        }
+        "{" => {
+          if !in_quotes
+            in_braces = in_braces + 1
+          end
+          current = current + ch
+        }
+        "}" => {
+          if !in_quotes
+            in_braces = in_braces - 1
+          end
+          current = current + ch
+        }
+        "," => {
+          if !in_quotes && in_braces == 0
+            parts = array_append(parts, current)
+            current = ""
+          else
+            current = current + ch
+          end
+        }
+        _ => current = current + ch
+      end
+    end
+
+    if length(current) > 0
+      parts = array_append(parts, current)
+    end
+
+    return parts
+  end
+
+fn index_of(s: string, substr: string) -> i32
+  intent "부분 문자열의 첫 인덱스 찾기"
+  do
+    let s_len = length(s)
+    let sub_len = length(substr)
+
+    for i = 0; i < s_len - sub_len + 1; i++
+      if substring(s, i, i + sub_len) == substr
+        return i
+      end
+    end
+
+    return -1
+  end
+
+fn char_at(s: string, index: i32) -> string
+  intent "특정 인덱스의 문자 반환"
+  do
+    if index < 0 || index >= length(s)
+      return ""
+    else
+      return substring(s, index, index + 1)
+    end
+  end
+
+fn substring(s: string, start: i32, end: i32) -> string
+  intent "부분 문자열 추출"
+  do
+    // FreeLang 문자열 슬라이싱
+    if start < 0 || end > length(s) || start >= end
+      return ""
+    end
+
+    return string_slice(s, start, end)
+  end
+
+fn trim(s: string) -> string
+  intent "좌우 공백 제거"
+  do
+    return string_trim(s)
+  end
+
+fn int_to_string(n: i32) -> string
+  intent "정수를 문자열로 변환"
+  do
+    return to_string(n)
+  end
+
+fn bool_to_string(b: bool) -> string
+  intent "boolean을 JSON 문자열로 변환"
+  do
+    return if b then "true" else "false" end
+  end
+
+fn string_to_int(s: string) -> Result<i32, string>
+  intent "문자열을 정수로 변환"
+  do
+    // FreeLang 함수 사용
+    match parse_int(s)
+      Ok(n) => return Ok(n)
+      Err(e) => return Err(e)
+    end
+  end
+
+// ============================================================================
+// PART 8: 상수
+// ============================================================================
+
+pub let JSON_INDENT = "  "  // 2칸 들여쓰기
+pub let JSON_COMPRESSION = false  // 압축 여부 (false: 가독성)
