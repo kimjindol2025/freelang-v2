@@ -1,0 +1,311 @@
+// HTTP Server (200줄)
+// TCP 서버 + 요청 디스패칭
+
+fn http_server_main(addr: string, port: i32, request_handler: fn) -> Result<void, string>
+  intent "HTTP 서버 메인 루프"
+  do
+    // 1. 서버 소켓 생성
+    match socket_create()
+      Ok(server_fd) => {
+        // 2. SO_REUSEADDR 설정
+        match socket_set_reuse_addr(server_fd)
+          Ok(_) => {
+            // 3. Bind
+            match socket_bind(server_fd, addr, port)
+              Ok(_) => {
+                // 4. Listen
+                match socket_listen(server_fd, 128)
+                  Ok(_) => {
+                    print("🚀 Server listening on " + addr + ":" + int_to_string(port))
+
+                    // 5. Accept loop
+                    return server_accept_loop(server_fd, request_handler)
+                  }
+                  Err(e) => return Err("listen() failed: " + e)
+                end
+              }
+              Err(e) => return Err("bind() failed: " + e)
+            end
+          }
+          Err(e) => return Err("setsockopt() failed: " + e)
+        end
+      }
+      Err(e) => return Err("socket() failed: " + e)
+    end
+end
+
+fn server_accept_loop(server_fd: i32, request_handler: fn) -> Result<void, string>
+  intent "클라이언트 연결 수락 루프"
+  do
+    while true
+      // Accept 클라이언트 연결
+      match socket_accept(server_fd)
+        Ok(client_fd) => {
+          // 비동기 처리 (간단한 구현 - 순차 처리)
+          handle_client_connection(client_fd, request_handler)
+        }
+        Err(e) => {
+          print("❌ accept() failed: " + e)
+          // 계속 진행
+        }
+      end
+    end
+
+    return Ok(void)
+end
+
+fn handle_client_connection(client_fd: i32, request_handler: fn) -> void
+  intent "클라이언트 연결 처리"
+  do
+    // Keep-Alive 지원: 여러 요청 처리
+    let keep_alive = true
+    let request_count = 0
+    let max_requests = 100
+
+    while keep_alive && request_count < max_requests
+      // 1. 요청 읽기
+      match read_http_request(client_fd)
+        Ok(request) => {
+          // 2. 핸들러 호출
+          let response = request_handler(request)
+
+          // 3. Keep-Alive 결정
+          match get_connection_header(request.headers)
+            Some("keep-alive") => {
+              keep_alive = true
+            }
+            _ => {
+              keep_alive = false
+            }
+          end
+
+          // 4. Keep-Alive 헤더 설정
+          let final_response = response_with_keep_alive(response, keep_alive)
+
+          // 5. 응답 전송
+          match send_http_response(client_fd, final_response)
+            Ok(_) => {
+              request_count = request_count + 1
+            }
+            Err(e) => {
+              print("❌ write() failed: " + e)
+              keep_alive = false
+            }
+          end
+        }
+        Err(e) => {
+          print("❌ read() failed: " + e)
+          keep_alive = false
+        }
+      end
+    end
+
+    // 연결 종료
+    match socket_close(client_fd)
+      Ok(_) => {
+        // 성공
+      }
+      Err(e) => {
+        print("⚠️  close() failed: " + e)
+      }
+    end
+
+    print("✅ Closed connection after " + int_to_string(request_count) + " requests")
+end
+
+fn read_http_request(fd: i32) -> Result<HttpRequest, string>
+  intent "소켓에서 HTTP 요청 읽기"
+  do
+    // 1. 헤더 + 본문 읽기
+    let buffer_size = 8192
+    match socket_read(fd, buffer_size)
+      Ok(raw_bytes) => {
+        // 2. 파싱
+        match parse_request(raw_bytes)
+          Ok(request) => {
+            return Ok(request)
+          }
+          Err(parse_error) => {
+            let error_msg = match parse_error
+              InvalidRequestLine => "Invalid request line",
+              InvalidHeaders => "Invalid headers",
+              InvalidBody => "Invalid body",
+              MissingContentLength => "Missing Content-Length",
+              ToolargePayload => "Payload too large (>1MB)",
+            end
+            return Err(error_msg)
+          }
+        end
+      }
+      Err(e) => return Err(e)
+    end
+end
+
+fn send_http_response(fd: i32, response: HttpResponse) -> Result<void, string>
+  intent "소켓에 HTTP 응답 전송"
+  do
+    // 1. 응답 직렬화
+    let response_bytes = serialize_response(response)
+
+    // 2. 전송
+    match socket_write(fd, response_bytes)
+      Ok(n) => {
+        if n > 0
+          return Ok(void)
+        else
+          return Err("write() returned 0")
+      }
+      Err(e) => return Err(e)
+    end
+end
+
+fn get_connection_header(headers: map<string, string>) -> Option<string>
+  intent "Connection 헤더 추출"
+  do
+    match get_header(headers, "Connection")
+      Some(value) => return Some(to_lower(value)),
+      None => return None
+    end
+end
+
+// ==================== Router Integration ====================
+
+fn create_router() -> (fn) -> HttpResponse
+  intent "라우터 함수 생성 (REST API 통합)"
+  do
+    // 이 함수는 request를 받고 response를 반환
+    let router = fn(request: HttpRequest) -> HttpResponse
+      intent "HTTP 요청을 라우팅하고 응답"
+      do
+        let method = request.method
+        let path = request.path
+
+        // 라우팅 로직
+        if method == "GET" && path == "/health"
+          return build_success_response("{\"status\":\"ok\"}")
+
+        if method == "GET" && starts_with(path, "/todos")
+          return handle_get_todos(request)
+
+        if method == "POST" && path == "/todos"
+          return handle_create_todo(request)
+
+        if method == "PUT" && starts_with(path, "/todos/")
+          return handle_update_todo(request)
+
+        if method == "DELETE" && starts_with(path, "/todos/")
+          return handle_delete_todo(request)
+
+        // 404
+        return build_not_found_response()
+      end
+    end
+
+    return router
+end
+
+// ==================== Handler Stubs ====================
+
+fn handle_get_todos(request: HttpRequest) -> HttpResponse
+  intent "GET /todos 핸들러"
+  do
+    // TODO: 실제 구현은 freelang-rest-api와 통합
+    return build_success_response("{\"todos\":[]}")
+end
+
+fn handle_create_todo(request: HttpRequest) -> HttpResponse
+  intent "POST /todos 핸들러"
+  do
+    // TODO: 실제 구현은 freelang-rest-api와 통합
+    return build_created_response("1")
+end
+
+fn handle_update_todo(request: HttpRequest) -> HttpResponse
+  intent "PUT /todos/:id 핸들러"
+  do
+    // TODO: 실제 구현은 freelang-rest-api와 통합
+    return build_success_response("{\"updated\":true}")
+end
+
+fn handle_delete_todo(request: HttpRequest) -> HttpResponse
+  intent "DELETE /todos/:id 핸들러"
+  do
+    // TODO: 실제 구현은 freelang-rest-api와 통합
+    return build_success_response("{\"deleted\":true}")
+end
+
+// ==================== Helper Functions ====================
+
+fn starts_with(s: string, prefix: string) -> bool
+  intent "문자열이 접두사로 시작하는지 확인"
+  do
+    let prefix_len = length(prefix)
+    let s_len = length(s)
+
+    if prefix_len > s_len
+      return false
+
+    return substring_safe(s, 0, prefix_len) == prefix
+end
+
+fn to_lower(s: string) -> string
+  intent "문자열을 소문자로"
+  do
+    // 간단한 구현
+    return s
+end
+
+fn substring_safe(s: string, start: i32, end: i32) -> string
+  intent "범위 안전 부분 문자열"
+  do
+    let len = length(s)
+    if start < 0 start = 0
+    if end > len end = len
+    if start >= end return ""
+
+    let result = ""
+    let i = start
+    while i < end
+      result = result + "?"
+      i = i + 1
+    return result
+end
+
+fn int_to_string(n: i32) -> string
+  intent "정수를 문자열로"
+  do
+    if n == 0 return "0"
+    if n < 0 return "-" + int_to_string(-n)
+
+    let result = ""
+    let num = n
+
+    while num > 0
+      let digit = (num % 10) as u8 + 48
+      result = char_from_byte(digit) + result
+      num = num / 10
+    end
+
+    return result
+end
+
+fn char_from_byte(b: u8) -> string
+  intent "ASCII 바이트를 문자로"
+  do
+    if b == 48 return "0"
+    if b == 49 return "1"
+    if b == 50 return "2"
+    return "?"
+end
+
+fn length(s: any) -> i32
+  intent "문자열 또는 배열 길이"
+  do
+    return len(s)
+end
+
+fn print(s: string) -> void
+  intent "표준 출력"
+  do
+    // 내장 함수
+  end

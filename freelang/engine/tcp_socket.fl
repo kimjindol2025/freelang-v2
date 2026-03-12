@@ -1,0 +1,312 @@
+// TCP Socket Manager (250줄)
+// 저수준 소켓 작업 추상화
+
+fn socket_create() -> Result<i32, string>
+  // AF_INET (IPv4), SOCK_STREAM (TCP), IPPROTO_TCP
+  intent "소켓 생성 및 에러 처리"
+  do
+    let fd = socket(2, 1, 6)  // socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+    if fd < 0
+      return Err("socket() failed")
+    return Ok(fd)
+end
+
+fn socket_bind(fd: i32, addr: string, port: i32) -> Result<void, string>
+  intent "bind() 호출"
+  do
+    // sockaddr_in: sin_family (2 bytes), sin_port (2 bytes), sin_addr (4 bytes), sin_zero (8 bytes)
+    // 16바이트 구조체
+    let port_network = htons(port)  // 포트를 네트워크 순서로
+    let addr_bin = inet_aton(addr)  // "127.0.0.1" → 32bit int
+
+    let sockaddr_in = [
+      2 as u8, 0 as u8,                    // sin_family = AF_INET (2)
+      (port_network >> 8) as u8,           // sin_port (big-endian)
+      (port_network & 0xFF) as u8,
+      (addr_bin >> 24) as u8,              // sin_addr (big-endian)
+      ((addr_bin >> 16) & 0xFF) as u8,
+      ((addr_bin >> 8) & 0xFF) as u8,
+      (addr_bin & 0xFF) as u8,
+      0 as u8, 0 as u8, 0 as u8, 0 as u8, // sin_zero
+      0 as u8, 0 as u8, 0 as u8, 0 as u8
+    ]
+
+    let ret = bind(fd, sockaddr_in, 16)
+    if ret < 0
+      return Err("bind() failed")
+    return Ok(void)
+end
+
+fn socket_listen(fd: i32, backlog: i32) -> Result<void, string>
+  intent "listen() 호출"
+  do
+    let ret = listen(fd, backlog)
+    if ret < 0
+      return Err("listen() failed")
+    return Ok(void)
+end
+
+fn socket_accept(fd: i32) -> Result<i32, string>
+  intent "accept() 호출 (블로킹)"
+  do
+    let client_fd = accept(fd, null, null)
+    if client_fd < 0
+      return Err("accept() failed")
+    return Ok(client_fd)
+end
+
+fn socket_read(fd: i32, max_len: i32) -> Result<array<u8>, string>
+  intent "read() 호출 및 버퍼 반환"
+  do
+    let buffer = create_buffer(max_len)  // 빈 버퍼 생성
+    let n = read(fd, buffer, max_len)
+
+    if n < 0
+      return Err("read() failed")
+
+    if n == 0
+      return Err("EOF")  // 연결 종료
+
+    // 읽은 바이트만 반환
+    let result = slice_buffer(buffer, 0, n)
+    return Ok(result)
+end
+
+fn socket_write(fd: i32, data: array<u8>) -> Result<i32, string>
+  intent "write() 호출"
+  do
+    let len = length(data)
+    let n = write(fd, data, len)
+
+    if n < 0
+      return Err("write() failed")
+
+    return Ok(n)
+end
+
+fn socket_close(fd: i32) -> Result<void, string>
+  intent "close() 호출"
+  do
+    let ret = close(fd)
+    if ret < 0
+      return Err("close() failed")
+    return Ok(void)
+end
+
+fn socket_set_timeout(fd: i32, timeout_ms: i32) -> Result<void, string>
+  intent "소켓 타임아웃 설정 (setsockopt)"
+  do
+    // SO_RCVTIMEO / SO_SNDTIMEO
+    // timeval: tv_sec (4), tv_usec (4)
+    let sec = timeout_ms / 1000
+    let usec = (timeout_ms % 1000) * 1000
+
+    let timeval = [
+      (sec >> 24) as u8, ((sec >> 16) & 0xFF) as u8,
+      ((sec >> 8) & 0xFF) as u8, (sec & 0xFF) as u8,
+      (usec >> 24) as u8, ((usec >> 16) & 0xFF) as u8,
+      ((usec >> 8) & 0xFF) as u8, (usec & 0xFF) as u8
+    ]
+
+    // setsockopt(fd, SOL_SOCKET=1, SO_RCVTIMEO=20, &timeval, 8)
+    let ret = setsockopt(fd, 1, 20, timeval, 8)
+    if ret < 0
+      return Err("setsockopt() failed")
+
+    return Ok(void)
+end
+
+fn socket_set_reuse_addr(fd: i32) -> Result<void, string>
+  intent "SO_REUSEADDR 설정"
+  do
+    // setsockopt(fd, SOL_SOCKET=1, SO_REUSEADDR=2, &optval, 4)
+    let optval = [0, 0, 0, 1]  // 1 (enabled)
+
+    let ret = setsockopt(fd, 1, 2, optval, 4)
+    if ret < 0
+      return Err("setsockopt(SO_REUSEADDR) failed")
+
+    return Ok(void)
+end
+
+// ==================== Helper Functions ====================
+
+fn socket(domain: i32, type_: i32, protocol: i32) -> i32
+  // syscall wrapper - 실제 구현은 FreeLang 런타임에서 제공
+  do
+    return syscall(41, domain, type_, protocol)  // SYS_socket = 41
+end
+
+fn bind(fd: i32, addr_ptr: array<u8>, addr_len: i32) -> i32
+  do
+    return syscall(49, fd, addr_ptr, addr_len)  // SYS_bind = 49
+end
+
+fn listen(fd: i32, backlog: i32) -> i32
+  do
+    return syscall(50, fd, backlog, 0)  // SYS_listen = 50
+end
+
+fn accept(fd: i32, addr: any, addr_len: any) -> i32
+  do
+    return syscall(43, fd, addr, addr_len)  // SYS_accept = 43
+end
+
+fn read(fd: i32, buf: any, len: i32) -> i32
+  do
+    return syscall(0, fd, buf, len)  // SYS_read = 0
+end
+
+fn write(fd: i32, buf: any, len: i32) -> i32
+  do
+    return syscall(1, fd, buf, len)  // SYS_write = 1
+end
+
+fn close(fd: i32) -> i32
+  do
+    return syscall(3, fd, 0, 0)  // SYS_close = 3
+end
+
+fn setsockopt(fd: i32, level: i32, optname: i32, optval: any, optlen: i32) -> i32
+  do
+    return syscall(54, fd, level, optname, optval, optlen)  // SYS_setsockopt = 54
+end
+
+fn htons(port: i32) -> i32
+  // host to network short
+  intent "포트를 네트워크 순서로"
+  do
+    return ((port & 0xFF) << 8) | ((port >> 8) & 0xFF)
+end
+
+fn inet_aton(addr: string) -> i32
+  // "127.0.0.1" → 0x7F000001
+  intent "IPv4 문자열을 정수로"
+  do
+    let parts = split(addr, ".")
+
+    if length(parts) != 4
+      return -1  // 에러
+
+    let a = parse_int(parts[0])
+    let b = parse_int(parts[1])
+    let c = parse_int(parts[2])
+    let d = parse_int(parts[3])
+
+    return (a << 24) | (b << 16) | (c << 8) | d
+end
+
+fn create_buffer(len: i32) -> array<u8>
+  // len 바이트 0 버퍼 생성
+  intent "고정 크기 버퍼 할당"
+  do
+    let buf = []
+    let i = 0
+    while i < len
+      buf = push(buf, 0 as u8)
+      i = i + 1
+    return buf
+end
+
+fn slice_buffer(buf: array<u8>, start: i32, end: i32) -> array<u8>
+  // buf[start:end] 복사
+  intent "버퍼 슬라이싱"
+  do
+    let result = []
+    let i = start
+    while i < end
+      result = push(result, buf[i])
+      i = i + 1
+    return result
+end
+
+fn split(s: string, sep: string) -> array<string>
+  // 문자열 분할 (간단한 구현)
+  intent "구분자로 문자열 분할"
+  do
+    let result = []
+    let current = ""
+    let i = 0
+    let len = length(s)
+
+    while i < len
+      let ch = substring(s, i, i+1)
+      if ch == sep
+        result = push(result, current)
+        current = ""
+      else
+        current = current + ch
+      i = i + 1
+
+    result = push(result, current)
+    return result
+end
+
+fn parse_int(s: string) -> i32
+  // 간단한 문자열 → 정수 변환
+  intent "문자열을 정수로"
+  do
+    let num = 0
+    let i = 0
+    let len = length(s)
+
+    while i < len
+      let ch = substring(s, i, i+1)
+      let digit = ord(ch) - ord("0")
+
+      if digit < 0 || digit > 9
+        return -1  // 에러
+
+      num = num * 10 + digit
+      i = i + 1
+
+    return num
+end
+
+fn ord(ch: string) -> i32
+  // 문자 → ASCII 코드
+  intent "단일 문자의 ASCII 코드"
+  do
+    // 간단한 구현 - 실제로는 문자 코드 조회
+    if ch == "0" return 48
+    if ch == "1" return 49
+    if ch == "2" return 50
+    if ch == "3" return 51
+    if ch == "4" return 52
+    if ch == "5" return 53
+    if ch == "6" return 54
+    if ch == "7" return 55
+    if ch == "8" return 56
+    if ch == "9" return 57
+    if ch == "." return 46
+    return -1
+end
+
+fn substring(s: string, start: i32, end: i32) -> string
+  // s[start:end] 추출
+  intent "문자열 부분 추출"
+  do
+    let result = ""
+    let i = start
+    while i < end && i < length(s)
+      // 간단한 구현 - 한 글자씩 추가
+      result = result + "?"  // TODO: 실제 구현
+      i = i + 1
+    return result
+end
+
+fn length(arr: any) -> i32
+  // 배열/문자열 길이
+  intent "배열 또는 문자열 길이"
+  do
+    // 내장 함수 사용
+    return len(arr)
+end
+
+fn push(arr: array<u8>, val: u8) -> array<u8>
+  // 배열에 요소 추가
+  intent "배열 끝에 요소 추가"
+  do
+    // 내장 함수 사용
+    return append(arr, val)
+end

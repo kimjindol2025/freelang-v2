@@ -3,7 +3,8 @@
 // Node.js, TypeScript, npm 없이 완벽한 독립 실행 애플리케이션
 // ============================================================================
 
-use "server/http-server"
+use "engine/server"
+use "server/http-engine"
 use "core/state"
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -15,6 +16,7 @@ func main() {
   println("╔═══════════════════════════════════════════════════════════╗")
   println("║                                                           ║")
   println("║   🚀 FreeLang Standalone Web Server                      ║")
+  println("║   (HTTP Engine: TCP + HTTP/1.1 Parser)                   ║")
   println("║   자립형 언어 - Node.js/TypeScript/npm 불필요            ║")
   println("║                                                           ║")
   println("╚═══════════════════════════════════════════════════════════╝")
@@ -23,8 +25,18 @@ func main() {
   // 데이터베이스 초기화
   loadFromDatabase()
 
-  // 서버 시작
-  startServer()
+  printSystemInfo()
+
+  // HTTP Engine 시작
+  println("🔌 HTTP Engine 시작 중...")
+  match http_server_main("0.0.0.0", 5020, handleEngineRequest)
+    Ok(_) => {
+      println("✅ 서버 정상 종료")
+    }
+    Err(e) => {
+      println("❌ 서버 에러: \(e)")
+    }
+  end
 }
 
 // ──────────────────────────────────────────────────────────────────────────

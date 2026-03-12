@@ -1,0 +1,322 @@
+// HTTP Handler (200줄)
+// HTTP 응답 생성
+
+struct HttpResponse {
+  version: string,
+  status: i32,
+  reason: string,
+  headers: map<string, string>,
+  body: array<u8>,
+}
+
+fn build_response(
+  status: i32,
+  headers: map<string, string>,
+  body: array<u8>
+) -> HttpResponse
+  intent "HttpResponse 구조체 생성"
+  do
+    return {
+      version: "HTTP/1.1",
+      status: status,
+      reason: status_code_to_reason(status),
+      headers: headers,
+      body: body,
+    }
+end
+
+fn serialize_response(resp: HttpResponse) -> array<u8>
+  intent "HttpResponse를 바이트 배열로 변환"
+  do
+    // 1. Status Line
+    let status_line = serialize_status_line(resp.version, resp.status, resp.reason)
+
+    // 2. Headers
+    let headers_bytes = serialize_headers(resp.headers)
+
+    // 3. CRLF 분리
+    let separator = string_to_bytes("\r\n")
+
+    // 4. Body
+    let body_bytes = resp.body
+
+    // 5. 연결
+    let result = concat_bytes(concat_bytes(concat_bytes(status_line, separator), headers_bytes), body_bytes)
+    return result
+end
+
+fn serialize_status_line(version: string, status: i32, reason: string) -> array<u8>
+  intent "상태 라인 생성: 'HTTP/1.1 200 OK\\r\\n'"
+  do
+    let line = version + " " + int_to_string(status) + " " + reason + "\r\n"
+    return string_to_bytes(line)
+end
+
+fn serialize_headers(headers: map<string, string>) -> array<u8>
+  intent "모든 헤더를 바이트로 변환"
+  do
+    let result = []
+
+    // 헤더 반복
+    for key in headers
+      let value = headers[key]
+      let header_line = key + ": " + value + "\r\n"
+      result = concat_bytes(result, string_to_bytes(header_line))
+    end
+
+    // 헤더 끝 (빈 라인)
+    result = concat_bytes(result, string_to_bytes("\r\n"))
+    return result
+end
+
+fn status_code_to_reason(status: i32) -> string
+  intent "상태 코드를 이유 구문으로"
+  do
+    if status == 200 return "OK"
+    if status == 201 return "Created"
+    if status == 204 return "No Content"
+    if status == 400 return "Bad Request"
+    if status == 404 return "Not Found"
+    if status == 409 return "Conflict"
+    if status == 413 return "Payload Too Large"
+    if status == 500 return "Internal Server Error"
+    if status == 503 return "Service Unavailable"
+    return "Unknown"
+end
+
+fn build_error_response(status: i32, message: string) -> HttpResponse
+  intent "에러 응답 생성"
+  do
+    let reason = status_code_to_reason(status)
+
+    let error_json = build_error_json(status, reason, message)
+    let body = string_to_bytes(error_json)
+
+    let headers = {
+      "Content-Type": "application/json",
+      "Content-Length": int_to_string(length(body)),
+      "Connection": "keep-alive",
+    }
+
+    return build_response(status, headers, body)
+end
+
+fn build_error_json(status: i32, reason: string, message: string) -> string
+  intent "에러 JSON 생성"
+  do
+    return "{\"error\":{\"status\":" + int_to_string(status) +
+           ",\"reason\":\"" + reason +
+           "\",\"message\":\"" + message + "\"}}"
+end
+
+fn build_success_response(data: string) -> HttpResponse
+  intent "성공 응답 생성"
+  do
+    let body = string_to_bytes(data)
+
+    let headers = {
+      "Content-Type": "application/json",
+      "Content-Length": int_to_string(length(body)),
+      "Connection": "keep-alive",
+      "Cache-Control": "no-cache",
+    }
+
+    return build_response(200, headers, body)
+end
+
+fn set_response_header(resp: HttpResponse, key: string, value: string) -> HttpResponse
+  intent "응답에 헤더 추가"
+  do
+    resp.headers[key] = value
+    return resp
+end
+
+fn build_redirect_response(location: string) -> HttpResponse
+  intent "리디렉트 응답 (3xx)"
+  do
+    let headers = {
+      "Location": location,
+      "Connection": "keep-alive",
+    }
+
+    return build_response(302, headers, [])
+end
+
+fn build_created_response(resource_id: string) -> HttpResponse
+  intent "생성됨 응답 (201)"
+  do
+    let json = "{\"id\":\"" + resource_id + "\",\"status\":\"created\"}"
+    let body = string_to_bytes(json)
+
+    let headers = {
+      "Content-Type": "application/json",
+      "Content-Length": int_to_string(length(body)),
+      "Location": "/" + resource_id,
+      "Connection": "keep-alive",
+    }
+
+    return build_response(201, headers, body)
+end
+
+fn build_not_found_response() -> HttpResponse
+  intent "404 Not Found"
+  do
+    return build_error_response(404, "Resource not found")
+end
+
+fn build_bad_request_response(reason: string) -> HttpResponse
+  intent "400 Bad Request"
+  do
+    return build_error_response(400, reason)
+end
+
+fn build_internal_error_response() -> HttpResponse
+  intent "500 Internal Server Error"
+  do
+    return build_error_response(500, "Internal server error")
+end
+
+fn response_with_keep_alive(resp: HttpResponse, keep_alive: bool) -> HttpResponse
+  intent "Keep-Alive 헤더 설정"
+  do
+    if keep_alive
+      resp.headers["Connection"] = "keep-alive"
+      resp.headers["Keep-Alive"] = "timeout=30, max=100"
+    else
+      resp.headers["Connection"] = "close"
+    end
+
+    return resp
+end
+
+fn response_set_body(resp: HttpResponse, body: array<u8>) -> HttpResponse
+  intent "응답 본문 설정"
+  do
+    resp.body = body
+    resp.headers["Content-Length"] = int_to_string(length(body))
+    return resp
+end
+
+// ==================== Helper Functions ====================
+
+fn string_to_bytes(s: string) -> array<u8>
+  intent "문자열을 바이트 배열로"
+  do
+    let result = []
+    let i = 0
+
+    while i < length(s)
+      // 문자를 ASCII 바이트로
+      let ch = substring_safe(s, i, i + 1)
+      let byte = char_to_byte(ch)
+      result = push(result, byte as u8)
+      i = i + 1
+    end
+
+    return result
+end
+
+fn int_to_string(n: i32) -> string
+  intent "정수를 문자열로"
+  do
+    if n == 0 return "0"
+    if n < 0 return "-" + int_to_string(-n)
+
+    let result = ""
+    let num = n
+
+    while num > 0
+      let digit = (num % 10) as u8
+      result = char_from_byte(digit + 48) + result
+      num = num / 10
+    end
+
+    return result
+end
+
+fn concat_bytes(a: array<u8>, b: array<u8>) -> array<u8>
+  intent "두 바이트 배열 연결"
+  do
+    let result = a
+    let i = 0
+
+    while i < length(b)
+      result = push(result, b[i])
+      i = i + 1
+    end
+
+    return result
+end
+
+fn char_to_byte(ch: string) -> u8
+  intent "문자를 ASCII 바이트로"
+  do
+    // 간단한 구현
+    if ch == "0" return 48
+    if ch == "1" return 49
+    if ch == "2" return 50
+    if ch == "3" return 51
+    if ch == "4" return 52
+    if ch == "5" return 53
+    if ch == "6" return 54
+    if ch == "7" return 55
+    if ch == "8" return 56
+    if ch == "9" return 57
+    if ch == " " return 32
+    if ch == "\r" return 13
+    if ch == "\n" return 10
+    if ch == ":" return 58
+    if ch == "/" return 47
+    if ch == "." return 46
+    if ch == "-" return 45
+    if ch == "_" return 95
+    if ch == "{" return 123
+    if ch == "}" return 125
+    if ch == "\"" return 34
+    if ch == "," return 44
+    return 63
+end
+
+fn char_from_byte(b: u8) -> string
+  intent "ASCII 바이트를 문자로"
+  do
+    if b == 48 return "0"
+    if b == 49 return "1"
+    if b == 50 return "2"
+    if b == 51 return "3"
+    if b == 52 return "4"
+    if b == 53 return "5"
+    if b == 54 return "6"
+    if b == 55 return "7"
+    if b == 56 return "8"
+    if b == 57 return "9"
+    return "?"
+end
+
+fn substring_safe(s: string, start: i32, end: i32) -> string
+  intent "범위 안전 부분 문자열"
+  do
+    let len = length(s)
+    if start < 0 start = 0
+    if end > len end = len
+    if start >= end return ""
+
+    let result = ""
+    let i = start
+    while i < end
+      result = result + "?"
+      i = i + 1
+    return result
+end
+
+fn push(arr: array<u8>, val: u8) -> array<u8>
+  intent "배열에 요소 추가"
+  do
+    return append(arr, val)
+end
+
+fn length(arr: any) -> i32
+  intent "배열 길이"
+  do
+    return len(arr)
+end

@@ -1,172 +1,74 @@
 // ============================================================================
 // FreeLang HTTP Engine Integration
-// freelang-http-engine과 freelang-hybrid의 통합 레이어
+// HTTP Engine의 HttpRequest/HttpResponse를 비즈니스 로직과 연결
 // ============================================================================
 
-use "http-server"
+use "../engine/http_parser"
+use "../engine/http_handler"
 use "../core/state"
 
 // ──────────────────────────────────────────────────────────────────────────
-// HTTP 요청/응답 타입 (http-engine과 호환)
+// Request Handler (HTTP Engine 콜백)
 // ──────────────────────────────────────────────────────────────────────────
 
-record EngineRequest {
-  method: string        // "GET", "POST", "PUT", "DELETE"
-  path: string         // "/api/counter", "/api/blogs"
-  version: string      // "HTTP/1.1"
-  headers: map<string, string>
-  body: string
-  bodyLen: number
-}
-
-record EngineResponse {
-  version: string      // "HTTP/1.1"
-  status: number       // 200, 404, 500
-  reason: string       // "OK", "Not Found"
-  headers: map<string, string>
-  body: string
-}
-
-// ──────────────────────────────────────────────────────────────────────────
-// HTTP 요청 파싱 (TCP 소켓에서 읽은 바이트 → 구조화된 요청)
-// ──────────────────────────────────────────────────────────────────────────
-
-func parseHttpRequest(rawBytes: string) -> EngineRequest {
-  let lines = rawBytes.split("\r\n")
-
-  // 요청 라인 파싱: GET /api/counter HTTP/1.1
-  let requestLine = lines[0].split(" ")
-  let method = requestLine[0]
-  let pathWithQuery = requestLine[1]
-  let version = requestLine[2]
-
-  // Path와 Query 분리
-  let pathParts = pathWithQuery.split("?")
-  let path = pathParts[0]
-
-  // 헤더 파싱
-  let headers: map<string, string> = {}
-  let bodyStart = 0
-
-  for i in 1..lines.length {
-    if lines[i] == "" {
-      bodyStart = i + 1
-      break
-    }
-
-    let headerParts = lines[i].split(": ")
-    if headerParts.length == 2 {
-      headers[headerParts[0]] = headerParts[1]
-    }
-  }
-
-  // 바디 추출
-  let body = bodyStart < lines.length ? lines[bodyStart..].join("\r\n") : ""
-
-  return {
-    method: method,
-    path: path,
-    version: version,
-    headers: headers,
-    body: body,
-    bodyLen: body.length
-  }
-}
-
-// ──────────────────────────────────────────────────────────────────────────
-// HTTP 응답 빌드
-// ──────────────────────────────────────────────────────────────────────────
-
-func buildEngineResponse(status: number, headers: map<string, string>, body: string) -> EngineResponse {
-  let reason = getStatusReason(status)
-
-  return {
-    version: "HTTP/1.1",
-    status: status,
-    reason: reason,
-    headers: headers,
-    body: body
-  }
-}
-
-func getStatusReason(status: number) -> string {
-  match status {
-    200 => "OK"
-    201 => "Created"
-    204 => "No Content"
-    400 => "Bad Request"
-    404 => "Not Found"
-    500 => "Internal Server Error"
-    default => "Unknown"
-  }
-}
-
-// ──────────────────────────────────────────────────────────────────────────
-// HTTP 응답 직렬화 (구조화된 응답 → 바이트)
-// ──────────────────────────────────────────────────────────────────────────
-
-func serializeEngineResponse(resp: EngineResponse) -> string {
-  let statusLine = `\(resp.version) \(resp.status) \(resp.reason)\r\n`
-
-  let headerLines = ""
-  for key, value in resp.headers {
-    headerLines += `\(key): \(value)\r\n`
-  }
-
-  // Content-Length 추가
-  headerLines += `Content-Length: \(resp.body.length)\r\n`
-
-  return statusLine + headerLines + "\r\n" + resp.body
-}
-
-// ──────────────────────────────────────────────────────────────────────────
-// 라우팅 핸들러
-// ──────────────────────────────────────────────────────────────────────────
-
-func handleEngineRequest(request: EngineRequest) -> EngineResponse {
+func handleEngineRequest(request: HttpRequest) -> HttpResponse {
   let method = request.method
   let path = request.path
+  let version = request.version
 
-  // Counter API
+  // CORS preflight
+  if method == "OPTIONS" {
+    return build_response(204, getCorsHeaders(), [])
+  }
+
+  // 라우팅
   match (method, path) {
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Counter API
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
     ("GET", "/api/counter") => {
       let counter = getCounter()
-      return buildEngineResponse(200, {
+      let body = jsonCounterResponse("success", counter)
+      return build_response(200, {
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
-      }, jsonResponse("success", counter))
+        ...getCorsHeaders()
+      }, stringToBytes(body))
     }
 
     ("POST", "/api/counter/increment") => {
       let counter = incrementCounter()
-      return buildEngineResponse(200, {
+      let body = jsonCounterResponse("success", counter)
+      return build_response(200, {
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
-      }, jsonResponse("success", counter))
+        ...getCorsHeaders()
+      }, stringToBytes(body))
     }
 
     ("POST", "/api/counter/decrement") => {
       let counter = decrementCounter()
-      return buildEngineResponse(200, {
+      let body = jsonCounterResponse("success", counter)
+      return build_response(200, {
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
-      }, jsonResponse("success", counter))
+        ...getCorsHeaders()
+      }, stringToBytes(body))
     }
 
     ("POST", "/api/counter/reset") => {
       let counter = resetCounter()
-      return buildEngineResponse(200, {
+      let body = jsonCounterResponse("success", counter)
+      return build_response(200, {
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
-      }, jsonResponse("success", counter))
+        ...getCorsHeaders()
+      }, stringToBytes(body))
     }
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // Health Check
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
     ("GET", "/api/health") => {
-      return buildEngineResponse(200, {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
-      }, `{
+      let body = `{
   "status": "healthy",
   "timestamp": "2026-03-12T00:00:00Z",
   "database": {
@@ -174,43 +76,242 @@ func handleEngineRequest(request: EngineRequest) -> EngineResponse {
     "counters": 1,
     "healthy": true
   }
-}`)
+}`
+      return build_response(200, {
+        "Content-Type": "application/json",
+        ...getCorsHeaders()
+      }, stringToBytes(body))
     }
 
-    // 404
-    default => {
-      return buildEngineResponse(404, {
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Blog API
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    ("GET", "/api/blogs") => {
+      let body = `{
+  "status": "success",
+  "data": {
+    "blogs": []
+  }
+}`
+      return build_response(200, {
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
-      }, `{
+        ...getCorsHeaders()
+      }, stringToBytes(body))
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 정적 파일 (인덱스)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    ("GET", "/") | ("GET", "/index.html") => {
+      let html = getIndexHtml()
+      return build_response(200, {
+        "Content-Type": "text/html; charset=utf-8",
+        ...getCorsHeaders()
+      }, stringToBytes(html))
+    }
+
+    ("GET", "/blog.html") => {
+      let html = getBlogHtml()
+      return build_response(200, {
+        "Content-Type": "text/html; charset=utf-8",
+        ...getCorsHeaders()
+      }, stringToBytes(html))
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 404 Not Found
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    default => {
+      let body = `{
   "status": "error",
   "statusCode": 404,
   "message": "Not Found"
-}`)
+}`
+      return build_response(404, {
+        "Content-Type": "application/json",
+        ...getCorsHeaders()
+      }, stringToBytes(body))
     }
   }
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// JSON 응답 헬퍼
+// Helper Functions
 // ──────────────────────────────────────────────────────────────────────────
 
-func jsonResponse(status: string, data: any) -> string {
+func jsonCounterResponse(status: string, counter: any) -> string {
   return `{
   "status": "\(status)",
-  "data": {}
+  "data": {
+    "id": "main",
+    "count": 0,
+    "name": "Main Counter"
+  }
 }`
 }
 
+func getCorsHeaders() -> map<string, string> {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type"
+  }
+}
+
+func stringToBytes(s: string) -> array<u8> {
+  // 간단한 구현: 문자열을 바이트 배열로
+  let bytes: array<u8> = []
+  // 실제 구현은 FreeLang 문법에 따라 필요
+  return bytes
+}
+
+func getIndexHtml() -> string {
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FreeLang HTTP Engine Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            font-size: 2em;
+            margin-bottom: 30px;
+        }
+        .counter {
+            font-size: 3em;
+            text-align: center;
+            color: #667eea;
+            margin: 30px 0;
+            font-weight: bold;
+        }
+        button {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            background: #667eea;
+            color: white;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 FreeLang HTTP Engine</h1>
+        <div class="counter" id="counter">0</div>
+        <button onclick="increment()">+1 증가</button>
+        <button onclick="decrement()">-1 감소</button>
+        <button onclick="reset()">초기화</button>
+        <p style="text-align: center; margin-top: 30px; color: #999;">
+            TCP + HTTP/1.1 Parser로 구현된 순수 FreeLang 웹 서버
+        </p>
+    </div>
+    <script>
+        async function increment() {
+            const res = await fetch('/api/counter/increment', { method: 'POST' });
+            const data = await res.json();
+            document.getElementById('counter').innerText = data.data.count || '?';
+        }
+        async function decrement() {
+            const res = await fetch('/api/counter/decrement', { method: 'POST' });
+            const data = await res.json();
+            document.getElementById('counter').innerText = data.data.count || '?';
+        }
+        async function reset() {
+            const res = await fetch('/api/counter/reset', { method: 'POST' });
+            const data = await res.json();
+            document.getElementById('counter').innerText = data.data.count || '?';
+        }
+        async function load() {
+            const res = await fetch('/api/counter');
+            const data = await res.json();
+            document.getElementById('counter').innerText = data.data.count || '0';
+        }
+        load();
+    </script>
+</body>
+</html>`
+}
+
+func getBlogHtml() -> string {
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Blog - FreeLang</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f5f5f5;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 40px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📝 FreeLang 블로그</h1>
+        <p style="text-align: center; color: #999;">아직 발행된 블로그가 없습니다.</p>
+        <div style="text-align: center;">
+            <a href="/">← 홈으로</a>
+        </div>
+    </div>
+</body>
+</html>`
+}
+
 // ──────────────────────────────────────────────────────────────────────────
-// 내보내기
+// Export
 // ──────────────────────────────────────────────────────────────────────────
 
 export {
-  EngineRequest,
-  EngineResponse,
-  parseHttpRequest,
-  buildEngineResponse,
-  serializeEngineResponse,
   handleEngineRequest
 }

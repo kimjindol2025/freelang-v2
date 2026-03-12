@@ -1,0 +1,82 @@
+// mod.fl - HTTP Engine 모듈 공개 API
+
+// TCP Socket 타입
+pub struct TcpSocket {
+  fd: i32,
+  addr: string,
+  port: i32,
+  is_listening: bool,
+  timeout_ms: i32,
+}
+
+pub struct SocketBuffer {
+  data: array<u8>,
+  offset: i32,
+  size: i32,
+}
+
+// HTTP 타입
+pub struct HttpRequest {
+  method: string,
+  path: string,
+  version: string,
+  headers: map<string, string>,
+  body: array<u8>,
+  body_len: i32,
+}
+
+pub struct HttpResponse {
+  version: string,
+  status: i32,
+  reason: string,
+  headers: map<string, string>,
+  body: array<u8>,
+}
+
+pub enum ParseError {
+  InvalidRequestLine,
+  InvalidHeaders,
+  InvalidBody,
+  MissingContentLength,
+  ToolargePayload,
+}
+
+// TCP Socket Functions
+pub fn socket_create() -> Result<i32, string>
+pub fn socket_bind(fd: i32, addr: string, port: i32) -> Result<void, string>
+pub fn socket_listen(fd: i32, backlog: i32) -> Result<void, string>
+pub fn socket_accept(fd: i32) -> Result<i32, string>
+pub fn socket_read(fd: i32, max_len: i32) -> Result<array<u8>, string>
+pub fn socket_write(fd: i32, data: array<u8>) -> Result<i32, string>
+pub fn socket_close(fd: i32) -> Result<void, string>
+pub fn socket_set_timeout(fd: i32, timeout_ms: i32) -> Result<void, string>
+pub fn socket_set_reuse_addr(fd: i32) -> Result<void, string>
+
+// HTTP Parser Functions
+pub fn parse_request(raw: array<u8>) -> Result<HttpRequest, ParseError>
+pub fn parse_request_line(line: string) -> Result<(string, string, string), ParseError>
+pub fn parse_headers_section(lines: array<string>, start: i32) -> Result<(map<string, string>, i32), ParseError>
+pub fn parse_header_line(line: string) -> Result<(string, string), ParseError>
+
+// HTTP Handler Functions
+pub fn build_response(status: i32, headers: map<string, string>, body: array<u8>) -> HttpResponse
+pub fn serialize_response(resp: HttpResponse) -> array<u8>
+pub fn serialize_status_line(version: string, status: i32, reason: string) -> array<u8>
+pub fn serialize_headers(headers: map<string, string>) -> array<u8>
+pub fn status_code_to_reason(status: i32) -> string
+pub fn build_error_response(status: i32, message: string) -> HttpResponse
+pub fn build_success_response(data: string) -> HttpResponse
+pub fn build_not_found_response() -> HttpResponse
+pub fn build_bad_request_response(reason: string) -> HttpResponse
+pub fn build_internal_error_response() -> HttpResponse
+pub fn response_with_keep_alive(resp: HttpResponse, keep_alive: bool) -> HttpResponse
+pub fn response_set_body(resp: HttpResponse, body: array<u8>) -> HttpResponse
+
+// HTTP Server Functions
+pub fn http_server_main(addr: string, port: i32, request_handler: fn) -> Result<void, string>
+pub fn server_accept_loop(server_fd: i32, request_handler: fn) -> Result<void, string>
+pub fn handle_client_connection(client_fd: i32, request_handler: fn) -> void
+pub fn read_http_request(fd: i32) -> Result<HttpRequest, string>
+pub fn send_http_response(fd: i32, response: HttpResponse) -> Result<void, string>
+pub fn get_connection_header(headers: map<string, string>) -> Option<string>
+pub fn create_router() -> (fn) -> HttpResponse
