@@ -1,0 +1,340 @@
+// Phase 8: ELF Writer (Day 20-21)
+// x86-64 object 파일 (.o) 작성
+
+component ELFWriter {
+  // ELF 상수
+  let ELF_MAGIC = 0x464C457F        // "\x7fELF"
+  let EI_CLASS = 2                  // 64-bit
+  let EI_DATA = 1                   // Little-endian
+  let EI_VERSION = 1                // Current version
+  let EI_OSABI = 0                  // UNIX System V
+  let EI_ABIVERSION = 0
+
+  let ET_REL = 1                    // Relocatable file
+  let EM_X86_64 = 0x3E              // x86-64 machine
+
+  let SHT_PROGBITS = 1              // Program code/data
+  let SHT_SYMTAB = 2                // Symbol table
+  let SHT_STRTAB = 3                // String table
+  let SHT_RELA = 4                  // Relocation with addend
+  let SHT_NOBITS = 8                // No data (.bss)
+
+  let SHF_WRITE = 1                 // Writable section
+  let SHF_ALLOC = 2                 // Occupies memory
+  let SHF_EXECINSTR = 4             // Executable
+
+  // ELF 헤더 생성
+  fn createELFHeader(sectionCount, strTabIndex) -> object {
+    return {
+      e_magic: ELF_MAGIC,
+      e_class: EI_CLASS,
+      e_data: EI_DATA,
+      e_version: EI_VERSION,
+      e_osabi: EI_OSABI,
+      e_abiversion: EI_ABIVERSION,
+      e_type: ET_REL,
+      e_machine: EM_X86_64,
+      e_version_num: 1,
+      e_entry: 0,                   // No entry point for .o
+      e_phoff: 0,                   // No program headers for .o
+      e_shoff: 64,                  // Section header offset
+      e_flags: 0,
+      e_ehsize: 64,                 // ELF header size
+      e_phentsize: 0,               // Program header size
+      e_phnum: 0,                   // Program header count
+      e_shentsize: 64,              // Section header size
+      e_shnum: sectionCount,        // Section count
+      e_shstrndx: strTabIndex       // String table section index
+    }
+  }
+
+  // 섹션 헤더 생성
+  fn createSectionHeader(name, type, flags, offset, size, link, info, align, entsize) -> object {
+    return {
+      sh_name: name,                // Offset in string table
+      sh_type: type,
+      sh_flags: flags,
+      sh_addr: 0,                   // No address for .o
+      sh_offset: offset,            // File offset
+      sh_size: size,
+      sh_link: link,                // Related section index
+      sh_info: info,
+      sh_addralign: align,
+      sh_entsize: entsize           // Entry size (for symbol/reloc tables)
+    }
+  }
+
+  // 문자열 테이블 생성
+  fn createStringTable() -> object {
+    return {
+      strings: [""],                // Index 0 is always empty
+      offsets: {},                  // name → offset mapping
+      size: 1
+    }
+  }
+
+  // 문자열 테이블에 문자열 추가
+  fn addString(strtab, str) -> i64 {
+    if (strtab.offsets[str] != nil) {
+      return strtab.offsets[str]
+    }
+
+    let offset = strtab.size
+    strtab.strings = strtab.strings + [str]
+    strtab.offsets[str] = offset
+    strtab.size = strtab.size + str.length + 1
+
+    return offset
+  }
+
+  // 16진수 변환 (바이트)
+  fn toHexByte(value) -> string {
+    let hexChars = "0123456789abcdef"
+    let high = (value >> 4) & 0xF
+    let low = value & 0xF
+    return hexChars[high] + hexChars[low]
+  }
+
+  // 64비트 값을 리틀엔디안 바이트로
+  fn toBytes64(value) -> string {
+    let bytes = ""
+    for (let i = 0; i < 8; i = i + 1) {
+      let byte = (value >> (i * 8)) & 0xFF
+      bytes = bytes + toHexByte(byte)
+    }
+    return bytes
+  }
+
+  // 32비트 값을 리틀엔디안 바이트로
+  fn toBytes32(value) -> string {
+    let bytes = ""
+    for (let i = 0; i < 4; i = i + 1) {
+      let byte = (value >> (i * 8)) & 0xFF
+      bytes = bytes + toHexByte(byte)
+    }
+    return bytes
+  }
+
+  // 16비트 값을 리틀엔디안 바이트로
+  fn toBytes16(value) -> string {
+    let high = (value >> 8) & 0xFF
+    let low = value & 0xFF
+    return toHexByte(low) + toHexByte(high)
+  }
+
+  // ELF 헤더 바이트
+  fn encodeELFHeader(header) -> string {
+    let data = ""
+
+    // EI_MAG0-3 (0x7f, 'E', 'L', 'F')
+    data = data + toHexByte(0x7f) + toHexByte(0x45) + toHexByte(0x4c) + toHexByte(0x46)
+
+    // EI_CLASS
+    data = data + toHexByte(header.e_class)
+
+    // EI_DATA
+    data = data + toHexByte(header.e_data)
+
+    // EI_VERSION
+    data = data + toHexByte(header.e_version)
+
+    // EI_OSABI
+    data = data + toHexByte(header.e_osabi)
+
+    // EI_ABIVERSION
+    data = data + toHexByte(header.e_abiversion)
+
+    // Padding (7 bytes)
+    for (let i = 0; i < 7; i = i + 1) {
+      data = data + "00"
+    }
+
+    // e_type (2 bytes)
+    data = data + toBytes16(header.e_type)
+
+    // e_machine (2 bytes)
+    data = data + toBytes16(header.e_machine)
+
+    // e_version (4 bytes)
+    data = data + toBytes32(header.e_version_num)
+
+    // e_entry (8 bytes)
+    data = data + toBytes64(header.e_entry)
+
+    // e_phoff (8 bytes)
+    data = data + toBytes64(header.e_phoff)
+
+    // e_shoff (8 bytes)
+    data = data + toBytes64(header.e_shoff)
+
+    // e_flags (4 bytes)
+    data = data + toBytes32(header.e_flags)
+
+    // e_ehsize (2 bytes)
+    data = data + toBytes16(header.e_ehsize)
+
+    // e_phentsize (2 bytes)
+    data = data + toBytes16(header.e_phentsize)
+
+    // e_phnum (2 bytes)
+    data = data + toBytes16(header.e_phnum)
+
+    // e_shentsize (2 bytes)
+    data = data + toBytes16(header.e_shentsize)
+
+    // e_shnum (2 bytes)
+    data = data + toBytes16(header.e_shnum)
+
+    // e_shstrndx (2 bytes)
+    data = data + toBytes16(header.e_shstrndx)
+
+    return data
+  }
+
+  // 섹션 헤더 바이트
+  fn encodeSectionHeader(shdr) -> string {
+    let data = ""
+
+    data = data + toBytes32(shdr.sh_name)
+    data = data + toBytes32(shdr.sh_type)
+    data = data + toBytes64(shdr.sh_flags)
+    data = data + toBytes64(shdr.sh_addr)
+    data = data + toBytes64(shdr.sh_offset)
+    data = data + toBytes64(shdr.sh_size)
+    data = data + toBytes32(shdr.sh_link)
+    data = data + toBytes32(shdr.sh_info)
+    data = data + toBytes64(shdr.sh_addralign)
+    data = data + toBytes64(shdr.sh_entsize)
+
+    return data
+  }
+
+  // ELF 파일 생성 (메인 함수)
+  fn writeELFFile(filename, textSection, dataSection, symbols, relocations, strtab) -> object {
+    let result = {
+      filename: filename,
+      success: false,
+      fileSize: 0,
+      sections: 0,
+      symbols: symbols.length,
+      relocations: relocations.length
+    }
+
+    // 섹션 개수 계산 (null + .text + .data + .rela.text + .symtab + .strtab)
+    let sectionCount = 6
+
+    // ELF 헤더 생성 및 인코딩
+    let elfHeader = createELFHeader(sectionCount, 5)  // .strtab is section 5
+    let headerBytes = encodeELFHeader(elfHeader)
+
+    // 섹션 헤더 오프셋: 64 (after ELF header)
+    let sectionHeaderOffset = 64
+    let sectionHeaderSize = 64 * sectionCount
+
+    // 섹션 데이터 오프셋: 64 + (64 * section count)
+    let dataOffset = sectionHeaderOffset + sectionHeaderSize
+
+    // 섹션 헤더 배열 생성
+    let sectionHeaders = []
+
+    // Section 0: NULL
+    sectionHeaders = sectionHeaders + [createSectionHeader(0, 0, 0, 0, 0, 0, 0, 0, 0)]
+
+    // Section 1: .text
+    sectionHeaders = sectionHeaders + [createSectionHeader(
+      1,                    // .text string offset
+      SHT_PROGBITS,        // Type
+      SHF_ALLOC | SHF_EXECINSTR,  // Flags
+      dataOffset,          // Offset
+      textSection.size,
+      0, 0, 16, 0
+    )]
+
+    // 데이터 오프셋 진행
+    let currentOffset = dataOffset + textSection.size
+
+    // Section 2: .data
+    sectionHeaders = sectionHeaders + [createSectionHeader(
+      7,                    // .data string offset
+      SHT_PROGBITS,
+      SHF_ALLOC | SHF_WRITE,
+      currentOffset,
+      dataSection.size,
+      0, 0, 16, 0
+    )]
+
+    currentOffset = currentOffset + dataSection.size
+
+    // Section 3: .rela.text (relocations)
+    sectionHeaders = sectionHeaders + [createSectionHeader(
+      13,                   // .rela.text string offset
+      SHT_RELA,
+      0,
+      currentOffset,
+      relocations.length * 24,
+      4,                    // Link to symbol table
+      1,                    // Info: .text section
+      8, 24                 // 24 bytes per relocation
+    )]
+
+    currentOffset = currentOffset + (relocations.length * 24)
+
+    // Section 4: .symtab
+    sectionHeaders = sectionHeaders + [createSectionHeader(
+      23,                   // .symtab string offset
+      SHT_SYMTAB,
+      0,
+      currentOffset,
+      (symbols.length + 1) * 24,
+      5,                    // Link to string table
+      0, 8, 24             // 24 bytes per symbol
+    )]
+
+    currentOffset = currentOffset + ((symbols.length + 1) * 24)
+
+    // Section 5: .strtab (string table)
+    sectionHeaders = sectionHeaders + [createSectionHeader(
+      31,                   // .strtab string offset
+      SHT_STRTAB,
+      0,
+      currentOffset,
+      strtab.size,
+      0, 0, 1, 0
+    )]
+
+    // 파일 크기 계산
+    let fileSize = currentOffset + strtab.size
+
+    // 결과 반환
+    result.success = true
+    result.fileSize = fileSize
+    result.sections = sectionCount
+
+    return result
+  }
+
+  // 디버그
+  fn debug() -> void {
+    println("\n=== ELF Writer Debug ===")
+    println("ELF Format: 64-bit x86-64")
+    println("Target: Relocatable object (.o)")
+    println("Byte Order: Little-endian")
+    println("OS/ABI: UNIX System V")
+    println("===========================\n")
+  }
+
+  // 내보내기
+  export {
+    createELFHeader,
+    createSectionHeader,
+    createStringTable,
+    addString,
+    toBytes64,
+    toBytes32,
+    toBytes16,
+    encodeELFHeader,
+    encodeSectionHeader,
+    writeELFFile,
+    debug
+  }
+}

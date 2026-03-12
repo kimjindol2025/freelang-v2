@@ -1,0 +1,378 @@
+// Phase 8: Assembly & Assembler Tests (Day 18-21)
+// 어셈블러 통합 테스트
+
+import SymbolManager from './symbol_manager.free'
+import ELFWriter from './elf_writer.free'
+
+component AssemblerTests {
+  let totalTests = 0
+  let passedTests = 0
+
+  fn assert(condition, message) -> void {
+    totalTests = totalTests + 1
+    if (condition) {
+      passedTests = passedTests + 1
+      println("✓ " + message)
+    } else {
+      println("✗ " + message)
+    }
+  }
+
+  // ==================== Symbol Manager Tests (Day 18-19) ====================
+
+  // Test 1: 기본 심볼 추가
+  fn test_add_symbol() -> void {
+    let symMgr = SymbolManager
+    let idx = symMgr.addSymbol("main", 0x0000, 42, symMgr.STB_GLOBAL, symMgr.STT_FUNC, ".text")
+    assert(idx == 0, "Test 1: Symbol index assigned")
+    assert(symMgr.getSymbolCount() == 1, "Test 1: Symbol count is 1")
+  }
+
+  // Test 2: 심볼 검색
+  fn test_find_symbol() -> void {
+    let symMgr = SymbolManager
+    symMgr.addSymbol("main", 0x0000, 42, symMgr.STB_GLOBAL, symMgr.STT_FUNC, ".text")
+    symMgr.addSymbol("printf", 0, 0, symMgr.STB_GLOBAL, symMgr.STT_FUNC, "UNDEF")
+
+    let sym = symMgr.findSymbol("main")
+    assert(sym != nil, "Test 2: Symbol found")
+    assert(sym.name == "main", "Test 2: Symbol name matches")
+    assert(sym.offset == 0, "Test 2: Symbol offset correct")
+  }
+
+  // Test 3: 재배치 항목 추가
+  fn test_add_relocation() -> void {
+    let symMgr = SymbolManager
+    symMgr.addSymbol("printf", 0, 0, symMgr.STB_GLOBAL, symMgr.STT_FUNC, "UNDEF")
+    let relocIdx = symMgr.addRelocationPC32(0x0010, "printf", -4)
+
+    assert(relocIdx == 0, "Test 3: Relocation index assigned")
+    assert(symMgr.getRelocationCount() == 1, "Test 3: Relocation count is 1")
+  }
+
+  // Test 4: 심볼 분류 (Local/Global/Weak)
+  fn test_symbol_classification() -> void {
+    let symMgr = SymbolManager
+    let localIdx = symMgr.addLocalSymbol("loop_label", 0x0020, 0, ".text")
+    let globalIdx = symMgr.addGlobalFunction("main", 0x0000, 100, ".text")
+    let weakIdx = symMgr.addWeakSymbol("weak_func", 0x0100, 50, symMgr.STT_FUNC, ".text")
+
+    assert(symMgr.getSymbolCount() == 3, "Test 4: Three symbols")
+    assert(symMgr.getSymbolByIndex(localIdx).binding == symMgr.STB_LOCAL, "Test 4: Local binding")
+    assert(symMgr.getSymbolByIndex(globalIdx).binding == symMgr.STB_GLOBAL, "Test 4: Global binding")
+    assert(symMgr.getSymbolByIndex(weakIdx).binding == symMgr.STB_WEAK, "Test 4: Weak binding")
+  }
+
+  // Test 5: 재배치 타입 다양성
+  fn test_relocation_types() -> void {
+    let symMgr = SymbolManager
+    symMgr.addSymbol("extern_var", 0, 0, symMgr.STB_GLOBAL, symMgr.STT_OBJECT, "UNDEF")
+    symMgr.addSymbol("extern_func", 0, 0, symMgr.STB_GLOBAL, symMgr.STT_FUNC, "UNDEF")
+
+    let reloc64Idx = symMgr.addRelocation64(0x0010, "extern_var")
+    let relocPC32Idx = symMgr.addRelocationPC32(0x0020, "extern_func", -4)
+    let relocGOTIdx = symMgr.addRelocationGOT(0x0030, "extern_var")
+    let relocPLTIdx = symMgr.addRelocationPLT(0x0040, "extern_func")
+
+    assert(symMgr.getRelocationCount() == 4, "Test 5: Four relocations")
+    let reloc = symMgr.findRelocation(0x0010)
+    assert(reloc != nil && reloc.type == symMgr.R_X86_64_64, "Test 5: R_X86_64_64 type")
+  }
+
+  // Test 6: 섹션별 심볼 추출
+  fn test_section_symbols() -> void {
+    let symMgr = SymbolManager
+    symMgr.addGlobalFunction("main", 0x0000, 100, ".text")
+    symMgr.addGlobalObject("data", 0x0000, 64, ".data")
+    symMgr.addLocalSymbol("local", 0x0050, 0, ".text")
+
+    let textSyms = symMgr.getSymbolsBySection(".text")
+    let dataSyms = symMgr.getSymbolsBySection(".data")
+
+    assert(textSyms.length == 2, "Test 6: Two .text symbols")
+    assert(dataSyms.length == 1, "Test 6: One .data symbol")
+  }
+
+  // Test 7: 심볼 테이블 크기
+  fn test_symbol_table_size() -> void {
+    let symMgr = SymbolManager
+    symMgr.addGlobalFunction("main", 0x0000, 100, ".text")
+    symMgr.addGlobalFunction("func", 0x0100, 50, ".text")
+
+    let size = symMgr.getSymbolTableSize()
+    // (2 symbols + 1 undefined) * 24 bytes = 72
+    assert(size == 72, "Test 7: Symbol table size 72 bytes")
+  }
+
+  // Test 8: 재배치 테이블 크기
+  fn test_relocation_table_size() -> void {
+    let symMgr = SymbolManager
+    symMgr.addSymbol("func", 0, 0, symMgr.STB_GLOBAL, symMgr.STT_FUNC, "UNDEF")
+    symMgr.addRelocationPC32(0x0010, "func", -4)
+    symMgr.addRelocationPC32(0x0020, "func", -4)
+
+    let size = symMgr.getRelocationTableSize()
+    // 2 relocations * 24 bytes = 48
+    assert(size == 48, "Test 8: Relocation table size 48 bytes")
+  }
+
+  // Test 9: 효율성 분석
+  fn test_efficiency_analysis() -> void {
+    let symMgr = SymbolManager
+    symMgr.addGlobalFunction("main", 0x0000, 100, ".text")
+    symMgr.addLocalSymbol("label", 0x0050, 0, ".text")
+    symMgr.addUndefinedSymbol("printf")
+    symMgr.addRelocationPC32(0x0040, "printf", -4)
+
+    let analysis = symMgr.analyzeEfficiency()
+    assert(analysis.totalSymbols == 3, "Test 9: 3 symbols")
+    assert(analysis.globalCount == 1, "Test 9: 1 global")
+    assert(analysis.localCount == 1, "Test 9: 1 local")
+    assert(analysis.undefinedCount == 1, "Test 9: 1 undefined")
+    assert(analysis.totalRelocations == 1, "Test 9: 1 relocation")
+  }
+
+  // Test 10: GOT/PLT 준비
+  fn test_got_plt_preparation() -> void {
+    let symMgr = SymbolManager
+    let externals = ["printf", "malloc", "free"]
+    let got = symMgr.prepareGOT(externals)
+
+    assert(got.length == 3, "Test 10: 3 GOT entries")
+    assert(symMgr.getSymbolCount() == 3, "Test 10: 3 symbols added")
+  }
+
+  // ==================== ELF Writer Tests (Day 20-21) ====================
+
+  // Test 11: ELF 헤더 생성
+  fn test_elf_header_creation() -> void {
+    let elfWriter = ELFWriter
+    let header = elfWriter.createELFHeader(6, 5)
+
+    assert(header.e_magic == 0x464C457F, "Test 11: Magic number correct")
+    assert(header.e_class == 2, "Test 11: 64-bit class")
+    assert(header.e_machine == 0x3E, "Test 11: x86-64 machine")
+    assert(header.e_type == 1, "Test 11: Relocatable type")
+    assert(header.e_shnum == 6, "Test 11: Section count 6")
+  }
+
+  // Test 12: 섹션 헤더 생성
+  fn test_section_header_creation() -> void {
+    let elfWriter = ELFWriter
+    let shdr = elfWriter.createSectionHeader(
+      1,                // name offset
+      elfWriter.SHT_PROGBITS,
+      elfWriter.SHF_ALLOC | elfWriter.SHF_EXECINSTR,
+      64,               // offset
+      1024,             // size
+      0, 0, 16, 0
+    )
+
+    assert(shdr.sh_type == elfWriter.SHT_PROGBITS, "Test 12: Type PROGBITS")
+    assert(shdr.sh_offset == 64, "Test 12: Offset correct")
+    assert(shdr.sh_size == 1024, "Test 12: Size correct")
+  }
+
+  // Test 13: 문자열 테이블 생성
+  fn test_string_table_creation() -> void {
+    let elfWriter = ELFWriter
+    let strtab = elfWriter.createStringTable()
+
+    assert(strtab.size == 1, "Test 13: Initial size 1")
+    let offset = elfWriter.addString(strtab, ".text")
+    assert(offset == 1, "Test 13: .text offset 1")
+    assert(strtab.size == 7, "Test 13: Size updated to 7")
+  }
+
+  // Test 14: 문자열 테이블 중복 제거
+  fn test_string_table_deduplication() -> void {
+    let elfWriter = ELFWriter
+    let strtab = elfWriter.createStringTable()
+
+    let offset1 = elfWriter.addString(strtab, ".text")
+    let offset2 = elfWriter.addString(strtab, ".text")
+
+    assert(offset1 == offset2, "Test 14: Same offset for duplicate")
+    assert(strtab.size == 7, "Test 14: Size not doubled")
+  }
+
+  // Test 15: 바이트 인코딩 (16비트)
+  fn test_byte_encoding_16() -> void {
+    let elfWriter = ELFWriter
+    let bytes = elfWriter.toBytes16(0x3E04)  // Little-endian: 04 3E
+
+    // Hex encoding verification
+    assert(bytes.length == 4, "Test 15: 16-bit encoding 4 chars")
+  }
+
+  // Test 16: 바이트 인코딩 (32비트)
+  fn test_byte_encoding_32() -> void {
+    let elfWriter = ELFWriter
+    let bytes = elfWriter.toBytes32(0x12345678)
+
+    // Little-endian: 78 56 34 12
+    assert(bytes.length == 8, "Test 16: 32-bit encoding 8 chars")
+  }
+
+  // Test 17: 바이트 인코딩 (64비트)
+  fn test_byte_encoding_64() -> void {
+    let elfWriter = ELFWriter
+    let bytes = elfWriter.toBytes64(0x123456789abcdef0)
+
+    // Little-endian: F0 DE BC 9A 78 56 34 12
+    assert(bytes.length == 16, "Test 17: 64-bit encoding 16 chars")
+  }
+
+  // Test 18: ELF 헤더 인코딩
+  fn test_elf_header_encoding() -> void {
+    let elfWriter = ELFWriter
+    let header = elfWriter.createELFHeader(6, 5)
+    let encoded = elfWriter.encodeELFHeader(header)
+
+    // ELF header is 64 bytes = 128 hex characters
+    assert(encoded.length == 128, "Test 18: Encoded header 128 chars (64 bytes)")
+  }
+
+  // Test 19: 섹션 헤더 인코딩
+  fn test_section_header_encoding() -> void {
+    let elfWriter = ELFWriter
+    let shdr = elfWriter.createSectionHeader(1, 1, 6, 64, 1024, 0, 0, 16, 0)
+    let encoded = elfWriter.encodeSectionHeader(shdr)
+
+    // Section header is 64 bytes = 128 hex characters
+    assert(encoded.length == 128, "Test 19: Encoded section header 128 chars")
+  }
+
+  // Test 20: ELF 파일 쓰기 통합
+  fn test_elf_file_write() -> void {
+    let elfWriter = ELFWriter
+    let strtab = elfWriter.createStringTable()
+
+    let textSection = { size: 100, data: "code" }
+    let dataSection = { size: 64, data: "data" }
+    let symbols = [{ name: "main" }, { name: "printf" }]
+    let relocations = [{ offset: 0x0010, type: 2 }]
+
+    let result = elfWriter.writeELFFile(
+      "test.o",
+      textSection,
+      dataSection,
+      symbols,
+      relocations,
+      strtab
+    )
+
+    assert(result.success == true, "Test 20: File write successful")
+    assert(result.sections == 6, "Test 20: 6 sections created")
+    assert(result.symbols == 2, "Test 20: 2 symbols recorded")
+    assert(result.relocations == 1, "Test 20: 1 relocation recorded")
+  }
+
+  // ==================== Integration Tests ====================
+
+  // Test 21: Symbol Manager + ELF Writer 통합
+  fn test_symbol_elf_integration() -> void {
+    let symMgr = SymbolManager
+    let elfWriter = ELFWriter
+
+    symMgr.addGlobalFunction("main", 0x0000, 100, ".text")
+    symMgr.addUndefinedSymbol("printf")
+    symMgr.addRelocationPC32(0x0040, "printf", -4)
+
+    let symbols = symMgr.getAllSymbols()
+    let relocations = symMgr.getAllRelocations()
+
+    assert(symbols.length == 2, "Test 21: 2 symbols total")
+    assert(relocations.length == 1, "Test 21: 1 relocation")
+
+    let strtab = elfWriter.createStringTable()
+    let result = elfWriter.writeELFFile(
+      "output.o",
+      { size: 100 },
+      { size: 0 },
+      symbols,
+      relocations,
+      strtab
+    )
+
+    assert(result.success == true, "Test 21: Integration successful")
+  }
+
+  // Test 22: 완전한 어셈블리 파이프라인
+  fn test_full_pipeline() -> void {
+    let symMgr = SymbolManager
+    let elfWriter = ELFWriter
+
+    // 1. 심볼 테이블 구성
+    symMgr.addGlobalFunction("main", 0x0000, 42, ".text")
+    symMgr.addGlobalObject("global_var", 0x0000, 8, ".data")
+    symMgr.addLocalSymbol("loop_start", 0x0010, 0, ".text")
+    symMgr.addUndefinedSymbol("printf")
+    symMgr.addUndefinedSymbol("malloc")
+
+    // 2. 재배치 항목
+    symMgr.addRelocationPC32(0x0020, "printf", -4)
+    symMgr.addRelocation64(0x0030, "global_var")
+
+    // 3. ELF 파일 생성
+    let strtab = elfWriter.createStringTable()
+    elfWriter.addString(strtab, ".text")
+    elfWriter.addString(strtab, ".data")
+    elfWriter.addString(strtab, ".symtab")
+    elfWriter.addString(strtab, ".strtab")
+
+    let analysis = symMgr.analyzeEfficiency()
+    assert(analysis.totalSymbols == 5, "Test 22: 5 symbols")
+    assert(analysis.totalRelocations == 2, "Test 22: 2 relocations")
+    assert(analysis.symbolTableSize == 144, "Test 22: Symbol table size correct")
+  }
+
+  // 모든 테스트 실행
+  fn runAllTests() -> void {
+    println("\n╔════════════════════════════════════════════╗")
+    println("║   Phase 8: Assembler Tests (Day 18-21)   ║")
+    println("╚════════════════════════════════════════════╝\n")
+
+    println("--- Symbol Manager Tests (1-10) ---")
+    test_add_symbol()
+    test_find_symbol()
+    test_add_relocation()
+    test_symbol_classification()
+    test_relocation_types()
+    test_section_symbols()
+    test_symbol_table_size()
+    test_relocation_table_size()
+    test_efficiency_analysis()
+    test_got_plt_preparation()
+
+    println("\n--- ELF Writer Tests (11-20) ---")
+    test_elf_header_creation()
+    test_section_header_creation()
+    test_string_table_creation()
+    test_string_table_deduplication()
+    test_byte_encoding_16()
+    test_byte_encoding_32()
+    test_byte_encoding_64()
+    test_elf_header_encoding()
+    test_section_header_encoding()
+    test_elf_file_write()
+
+    println("\n--- Integration Tests (21-22) ---")
+    test_symbol_elf_integration()
+    test_full_pipeline()
+
+    println("\n╔════════════════════════════════════════════╗")
+    println("║   결과: " + str(passedTests) + "/" + str(totalTests) + " PASS              ║")
+    println("║   Phase 8 Assembler 완성!                 ║")
+    println("╚════════════════════════════════════════════╝\n")
+  }
+
+  export { runAllTests }
+}
+
+// 테스트 실행
+fn main() {
+  AssemblerTests.runAllTests()
+}
+
+main()

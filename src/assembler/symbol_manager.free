@@ -1,0 +1,379 @@
+// Phase 8: Symbol Manager & Relocation Manager (Day 18-19)
+// 심볼 테이블 관리, 재배치 정보 생성
+
+component SymbolManager {
+  // 심볼 테이블 (이름, 오프셋, 크기, 바인딩, 타입, 섹션, 값)
+  let symbols = []
+  let symbolIndex = 0
+
+  // 재배치 항목 (오프셋, 타입, 심볼 참조, 가산값)
+  let relocations = []
+  let relocationIndex = 0
+
+  // Symbol Binding 상수
+  let STB_LOCAL = 0
+  let STB_WEAK = 1
+  let STB_GLOBAL = 2
+
+  // Symbol Type 상수
+  let STT_NOTYPE = 0
+  let STT_OBJECT = 1
+  let STT_FUNC = 2
+  let STT_SECTION = 3
+
+  // Relocation Type 상수 (x86-64)
+  let R_X86_64_NONE = 0
+  let R_X86_64_64 = 1
+  let R_X86_64_PC32 = 2
+  let R_X86_64_GOT64 = 3
+  let R_X86_64_PLT32 = 4
+  let R_X86_64_COPY = 5
+  let R_X86_64_GLOB_DAT = 6
+  let R_X86_64_JUMP_SLOT = 7
+  let R_X86_64_RELATIVE = 8
+  let R_X86_64_GOTPCREL = 9
+
+  // 심볼 추가
+  fn addSymbol(name, offset, size, binding, type, section) -> i64 {
+    let symbol = {
+      index: symbolIndex,
+      name: name,
+      offset: offset,
+      size: size,
+      binding: binding,      // STB_LOCAL, STB_GLOBAL, STB_WEAK
+      type: type,            // STT_FUNC, STT_OBJECT, STT_NOTYPE
+      section: section,      // ".text", ".data", ".bss", "UNDEF"
+      value: offset          // 최종 값은 링커가 결정
+    }
+    symbols = symbols + [symbol]
+    symbolIndex = symbolIndex + 1
+    return symbol.index
+  }
+
+  // 심볼 찾기 (이름으로)
+  fn findSymbol(name) -> object {
+    for (let i = 0; i < symbols.length; i = i + 1) {
+      if (symbols[i].name == name) {
+        return symbols[i]
+      }
+    }
+    return nil
+  }
+
+  // 심볼 찾기 (인덱스로)
+  fn getSymbolByIndex(index) -> object {
+    if (index >= 0 && index < symbols.length) {
+      return symbols[index]
+    }
+    return nil
+  }
+
+  // 심볼 업데이트
+  fn updateSymbol(index, offset, size) -> void {
+    if (index >= 0 && index < symbols.length) {
+      symbols[index].offset = offset
+      symbols[index].size = size
+      symbols[index].value = offset
+    }
+  }
+
+  // 전역 심볼 추가 (함수)
+  fn addGlobalFunction(name, offset, size, section) -> i64 {
+    return addSymbol(name, offset, size, STB_GLOBAL, STT_FUNC, section)
+  }
+
+  // 전역 심볼 추가 (데이터)
+  fn addGlobalObject(name, offset, size, section) -> i64 {
+    return addSymbol(name, offset, size, STB_GLOBAL, STT_OBJECT, section)
+  }
+
+  // 로컬 심볼 추가
+  fn addLocalSymbol(name, offset, size, section) -> i64 {
+    return addSymbol(name, offset, size, STB_LOCAL, STT_NOTYPE, section)
+  }
+
+  // 약한 심볼 추가
+  fn addWeakSymbol(name, offset, size, type, section) -> i64 {
+    return addSymbol(name, offset, size, STB_WEAK, type, section)
+  }
+
+  // 외부 심볼 (undefined) 추가
+  fn addUndefinedSymbol(name) -> i64 {
+    return addSymbol(name, 0, 0, STB_GLOBAL, STT_NOTYPE, "UNDEF")
+  }
+
+  // 재배치 항목 추가
+  fn addRelocation(offset, type, symbolName, addend) -> i64 {
+    let symbol = findSymbol(symbolName)
+    let symbolIndex = 0
+    if (symbol != nil) {
+      symbolIndex = symbol.index
+    }
+
+    let reloc = {
+      index: relocationIndex,
+      offset: offset,
+      type: type,           // R_X86_64_64, R_X86_64_PC32 등
+      symbol: symbolName,
+      symbolIndex: symbolIndex,
+      addend: addend
+    }
+    relocations = relocations + [reloc]
+    relocationIndex = relocationIndex + 1
+    return reloc.index
+  }
+
+  // 64비트 절대 주소 재배치
+  fn addRelocation64(offset, symbolName) -> i64 {
+    return addRelocation(offset, R_X86_64_64, symbolName, 0)
+  }
+
+  // 32비트 RIP-relative 재배치 (함수 호출 등)
+  fn addRelocationPC32(offset, symbolName, addend) -> i64 {
+    return addRelocation(offset, R_X86_64_PC32, symbolName, addend)
+  }
+
+  // GOT 항목 재배치
+  fn addRelocationGOT(offset, symbolName) -> i64 {
+    return addRelocation(offset, R_X86_64_GOT64, symbolName, 0)
+  }
+
+  // PLT 항목 재배치 (지연 바인딩)
+  fn addRelocationPLT(offset, symbolName) -> i64 {
+    return addRelocation(offset, R_X86_64_PLT32, symbolName, -4)
+  }
+
+  // 재배치 항목 찾기
+  fn findRelocation(offset) -> object {
+    for (let i = 0; i < relocations.length; i = i + 1) {
+      if (relocations[i].offset == offset) {
+        return relocations[i]
+      }
+    }
+    return nil
+  }
+
+  // 심볼 개수
+  fn getSymbolCount() -> i64 {
+    return symbols.length
+  }
+
+  // 재배치 개수
+  fn getRelocationCount() -> i64 {
+    return relocations.length
+  }
+
+  // 모든 심볼 반환
+  fn getAllSymbols() -> array {
+    return symbols
+  }
+
+  // 모든 재배치 반환
+  fn getAllRelocations() -> array {
+    return relocations
+  }
+
+  // 섹션별 심볼 추출
+  fn getSymbolsBySection(section) -> array {
+    let sectionSymbols = []
+    for (let i = 0; i < symbols.length; i = i + 1) {
+      if (symbols[i].section == section) {
+        sectionSymbols = sectionSymbols + [symbols[i]]
+      }
+    }
+    return sectionSymbols
+  }
+
+  // 재배치 타입 문자열
+  fn relocationTypeToString(type) -> string {
+    if (type == R_X86_64_64) {
+      return "R_X86_64_64"
+    } else if (type == R_X86_64_PC32) {
+      return "R_X86_64_PC32"
+    } else if (type == R_X86_64_GOT64) {
+      return "R_X86_64_GOT64"
+    } else if (type == R_X86_64_PLT32) {
+      return "R_X86_64_PLT32"
+    }
+    return "UNKNOWN"
+  }
+
+  // 심볼 바인딩 문자열
+  fn bindingToString(binding) -> string {
+    if (binding == STB_LOCAL) {
+      return "LOCAL"
+    } else if (binding == STB_GLOBAL) {
+      return "GLOBAL"
+    } else if (binding == STB_WEAK) {
+      return "WEAK"
+    }
+    return "UNKNOWN"
+  }
+
+  // 심볼 타입 문자열
+  fn typeToString(type) -> string {
+    if (type == STT_FUNC) {
+      return "FUNC"
+    } else if (type == STT_OBJECT) {
+      return "OBJECT"
+    } else if (type == STT_NOTYPE) {
+      return "NOTYPE"
+    }
+    return "UNKNOWN"
+  }
+
+  // 심볼 테이블 크기 계산 (ELF 형식: 24바이트/항목)
+  fn getSymbolTableSize() -> i64 {
+    return (symbols.length + 1) * 24  // +1 for undefined entry
+  }
+
+  // 재배치 테이블 크기 계산 (ELF 형식: 24바이트/항목 with addend)
+  fn getRelocationTableSize() -> i64 {
+    return relocations.length * 24
+  }
+
+  // 심볼 테이블 정렬 (로컬 심볼 우선)
+  fn sortSymbols() -> void {
+    let localSymbols = []
+    let globalSymbols = []
+    let weakSymbols = []
+
+    for (let i = 0; i < symbols.length; i = i + 1) {
+      let sym = symbols[i]
+      if (sym.binding == STB_LOCAL) {
+        localSymbols = localSymbols + [sym]
+      } else if (sym.binding == STB_GLOBAL) {
+        globalSymbols = globalSymbols + [sym]
+      } else if (sym.binding == STB_WEAK) {
+        weakSymbols = weakSymbols + [sym]
+      }
+    }
+
+    symbols = localSymbols + globalSymbols + weakSymbols
+  }
+
+  // GOT (Global Offset Table) 준비
+  fn prepareGOT(externalSymbols) -> array {
+    let got = []
+    for (let i = 0; i < externalSymbols.length; i = i + 1) {
+      let sym = externalSymbols[i]
+      addUndefinedSymbol(sym)
+      got = got + [{ symbol: sym, offset: i * 8 }]
+    }
+    return got
+  }
+
+  // PLT (Procedure Linkage Table) 준비
+  fn preparePLT(externalFunctions) -> array {
+    let plt = []
+    for (let i = 0; i < externalFunctions.length; i = i + 1) {
+      let func = externalFunctions[i]
+      addUndefinedSymbol(func)
+      plt = plt + [{ symbol: func, offset: (i + 1) * 16 }]  // +1 for PLT0
+    }
+    return plt
+  }
+
+  // 효율성 분석
+  fn analyzeEfficiency() -> object {
+    let analysis = {
+      totalSymbols: symbols.length,
+      localCount: 0,
+      globalCount: 0,
+      weakCount: 0,
+      undefinedCount: 0,
+      totalRelocations: relocations.length,
+      reloc64Count: 0,
+      relocPC32Count: 0,
+      relocGOTCount: 0,
+      relocPLTCount: 0,
+      symbolTableSize: getSymbolTableSize(),
+      relocationTableSize: getRelocationTableSize()
+    }
+
+    for (let i = 0; i < symbols.length; i = i + 1) {
+      let sym = symbols[i]
+      if (sym.binding == STB_LOCAL) {
+        analysis.localCount = analysis.localCount + 1
+      } else if (sym.binding == STB_GLOBAL) {
+        analysis.globalCount = analysis.globalCount + 1
+      } else if (sym.binding == STB_WEAK) {
+        analysis.weakCount = analysis.weakCount + 1
+      }
+      if (sym.section == "UNDEF") {
+        analysis.undefinedCount = analysis.undefinedCount + 1
+      }
+    }
+
+    for (let i = 0; i < relocations.length; i = i + 1) {
+      let reloc = relocations[i]
+      if (reloc.type == R_X86_64_64) {
+        analysis.reloc64Count = analysis.reloc64Count + 1
+      } else if (reloc.type == R_X86_64_PC32) {
+        analysis.relocPC32Count = analysis.relocPC32Count + 1
+      } else if (reloc.type == R_X86_64_GOT64) {
+        analysis.relocGOTCount = analysis.relocGOTCount + 1
+      } else if (reloc.type == R_X86_64_PLT32) {
+        analysis.relocPLTCount = analysis.relocPLTCount + 1
+      }
+    }
+
+    return analysis
+  }
+
+  // 디버그 출력
+  fn debug() -> void {
+    println("\n=== Symbol Manager Debug ===")
+    println("Symbols: " + str(symbols.length))
+    println("Relocations: " + str(relocations.length))
+
+    for (let i = 0; i < symbols.length; i = i + 1) {
+      let sym = symbols[i]
+      println("  [" + str(i) + "] " + sym.name + " @ " + str(sym.offset) +
+              " (" + bindingToString(sym.binding) + ", " + typeToString(sym.type) +
+              ", " + sym.section + ")")
+    }
+
+    println("\n=== Relocation Debug ===")
+    for (let i = 0; i < relocations.length; i = i + 1) {
+      let reloc = relocations[i]
+      println("  [" + str(i) + "] @ " + str(reloc.offset) +
+              " → " + reloc.symbol +
+              " (" + relocationTypeToString(reloc.type) + ")")
+    }
+  }
+
+  // 내보내기
+  export {
+    addSymbol,
+    findSymbol,
+    getSymbolByIndex,
+    updateSymbol,
+    addGlobalFunction,
+    addGlobalObject,
+    addLocalSymbol,
+    addWeakSymbol,
+    addUndefinedSymbol,
+    addRelocation,
+    addRelocation64,
+    addRelocationPC32,
+    addRelocationGOT,
+    addRelocationPLT,
+    findRelocation,
+    getSymbolCount,
+    getRelocationCount,
+    getAllSymbols,
+    getAllRelocations,
+    getSymbolsBySection,
+    relocationTypeToString,
+    bindingToString,
+    typeToString,
+    getSymbolTableSize,
+    getRelocationTableSize,
+    sortSymbols,
+    prepareGOT,
+    preparePLT,
+    analyzeEfficiency,
+    debug
+  }
+}

@@ -1,0 +1,222 @@
+// Phase 8: Instruction Encoder (Day 16-17)
+// x86-64 명령어 → 기계어
+
+component InstructionEncoder {
+  // 레지스터 코드 (ModR/M에서 사용)
+  let regCodes = {
+    "rax": 0, "rcx": 1, "rdx": 2, "rbx": 3,
+    "rsp": 4, "rbp": 5, "rsi": 6, "rdi": 7,
+    "r8": 0, "r9": 1, "r10": 2, "r11": 3,
+    "r12": 4, "r13": 5, "r14": 6, "r15": 7,
+    "eax": 0, "ecx": 1, "edx": 2, "ebx": 3,
+    "esp": 4, "ebp": 5, "esi": 6, "edi": 7
+  }
+
+  // 명령어 opcode 테이블
+  let opcodes = {
+    // MOV 명령어들
+    "mov": { opcode: "89", format: "r/m64, r64" },     // mov r64, r64
+    "mov_imm": { opcode: "c7", format: "r/m64, imm32" }, // mov r64, imm64 (부분)
+    "mov_imm64": { opcode: "b8", format: "r64, imm64" }, // mov r64, imm64
+
+    // 산술 연산
+    "add": { opcode: "01", format: "r/m64, r64" },
+    "sub": { opcode: "29", format: "r/m64, r64" },
+    "imul": { opcode: "0faf", format: "r64, r/m64" },
+
+    // 비교
+    "cmp": { opcode: "39", format: "r/m64, r64" },
+    "test": { opcode: "85", format: "r/m64, r64" },
+
+    // 점프
+    "jmp": { opcode: "e9", format: "rel32" },
+    "je": { opcode: "0f84", format: "rel32" },
+    "jne": { opcode: "0f85", format: "rel32" },
+    "jl": { opcode: "0f8c", format: "rel32" },
+    "jg": { opcode: "0f8f", format: "rel32" },
+
+    // 스택
+    "push": { opcode: "50", format: "r64" },
+    "pop": { opcode: "58", format: "r64" },
+
+    // 함수
+    "call": { opcode: "e8", format: "rel32" },
+    "ret": { opcode: "c3", format: "" },
+
+    // 기타
+    "nop": { opcode: "90", format: "" },
+    "lea": { opcode: "8d", format: "r64, [rip+rel32]" }
+  }
+
+  // 명령어 인코딩
+  fn encodeInstruction(mnemonic, operands) -> string {
+    let encoded = ""
+
+    // REX prefix 결정
+    let rex = determineREX(operands)
+    if (rex != "") {
+      encoded = encoded + rex
+    }
+
+    // Opcode 조회
+    let opcode = lookupOpcode(mnemonic)
+    if (opcode == nil) {
+      return ""  // 미지원 명령어
+    }
+
+    encoded = encoded + opcode
+
+    // ModR/M 바이트 (필요시)
+    if (needsModRM(mnemonic)) {
+      let modrm = encodeModRM(operands)
+      encoded = encoded + modrm
+    }
+
+    // 피연산자 인코딩 (Immediate, Displacement)
+    let operandBytes = encodeOperands(mnemonic, operands)
+    encoded = encoded + operandBytes
+
+    return encoded
+  }
+
+  // REX prefix 결정 (64비트 연산, 확장 레지스터)
+  fn determineREX(operands) -> string {
+    let needsREX = false
+    let w = 0  // 64-bit operand size
+    let r = 0  // REG extension
+    let x = 0  // INDEX extension
+    let b = 0  // RM extension
+
+    // 피연산자에서 확장 레지스터 확인
+    for (let i = 0; i < operands.length; i = i + 1) {
+      let op = operands[i]
+      if (op.type == "register") {
+        // r8-r15는 확장 레지스터
+        if (op.value == "r8" || op.value == "r9" || op.value == "r10" ||
+            op.value == "r11" || op.value == "r12" || op.value == "r13" ||
+            op.value == "r14" || op.value == "r15") {
+          if (i == 0) {
+            r = 1
+          } else {
+            b = 1
+          }
+          needsREX = true
+        } else if (op.value == "rax" || op.value == "rcx" ||
+                   op.value == "rdx" || op.value == "rbx" ||
+                   op.value == "rsp" || op.value == "rbp" ||
+                   op.value == "rsi" || op.value == "rdi") {
+          w = 1  // 64-bit 연산
+          needsREX = true
+        }
+      }
+    }
+
+    if (!needsREX) {
+      return ""
+    }
+
+    // REX byte: 0100_wrxb
+    let rex = 0x40 | (w << 3) | (r << 2) | (x << 1) | b
+    return toHex(rex, 2)
+  }
+
+  // ModR/M 바이트 인코딩
+  fn encodeModRM(operands) -> string {
+    // ModR/M = mod(2) + reg(3) + rm(3)
+    let mod = 3   // 11 = register-to-register
+    let reg = getRegCode(operands[0])
+    let rm = getRegCode(operands[1])
+
+    let byte = (mod << 6) | (reg << 3) | rm
+    return toHex(byte, 2)
+  }
+
+  // 레지스터 코드 조회
+  fn getRegCode(operand) -> i64 {
+    if (operand.type == "register") {
+      return regCodes[operand.value]
+    }
+    return 0
+  }
+
+  // ModR/M 필요 확인
+  fn needsModRM(mnemonic) -> bool {
+    let needsMRM = [
+      "mov", "add", "sub", "imul", "cmp", "test", "lea"
+    ]
+    for (let i = 0; i < needsMRM.length; i = i + 1) {
+      if (mnemonic == needsMRM[i]) {
+        return true
+      }
+    }
+    return false
+  }
+
+  // Opcode 조회
+  fn lookupOpcode(mnemonic) -> string {
+    return opcodes[mnemonic].opcode
+  }
+
+  // 피연산자 인코딩 (Immediate, Displacement)
+  fn encodeOperands(mnemonic, operands) -> string {
+    let encoded = ""
+
+    for (let i = 0; i < operands.length; i = i + 1) {
+      let op = operands[i]
+
+      if (op.type == "immediate") {
+        // 즉시값 인코딩
+        let value = parseImmediate(op.value)
+        if (value <= 0xFFFFFFFF) {
+          // 32비트 또는 64비트
+          encoded = encoded + toHex(value, 8)
+        }
+      }
+    }
+
+    return encoded
+  }
+
+  // 즉시값 파싱
+  fn parseImmediate(immStr) -> i64 {
+    if (immStr.startsWith && immStr.startsWith("0x")) {
+      // 16진수
+      return 0  // TODO: 실제 파싱
+    } else {
+      // 10진수
+      return 0  // TODO: 실제 파싱
+    }
+  }
+
+  // 정수를 16진수로 변환
+  fn toHex(value, digits) -> string {
+    let hex = ""
+    let hexChars = "0123456789abcdef"
+
+    for (let i = 0; i < digits; i = i + 1) {
+      let digit = (value >> (i * 4)) & 0xF
+      hex = hexChars[digit] + hex
+    }
+
+    return hex
+  }
+
+  // 디버그
+  fn debug() -> void {
+    println("\n=== Instruction Encoder Debug ===")
+    println("Opcode count: 20+")
+    println("REX prefix support: YES")
+    println("ModR/M encoding: YES")
+    println("==================================\n")
+  }
+
+  // 내보내기
+  export {
+    encodeInstruction,
+    determineREX,
+    encodeModRM,
+    needsModRM,
+    getRegCode,
+    debug
+  }
+}
