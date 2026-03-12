@@ -1,0 +1,409 @@
+// ============================================================================
+// FreeLang CSS Module: CSS-in-FreeLang 시스템
+// 스타일을 FreeLang 코드로 정의하고 CSS로 컴파일
+// ============================================================================
+
+use "../core/types"
+
+// ──────────────────────────────────────────────────────────────────────────
+// CSS 모듈 기본 구조
+// ──────────────────────────────────────────────────────────────────────────
+
+type CSSRule = {
+  selector: string,
+  properties: map[string]string,
+  mediaQuery?: string,
+  pseudo?: string  // :hover, :focus 등
+}
+
+type CSSModule = {
+  name: string,
+  rules: [CSSRule],
+  variables: map[string]string,
+  theme: string,  // "light", "dark"
+  breakpoints: map[string]string
+}
+
+type StyleSheet = {
+  module: string,
+  css: string,
+  minified: string,
+  stats: {
+    ruleCount: i32,
+    size: i32,
+    gzipSize: i32
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// CSS 변수 정의
+// ──────────────────────────────────────────────────────────────────────────
+
+func defineColors() -> map[string]string {
+  return {
+    "white": "#ffffff",
+    "black": "#000000",
+    "gray-50": "#f9fafb",
+    "gray-100": "#f3f4f6",
+    "gray-200": "#e5e7eb",
+    "gray-300": "#d1d5db",
+    "gray-400": "#9ca3af",
+    "gray-500": "#6b7280",
+    "gray-600": "#4b5563",
+    "gray-700": "#374151",
+    "gray-800": "#1f2937",
+    "gray-900": "#111827",
+    "blue-50": "#eff6ff",
+    "blue-100": "#dbeafe",
+    "blue-500": "#3b82f6",
+    "blue-600": "#2563eb",
+    "blue-900": "#1e3a8a",
+    "red-500": "#ef4444",
+    "red-600": "#dc2626",
+    "green-500": "#10b981",
+    "green-600": "#059669"
+  }
+}
+
+func defineSpacing() -> map[string]string {
+  return {
+    "0": "0",
+    "1": "4px",
+    "2": "8px",
+    "3": "12px",
+    "4": "16px",
+    "6": "24px",
+    "8": "32px",
+    "10": "40px",
+    "12": "48px",
+    "16": "64px",
+    "20": "80px",
+    "24": "96px"
+  }
+}
+
+func defineTypography() -> map[string]string {
+  return {
+    "font-xs": "12px",
+    "font-sm": "14px",
+    "font-base": "16px",
+    "font-lg": "18px",
+    "font-xl": "20px",
+    "font-2xl": "24px",
+    "font-3xl": "30px",
+    "font-4xl": "36px",
+    "font-bold": "700",
+    "font-semibold": "600",
+    "font-normal": "400",
+    "font-light": "300"
+  }
+}
+
+func defineBreakpoints() -> map[string]string {
+  return {
+    "xs": "320px",
+    "sm": "640px",
+    "md": "768px",
+    "lg": "1024px",
+    "xl": "1280px",
+    "2xl": "1536px"
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// CSS 규칙 생성 함수
+// ──────────────────────────────────────────────────────────────────────────
+
+func createRule(selector: string, props: map[string]string) -> CSSRule {
+  return {
+    selector: selector,
+    properties: props,
+    mediaQuery: nil,
+    pseudo: nil
+  }
+}
+
+func createRuleWithPseudo(selector: string, pseudo: string, props: map[string]string) -> CSSRule {
+  return {
+    selector: selector,
+    properties: props,
+    mediaQuery: nil,
+    pseudo: pseudo
+  }
+}
+
+func createRuleWithMedia(selector: string, media: string, props: map[string]string) -> CSSRule {
+  return {
+    selector: selector,
+    properties: props,
+    mediaQuery: media,
+    pseudo: nil
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// CSS 클래스 생성
+// ──────────────────────────────────────────────────────────────────────────
+
+func createColorClass(name: string, color: string) -> CSSRule {
+  return createRule("." + name, {
+    "color": color
+  })
+}
+
+func createBackgroundClass(name: string, color: string) -> CSSRule {
+  return createRule(".bg-" + name, {
+    "background-color": color
+  })
+}
+
+func createPaddingClass(name: string, size: string) -> CSSRule {
+  return createRule(".p-" + name, {
+    "padding": size
+  })
+}
+
+func createMarginClass(name: string, size: string) -> CSSRule {
+  return createRule(".m-" + name, {
+    "margin": size
+  })
+}
+
+func createFlexClass() -> [CSSRule] {
+  let rules: [CSSRule] = []
+
+  // Flex utilities
+  rules.push(createRule(".flex", {
+    "display": "flex"
+  }))
+
+  rules.push(createRule(".flex-col", {
+    "flex-direction": "column"
+  }))
+
+  rules.push(createRule(".flex-row", {
+    "flex-direction": "row"
+  }))
+
+  rules.push(createRule(".gap-4", {
+    "gap": "16px"
+  }))
+
+  rules.push(createRule(".items-center", {
+    "align-items": "center"
+  }))
+
+  rules.push(createRule(".justify-center", {
+    "justify-content": "center"
+  }))
+
+  return rules
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// CSS 모듈 구성
+// ──────────────────────────────────────────────────────────────────────────
+
+func buildCSSModule(name: string) -> CSSModule {
+  let colors = defineColors()
+  let spacing = defineSpacing()
+  let typography = defineTypography()
+  let breakpoints = defineBreakpoints()
+
+  let rules: [CSSRule] = []
+
+  // 색상 클래스 생성
+  for (colorName, colorValue) in colors {
+    rules.push(createColorClass("text-" + colorName, colorValue))
+    rules.push(createBackgroundClass(colorName, colorValue))
+  }
+
+  // 간격 클래스 생성
+  for (spaceName, spaceValue) in spacing {
+    rules.push(createPaddingClass(spaceName, spaceValue))
+    rules.push(createMarginClass(spaceName, spaceValue))
+  }
+
+  // Flex 클래스
+  rules.extend(createFlexClass())
+
+  // Reset 규칙
+  rules.push(createRule("*", {
+    "margin": "0",
+    "padding": "0",
+    "box-sizing": "border-box"
+  }))
+
+  rules.push(createRule("body", {
+    "font-family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    "line-height": "1.5",
+    "color": colors["gray-900"]
+  }))
+
+  return {
+    name: name,
+    rules: rules,
+    variables: {
+      ...colors,
+      ...spacing,
+      ...typography
+    },
+    theme: "light",
+    breakpoints: breakpoints
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// CSS 생성 함수
+// ──────────────────────────────────────────────────────────────────────────
+
+func renderRule(rule: CSSRule) -> string {
+  let selector = rule.selector
+
+  if rule.pseudo != nil {
+    selector = selector + ":" + rule.pseudo
+  }
+
+  let css = selector + " {\n"
+
+  for (prop, value) in rule.properties {
+    css = css + "  " + prop + ": " + value + ";\n"
+  }
+
+  css = css + "}\n"
+
+  return css
+}
+
+func generateCSS(module: CSSModule) -> string {
+  let css = "/* ========================================\n"
+  css = css + "   FreeLang CSS Module: " + module.name + "\n"
+  css = css + "   Theme: " + module.theme + "\n"
+  css = css + "   ======================================== */\n\n"
+
+  // CSS 변수
+  css = css + ":root {\n"
+  for (varName, varValue) in module.variables {
+    css = css + "  --" + varName + ": " + varValue + ";\n"
+  }
+  css = css + "}\n\n"
+
+  // CSS 규칙
+  for rule in module.rules {
+    if rule.mediaQuery != nil {
+      css = css + "@media " + rule.mediaQuery + " {\n"
+      css = css + renderRule(rule)
+      css = css + "}\n"
+    } else {
+      css = css + renderRule(rule)
+    }
+  }
+
+  return css
+}
+
+func minifyCSS(css: string) -> string {
+  // 공백 제거
+  let minified = css
+  minified = minified.replace("\n", "")
+  minified = minified.replace("  ", "")
+  minified = minified.replace(": ", ":")
+  minified = minified.replace("; ", ";")
+
+  return minified
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 스타일시트 생성 및 배포
+// ──────────────────────────────────────────────────────────────────────────
+
+func compileStyleSheet(moduleName: string) -> StyleSheet {
+  let module = buildCSSModule(moduleName)
+  let css = generateCSS(module)
+  let minified = minifyCSS(css)
+
+  let ruleCount = i32(module.rules.length)
+  let size = css.length()
+  let gzipSize = size / 3  // 대략적 추정
+
+  return {
+    module: moduleName,
+    css: css,
+    minified: minified,
+    stats: {
+      ruleCount: ruleCount,
+      size: i32(size),
+      gzipSize: i32(gzipSize)
+    }
+  }
+}
+
+func exportStyleSheet(sheet: StyleSheet, filename: string) -> bool {
+  // 파일에 저장하는 로직
+  // (실제 구현에서는 파일 I/O)
+  return true
+}
+
+func getStyleSheetStats(sheet: StyleSheet) -> string {
+  let stats = sheet.stats
+  return "CSS Module: " + sheet.module + "\n" +
+         "Rules: " + i32ToString(stats.ruleCount) + "\n" +
+         "Size: " + i32ToString(stats.size) + " bytes\n" +
+         "Gzipped: " + i32ToString(stats.gzipSize) + " bytes"
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 반응형 스타일 생성
+// ──────────────────────────────────────────────────────────────────────────
+
+func createResponsiveClass(
+  baseName: string,
+  breakpoint: string,
+  breakpointValue: string,
+  props: map[string]string
+) -> CSSRule {
+  let selector = "@media (min-width: " + breakpointValue + ") { ." + baseName + " }"
+
+  return createRuleWithMedia(
+    "." + baseName,
+    "(min-width: " + breakpointValue + ")",
+    props
+  )
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 다크 모드 지원
+// ──────────────────────────────────────────────────────────────────────────
+
+func createDarkModeClass(lightColor: string, darkColor: string) -> [CSSRule] {
+  let rules: [CSSRule] = []
+
+  rules.push(createRule(".dark-mode", {
+    "background-color": darkColor,
+    "color": lightColor
+  }))
+
+  return rules
+}
+
+func generateDarkTheme(module: CSSModule) -> CSSModule {
+  let darkModule = module
+  darkModule.theme = "dark"
+
+  // 다크 테마용 색상 오버라이드
+  let darkColors = defineColors()
+  darkColors["gray-900"] = "#ffffff"
+  darkColors["gray-50"] = "#0f172a"
+
+  darkModule.variables = darkColors
+
+  return darkModule
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 유틸리티 함수
+// ──────────────────────────────────────────────────────────────────────────
+
+func i32ToString(n: i32) -> string {
+  return "number"  // 실제 구현에서는 숫자를 문자열로 변환
+}

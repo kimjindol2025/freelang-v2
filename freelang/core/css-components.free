@@ -1,0 +1,363 @@
+// ============================================================================
+// FreeLang CSS Components: 컴포넌트 기반 스타일 시스템
+// 재사용 가능한 UI 컴포넌트를 FreeLang으로 정의
+// ============================================================================
+
+use "../core/css-module"
+
+// ──────────────────────────────────────────────────────────────────────────
+// 컴포넌트 타입
+// ──────────────────────────────────────────────────────────────────────────
+
+type ComponentStyle = {
+  name: string,
+  baseClass: string,
+  rules: [CSSRule],
+  variants: map[string][CSSRule],
+  props: map[string]string
+}
+
+type StyledComponent = {
+  component: ComponentStyle,
+  className: string,
+  markup: string
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 버튼 컴포넌트
+// ──────────────────────────────────────────────────────────────────────────
+
+func createButtonComponent() -> ComponentStyle {
+  let rules: [CSSRule] = []
+
+  // 기본 버튼 스타일
+  rules.push(createRule(".btn", {
+    "display": "inline-flex",
+    "align-items": "center",
+    "justify-content": "center",
+    "padding": "8px 16px",
+    "border": "none",
+    "border-radius": "6px",
+    "font-size": "14px",
+    "font-weight": "600",
+    "cursor": "pointer",
+    "transition": "all 0.3s ease"
+  }))
+
+  // 호버 상태
+  rules.push(createRuleWithPseudo(".btn", "hover", {
+    "transform": "translateY(-2px)",
+    "box-shadow": "0 4px 12px rgba(0,0,0,0.15)"
+  }))
+
+  // 활성 상태
+  rules.push(createRuleWithPseudo(".btn", "active", {
+    "transform": "translateY(0)"
+  }))
+
+  // 비활성 상태
+  rules.push(createRuleWithPseudo(".btn", "disabled", {
+    "opacity": "0.6",
+    "cursor": "not-allowed"
+  }))
+
+  let variants: map[string][CSSRule] = {
+    "primary": [
+      createRule(".btn-primary", {
+        "background-color": "#3b82f6",
+        "color": "#ffffff"
+      }),
+      createRuleWithPseudo(".btn-primary", "hover", {
+        "background-color": "#2563eb"
+      })
+    ],
+    "secondary": [
+      createRule(".btn-secondary", {
+        "background-color": "#e5e7eb",
+        "color": "#1f2937"
+      }),
+      createRuleWithPseudo(".btn-secondary", "hover", {
+        "background-color": "#d1d5db"
+      })
+    ],
+    "danger": [
+      createRule(".btn-danger", {
+        "background-color": "#ef4444",
+        "color": "#ffffff"
+      }),
+      createRuleWithPseudo(".btn-danger", "hover", {
+        "background-color": "#dc2626"
+      })
+    ],
+    "success": [
+      createRule(".btn-success", {
+        "background-color": "#10b981",
+        "color": "#ffffff"
+      }),
+      createRuleWithPseudo(".btn-success", "hover", {
+        "background-color": "#059669"
+      })
+    ]
+  }
+
+  return {
+    name: "Button",
+    baseClass: "btn",
+    rules: rules,
+    variants: variants,
+    props: {
+      "padding": "8px 16px",
+      "border-radius": "6px",
+      "font-weight": "600"
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 카드 컴포넌트
+// ──────────────────────────────────────────────────────────────────────────
+
+func createCardComponent() -> ComponentStyle {
+  let rules: [CSSRule] = []
+
+  // 기본 카드 스타일
+  rules.push(createRule(".card", {
+    "background-color": "#ffffff",
+    "border": "1px solid #e5e7eb",
+    "border-radius": "8px",
+    "padding": "24px",
+    "box-shadow": "0 1px 3px rgba(0,0,0,0.1)"
+  }))
+
+  // 카드 호버
+  rules.push(createRuleWithPseudo(".card", "hover", {
+    "box-shadow": "0 10px 25px rgba(0,0,0,0.1)",
+    "transform": "translateY(-2px)",
+    "transition": "all 0.3s ease"
+  }))
+
+  // 카드 헤더
+  rules.push(createRule(".card-header", {
+    "font-size": "20px",
+    "font-weight": "700",
+    "margin-bottom": "16px",
+    "color": "#1f2937"
+  }))
+
+  // 카드 본문
+  rules.push(createRule(".card-body", {
+    "color": "#6b7280",
+    "line-height": "1.6"
+  }))
+
+  // 카드 푸터
+  rules.push(createRule(".card-footer", {
+    "margin-top": "16px",
+    "padding-top": "16px",
+    "border-top": "1px solid #e5e7eb",
+    "font-size": "14px",
+    "color": "#9ca3af"
+  }))
+
+  let variants: map[string][CSSRule] = {
+    "elevated": [
+      createRule(".card-elevated", {
+        "box-shadow": "0 10px 25px rgba(0,0,0,0.2)"
+      })
+    ],
+    "flat": [
+      createRule(".card-flat", {
+        "border": "none",
+        "box-shadow": "none",
+        "background-color": "#f9fafb"
+      })
+    ]
+  }
+
+  return {
+    name: "Card",
+    baseClass: "card",
+    rules: rules,
+    variants: variants,
+    props: {
+      "padding": "24px",
+      "border-radius": "8px"
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 입력 필드 컴포넌트
+// ──────────────────────────────────────────────────────────────────────────
+
+func createInputComponent() -> ComponentStyle {
+  let rules: [CSSRule] = []
+
+  rules.push(createRule(".input", {
+    "display": "block",
+    "width": "100%",
+    "padding": "8px 12px",
+    "border": "1px solid #d1d5db",
+    "border-radius": "6px",
+    "font-size": "14px",
+    "transition": "border-color 0.3s ease"
+  }))
+
+  // 포커스 상태
+  rules.push(createRuleWithPseudo(".input", "focus", {
+    "outline": "none",
+    "border-color": "#3b82f6",
+    "box-shadow": "0 0 0 3px rgba(59, 130, 246, 0.1)"
+  }))
+
+  // 비활성 상태
+  rules.push(createRuleWithPseudo(".input", "disabled", {
+    "background-color": "#f3f4f6",
+    "cursor": "not-allowed"
+  }))
+
+  let variants: map[string][CSSRule] = {
+    "error": [
+      createRule(".input-error", {
+        "border-color": "#ef4444",
+        "background-color": "#fef2f2"
+      })
+    ],
+    "success": [
+      createRule(".input-success", {
+        "border-color": "#10b981",
+        "background-color": "#f0fdf4"
+      })
+    ]
+  }
+
+  return {
+    name: "Input",
+    baseClass: "input",
+    rules: rules,
+    variants: variants,
+    props: {
+      "padding": "8px 12px",
+      "border-radius": "6px"
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 배지 컴포넌트
+// ──────────────────────────────────────────────────────────────────────────
+
+func createBadgeComponent() -> ComponentStyle {
+  let rules: [CSSRule] = []
+
+  rules.push(createRule(".badge", {
+    "display": "inline-block",
+    "padding": "4px 12px",
+    "border-radius": "16px",
+    "font-size": "12px",
+    "font-weight": "600"
+  }))
+
+  let variants: map[string][CSSRule] = {
+    "default": [
+      createRule(".badge-default", {
+        "background-color": "#e5e7eb",
+        "color": "#374151"
+      })
+    ],
+    "primary": [
+      createRule(".badge-primary", {
+        "background-color": "#dbeafe",
+        "color": "#1e40af"
+      })
+    ],
+    "success": [
+      createRule(".badge-success", {
+        "background-color": "#d1fae5",
+        "color": "#065f46"
+      })
+    ],
+    "danger": [
+      createRule(".badge-danger", {
+        "background-color": "#fee2e2",
+        "color": "#7f1d1d"
+      })
+    ]
+  }
+
+  return {
+    name: "Badge",
+    baseClass: "badge",
+    rules: rules,
+    variants: variants,
+    props: {
+      "padding": "4px 12px"
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 컴포넌트 스타일 생성
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateComponentCSS(component: ComponentStyle) -> string {
+  let css = "/* Component: " + component.name + " */\n\n"
+
+  // 기본 규칙
+  for rule in component.rules {
+    css = css + renderRule(rule)
+  }
+
+  // 변형 규칙
+  for (variantName, variantRules) in component.variants {
+    css = css + "\n/* Variant: " + variantName + " */\n"
+    for rule in variantRules {
+      css = css + renderRule(rule)
+    }
+  }
+
+  return css
+}
+
+func renderRule(rule: CSSRule) -> string {
+  let selector = rule.selector
+
+  if rule.pseudo != nil {
+    selector = selector + ":" + rule.pseudo
+  }
+
+  let css = selector + " {\n"
+
+  for (prop, value) in rule.properties {
+    css = css + "  " + prop + ": " + value + ";\n"
+  }
+
+  css = css + "}\n"
+
+  return css
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 컴포넌트 라이브러리
+// ──────────────────────────────────────────────────────────────────────────
+
+func getAllComponents() -> [ComponentStyle] {
+  let components: [ComponentStyle] = []
+
+  components.push(createButtonComponent())
+  components.push(createCardComponent())
+  components.push(createInputComponent())
+  components.push(createBadgeComponent())
+
+  return components
+}
+
+func generateAllComponentStyles() -> string {
+  let css = "/* FreeLang CSS Component Library */\n\n"
+
+  for component in getAllComponents() {
+    css = css + generateComponentCSS(component) + "\n"
+  }
+
+  return css
+}
