@@ -18,5 +18,8 @@
       "createdAt": "2026-03-12T12:14:19.917Z",
       "updatedAt": "2026-03-12T12:14:19.917Z"
     }
-  ]
+  ],
+  "blogs": [],
+  "nextBlogId": 1,
+  "events": []
 }
