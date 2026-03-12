@@ -1,0 +1,304 @@
+// ============================================================================
+// BlogDatabase - JSON 파일 기반 데이터 저장소
+// ============================================================================
+// 포스트 CRUD, 읽기 시간 계산, 마크다운 처리
+
+pub struct Post {
+  id: i32,
+  title: string,
+  description: string,
+  content: string,
+  author: string,
+  category: string,
+  tags: string,
+  slug: string,
+  featured: bool,
+  status: string,
+  isDraft: bool,
+  createdAt: i64,
+  updatedAt: i64,
+  viewCount: i32,
+  likes: i32,
+  readingTime: i32,
+  readingTimeDisplay: string
+}
+
+pub struct BlogDb {
+  posts: map<i32, Post>,
+  nextId: i32,
+  dataPath: string
+}
+
+// 1. 데이터베이스 초기화
+pub fn blog_db_new(dataPath: string) -> BlogDb {
+  intent "새 블로그 데이터베이스 생성"
+  do
+    let db = BlogDb {
+      posts: {},
+      nextId: 1,
+      dataPath: dataPath
+    }
+
+    blog_db_load(&db)
+    return db
+  end
+}
+
+// 2. 파일에서 데이터 로드
+fn blog_db_load(db: &mut BlogDb) -> void {
+  intent "JSON 파일에서 포스트 로드"
+  do
+    // TODO: 파일 읽기 및 JSON 파싱
+    // 현재는 메모리에만 저장
+    print("📂 Database loaded from: " + db.dataPath)
+  end
+}
+
+// 3. 데이터를 파일에 저장
+fn blog_db_save(db: &BlogDb) -> Result<void, string> {
+  intent "포스트를 JSON 파일에 저장"
+  do
+    // TODO: map을 JSON으로 변환 및 파일 쓰기
+    return Ok(void)
+  end
+}
+
+// 4. 읽기 시간 계산 (평균 200 단어/분)
+fn calculate_reading_time(content: string) -> i32 {
+  intent "포스트 읽기 시간 계산"
+  do
+    let word_count = 0
+    let in_word = false
+    let i = 0
+    let len = string_length(content)
+
+    while i < len
+      let ch = string_char_at(content, i)
+      let is_space = ch == ' ' || ch == '\n' || ch == '\t'
+
+      if !is_space && !in_word
+        word_count = word_count + 1
+        in_word = true
+      end
+
+      if is_space
+        in_word = false
+      end
+
+      i = i + 1
+    end
+
+    // 200 단어/분 기준
+    let reading_time = (word_count + 199) / 200  // 올림
+
+    // 최소 1분, 최대 30분
+    if reading_time < 1
+      reading_time = 1
+    end
+    if reading_time > 30
+      reading_time = 30
+    end
+
+    return reading_time
+  end
+}
+
+// 5. 포스트 생성
+pub fn blog_db_create(db: &mut BlogDb, post: Post) -> Post {
+  intent "새 포스트 생성"
+  do
+    let id = db.nextId
+    db.nextId = db.nextId + 1
+
+    let now = current_time_millis()
+    let reading_time = calculate_reading_time(post.content)
+
+    let new_post = Post {
+      id: id,
+      title: post.title,
+      description: post.description,
+      content: post.content,
+      author: post.author,
+      category: post.category,
+      tags: post.tags,
+      slug: post.slug,
+      featured: post.featured,
+      status: "published",
+      isDraft: false,
+      createdAt: now,
+      updatedAt: now,
+      viewCount: 0,
+      likes: 0,
+      readingTime: reading_time,
+      readingTimeDisplay: int_to_string(reading_time) + " min read"
+    }
+
+    db.posts[id] = new_post
+
+    // TODO: blog_db_save(db)
+
+    return new_post
+  end
+}
+
+// 6. 포스트 조회
+pub fn blog_db_get_by_id(db: &BlogDb, id: i32) -> Option<Post> {
+  intent "ID로 포스트 조회"
+  do
+    match db.posts[id]
+      Some(post) => return Some(post)
+      None => return None
+    end
+  end
+}
+
+// 7. 모든 포스트 조회
+pub fn blog_db_list(db: &BlogDb) -> array<Post> {
+  intent "모든 포스트 목록"
+  do
+    let result = []
+    let keys = map_keys(db.posts)
+    let i = 0
+
+    while i < array_length(keys)
+      let key = keys[i]
+      match db.posts[key]
+        Some(post) => {
+          array_push(&result, post)
+        }
+        None => {}
+      end
+      i = i + 1
+    end
+
+    return result
+  end
+}
+
+// 8. 포스트 업데이트
+pub fn blog_db_update(db: &mut BlogDb, id: i32, post: Post) -> Result<Post, string> {
+  intent "포스트 업데이트"
+  do
+    match db.posts[id]
+      Some(existing) => {
+        let now = current_time_millis()
+        let reading_time = calculate_reading_time(post.content)
+
+        let updated = Post {
+          id: existing.id,
+          title: post.title,
+          description: post.description,
+          content: post.content,
+          author: post.author,
+          category: post.category,
+          tags: post.tags,
+          slug: post.slug,
+          featured: post.featured,
+          status: existing.status,
+          isDraft: existing.isDraft,
+          createdAt: existing.createdAt,
+          updatedAt: now,
+          viewCount: existing.viewCount,
+          likes: existing.likes,
+          readingTime: reading_time,
+          readingTimeDisplay: int_to_string(reading_time) + " min read"
+        }
+
+        db.posts[id] = updated
+
+        // TODO: blog_db_save(db)
+
+        return Ok(updated)
+      }
+      None => return Err("Post not found")
+    end
+  end
+}
+
+// 9. 포스트 삭제
+pub fn blog_db_delete(db: &mut BlogDb, id: i32) -> Result<void, string> {
+  intent "포스트 삭제"
+  do
+    match db.posts[id]
+      Some(_) => {
+        map_remove(&db.posts, id)
+        // TODO: blog_db_save(db)
+        return Ok(void)
+      }
+      None => return Err("Post not found")
+    end
+  end
+}
+
+// 10. 조회수 증가
+pub fn blog_db_increment_view(db: &mut BlogDb, id: i32) -> Result<void, string> {
+  intent "포스트 조회수 증가"
+  do
+    match db.posts[id]
+      Some(post) => {
+        post.viewCount = post.viewCount + 1
+        post.updatedAt = current_time_millis()
+        db.posts[id] = post
+        // TODO: blog_db_save(db)
+        return Ok(void)
+      }
+      None => return Err("Post not found")
+    end
+  end
+}
+
+// 11. 좋아요 추가
+pub fn blog_db_add_like(db: &mut BlogDb, id: i32) -> Result<void, string> {
+  intent "포스트 좋아요 추가"
+  do
+    match db.posts[id]
+      Some(post) => {
+        post.likes = post.likes + 1
+        post.updatedAt = current_time_millis()
+        db.posts[id] = post
+        // TODO: blog_db_save(db)
+        return Ok(void)
+      }
+      None => return Err("Post not found")
+    end
+  end
+}
+
+// 헬퍼 함수들
+fn string_length(s: string) -> i32 {
+  // TODO: 문자열 길이 반환
+  return 0
+}
+
+fn string_char_at(s: string, index: i32) -> u8 {
+  // TODO: 문자열의 특정 인덱스 문자 반환
+  return 0
+}
+
+fn current_time_millis() -> i64 {
+  // TODO: 현재 시간 밀리초 반환
+  return 0
+}
+
+fn int_to_string(n: i32) -> string {
+  // TODO: 정수를 문자열로 변환
+  return ""
+}
+
+fn map_keys(m: map) -> array {
+  // TODO: 맵의 모든 키 반환
+  return []
+}
+
+fn array_push(arr: &mut array, item) -> void {
+  // TODO: 배열에 항목 추가
+}
+
+fn array_length(arr: array) -> i32 {
+  // TODO: 배열 길이 반환
+  return 0
+}
+
+fn map_remove(m: &mut map, key) -> void {
+  // TODO: 맵에서 키 제거
+}

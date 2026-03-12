@@ -1,0 +1,20 @@
+// ============================================================================
+// FreeLang Blog Server - 모듈 통합
+// ============================================================================
+
+pub mod blog_db {
+  pub use "blog-db"
+}
+
+pub mod blog_api {
+  pub use "blog-api"
+}
+
+pub mod blog_server {
+  pub use "blog-server"
+}
+
+// HTTP 엔진 (향후 통합)
+// pub mod http_engine {
+//   pub use "../../../freelang-http-engine/src/mod"
+// }

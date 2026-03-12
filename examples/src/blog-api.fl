@@ -1,0 +1,381 @@
+// ============================================================================
+// BlogAPI - REST API 라우팅 및 핸들러
+// ============================================================================
+// HTTP 요청 라우팅, JSON 파싱/생성, 응답 생성
+
+pub struct HttpRequest {
+  method: string,
+  path: string,
+  headers: map<string, string>,
+  body: string,
+  bodyBytes: array<u8>
+}
+
+pub struct HttpResponse {
+  status: i32,
+  statusText: string,
+  headers: map<string, string>,
+  body: string,
+  bodyBytes: array<u8>
+}
+
+// 1. HTTP 응답 생성
+pub fn create_response(status: i32, body: string) -> HttpResponse {
+  intent "HTTP 응답 생성"
+  do
+    let status_text = match status
+      200 => "OK"
+      201 => "Created"
+      204 => "No Content"
+      400 => "Bad Request"
+      404 => "Not Found"
+      500 => "Internal Server Error"
+      _ => "Unknown"
+    end
+
+    let headers = {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+      "Connection": "keep-alive"
+    }
+
+    return HttpResponse {
+      status: status,
+      statusText: status_text,
+      headers: headers,
+      body: body,
+      bodyBytes: string_to_bytes(body)
+    }
+  end
+}
+
+// 2. 정적 파일 응답 (index.html)
+pub fn create_html_response(html: string) -> HttpResponse {
+  intent "HTML 파일 응답"
+  do
+    let headers = {
+      "Content-Type": "text/html; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+      "Connection": "keep-alive"
+    }
+
+    return HttpResponse {
+      status: 200,
+      statusText: "OK",
+      headers: headers,
+      body: html,
+      bodyBytes: string_to_bytes(html)
+    }
+  end
+}
+
+// 3. 에러 응답
+pub fn create_error_response(status: i32, message: string) -> HttpResponse {
+  intent "에러 응답"
+  do
+    let json = "{\"error\":\"" + message + "\",\"status\":" + int_to_string(status) + "}"
+    return create_response(status, json)
+  end
+}
+
+// 4. JSON 배열 응답 (포스트 목록)
+pub fn create_posts_response(posts: array<Post>) -> HttpResponse {
+  intent "포스트 목록 JSON 응답"
+  do
+    let json = "[" // TODO: 배열을 JSON으로 변환
+    // 실제 구현은 posts 배열을 반복하여 각 post를 JSON으로 변환
+    let json = json + "]"
+
+    return create_response(200, json)
+  end
+}
+
+// 5. JSON 단일 객체 응답 (포스트)
+pub fn create_post_response(post: Post) -> HttpResponse {
+  intent "포스트 JSON 응답"
+  do
+    let json = post_to_json(post)
+    return create_response(200, json)
+  end
+}
+
+// 6. POST 포스트 생성
+pub fn handle_create_post(req: HttpRequest, db: &mut BlogDb) -> HttpResponse {
+  intent "POST /api/blogs - 포스트 생성"
+  do
+    // TODO: req.body JSON 파싱
+    let title = "Test Post"  // 실제로는 JSON에서 파싱
+    let content = "Test Content"
+    let author = "Author"
+    let category = "Category"
+
+    let new_post = Post {
+      id: 0,
+      title: title,
+      description: "",
+      content: content,
+      author: author,
+      category: category,
+      tags: "",
+      slug: "",
+      featured: false,
+      status: "published",
+      isDraft: false,
+      createdAt: 0,
+      updatedAt: 0,
+      viewCount: 0,
+      likes: 0,
+      readingTime: 0,
+      readingTimeDisplay: ""
+    }
+
+    let created = blog_db_create(db, new_post)
+    return create_post_response(created)
+  end
+}
+
+// 7. GET 포스트 목록
+pub fn handle_list_posts(req: HttpRequest, db: &BlogDb) -> HttpResponse {
+  intent "GET /api/blogs - 포스트 목록"
+  do
+    let posts = blog_db_list(db)
+    return create_posts_response(posts)
+  end
+}
+
+// 8. GET 포스트 상세
+pub fn handle_get_post(id: i32, db: &BlogDb) -> HttpResponse {
+  intent "GET /api/blogs/:id - 포스트 상세"
+  do
+    match blog_db_get_by_id(db, id)
+      Some(post) => return create_post_response(post)
+      None => return create_error_response(404, "Post not found")
+    end
+  end
+}
+
+// 9. PUT 포스트 수정
+pub fn handle_update_post(id: i32, req: HttpRequest, db: &mut BlogDb) -> HttpResponse {
+  intent "PUT /api/blogs/:id - 포스트 수정"
+  do
+    // TODO: req.body JSON 파싱
+    match blog_db_get_by_id(db, id)
+      Some(existing) => {
+        let updated_post = Post {
+          id: existing.id,
+          title: "Updated Title",
+          description: existing.description,
+          content: "Updated Content",
+          author: existing.author,
+          category: existing.category,
+          tags: existing.tags,
+          slug: existing.slug,
+          featured: existing.featured,
+          status: existing.status,
+          isDraft: existing.isDraft,
+          createdAt: existing.createdAt,
+          updatedAt: 0,
+          viewCount: existing.viewCount,
+          likes: existing.likes,
+          readingTime: 0,
+          readingTimeDisplay: ""
+        }
+
+        match blog_db_update(db, id, updated_post)
+          Ok(updated) => return create_post_response(updated)
+          Err(err) => return create_error_response(500, err)
+        end
+      }
+      None => return create_error_response(404, "Post not found")
+    end
+  end
+}
+
+// 10. DELETE 포스트 삭제
+pub fn handle_delete_post(id: i32, db: &mut BlogDb) -> HttpResponse {
+  intent "DELETE /api/blogs/:id - 포스트 삭제"
+  do
+    match blog_db_delete(db, id)
+      Ok(_) => {
+        let json = "{\"status\":\"deleted\",\"id\":" + int_to_string(id) + "}"
+        return create_response(200, json)
+      }
+      Err(err) => return create_error_response(404, err)
+    end
+  end
+}
+
+// 11. POST 조회수 증가
+pub fn handle_view_post(id: i32, db: &mut BlogDb) -> HttpResponse {
+  intent "POST /api/blogs/:id/view - 조회수 증가"
+  do
+    match blog_db_increment_view(db, id)
+      Ok(_) => {
+        let json = "{\"status\":\"viewed\",\"id\":" + int_to_string(id) + "}"
+        return create_response(200, json)
+      }
+      Err(err) => return create_error_response(404, err)
+    end
+  end
+}
+
+// 12. POST 좋아요 추가
+pub fn handle_like_post(id: i32, db: &mut BlogDb) -> HttpResponse {
+  intent "POST /api/blogs/:id/like - 좋아요 추가"
+  do
+    match blog_db_add_like(db, id)
+      Ok(_) => {
+        match blog_db_get_by_id(db, id)
+          Some(post) => return create_post_response(post)
+          None => return create_error_response(404, "Post not found")
+        end
+      }
+      Err(err) => return create_error_response(404, err)
+    end
+  end
+}
+
+// 13. 플러그인 목록
+pub fn handle_list_plugins(req: HttpRequest) -> HttpResponse {
+  intent "GET /api/plugins - 플러그인 목록"
+  do
+    let json = "{\"data\":[{\"name\":\"comments\",\"enabled\":true}],\"totalEnabled\":5}"
+    return create_response(200, json)
+  end
+}
+
+// 14. 플러그인 UI 렌더링
+pub fn handle_plugin_ui(position: string) -> HttpResponse {
+  intent "GET /api/plugins/ui/:position - 플러그인 UI"
+  do
+    let json = "{\"position\":\"" + position + "\",\"components\":[]}"
+    return create_response(200, json)
+  end
+}
+
+// 15. 요청 라우팅 (메인 핸들러)
+pub fn route_request(req: HttpRequest, db: &mut BlogDb) -> HttpResponse {
+  intent "HTTP 요청 라우팅"
+  do
+    print("📍 " + req.method + " " + req.path)
+
+    // 정적 파일: GET /
+    if req.method == "GET" && req.path == "/"
+      let html = read_index_html()  // TODO: 파일에서 읽기
+      return create_html_response(html)
+    end
+
+    // API: GET /api/blogs
+    if req.method == "GET" && req.path == "/api/blogs"
+      return handle_list_posts(req, db)
+    end
+
+    // API: POST /api/blogs
+    if req.method == "POST" && req.path == "/api/blogs"
+      return handle_create_post(req, db)
+    end
+
+    // API: GET /api/blogs/:id
+    if starts_with(req.path, "/api/blogs/") && req.method == "GET"
+      let id = parse_id_from_path(req.path)
+      return handle_get_post(id, db)
+    end
+
+    // API: DELETE /api/blogs/:id
+    if starts_with(req.path, "/api/blogs/") && req.method == "DELETE"
+      let id = parse_id_from_path(req.path)
+      return handle_delete_post(id, db)
+    end
+
+    // API: POST /api/blogs/:id/view
+    if ends_with(req.path, "/view") && req.method == "POST"
+      let id = parse_id_from_path(req.path)
+      return handle_view_post(id, db)
+    end
+
+    // API: POST /api/blogs/:id/like
+    if ends_with(req.path, "/like") && req.method == "POST"
+      let id = parse_id_from_path(req.path)
+      return handle_like_post(id, db)
+    end
+
+    // API: GET /api/plugins
+    if req.path == "/api/plugins"
+      return handle_list_plugins(req)
+    end
+
+    // API: GET /api/plugins/ui/:position
+    if starts_with(req.path, "/api/plugins/ui/")
+      let position = extract_position(req.path)
+      return handle_plugin_ui(position)
+    end
+
+    // 404
+    return create_error_response(404, "Not Found")
+  end
+}
+
+// ============================================================================
+// 헬퍼 함수들
+// ============================================================================
+
+fn post_to_json(post: Post) -> string {
+  intent "Post를 JSON으로 변환"
+  do
+    // TODO: 실제 JSON 직렬화
+    return "{}"
+  end
+}
+
+fn read_index_html() -> string {
+  intent "index.html 파일 읽기"
+  do
+    // TODO: 파일 시스템에서 읽기
+    return "<html></html>"
+  end
+}
+
+fn string_to_bytes(s: string) -> array<u8> {
+  intent "문자열을 바이트 배열로 변환"
+  do
+    return []
+  end
+}
+
+fn starts_with(s: string, prefix: string) -> bool {
+  intent "문자열이 특정 접두사로 시작하는지 확인"
+  do
+    // TODO: 구현
+    return false
+  end
+}
+
+fn ends_with(s: string, suffix: string) -> bool {
+  intent "문자열이 특정 접미사로 끝나는지 확인"
+  do
+    // TODO: 구현
+    return false
+  end
+}
+
+fn parse_id_from_path(path: string) -> i32 {
+  intent "경로에서 ID 파싱"
+  do
+    // TODO: "/api/blogs/123" → 123
+    return 0
+  end
+}
+
+fn extract_position(path: string) -> string {
+  intent "경로에서 position 파싱"
+  do
+    // TODO: "/api/plugins/ui/sidebar" → "sidebar"
+    return ""
+  end
+}
+
+fn int_to_string(n: i32) -> string {
+  // 이미 정의됨
+  return ""
+}
