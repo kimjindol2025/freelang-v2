@@ -316,10 +316,13 @@ export class FeedbackAnalyzer {
    * Get metrics for a specific pattern
    */
   getMetricsForPattern(patternId: string): PatternUsageMetrics | undefined {
-    for (const metric of this.feedbackByPattern.values()) {
-      // This is incorrect, need to fix
-    }
-    return undefined;
+    const pattern = this.uniquePatterns.get(patternId);
+    if (!pattern) return undefined;
+
+    const feedbackList = this.feedbackByPattern.get(pattern.name);
+    if (!feedbackList) return undefined;
+
+    return this.calculateMetrics(pattern, feedbackList);
   }
 
   /**
