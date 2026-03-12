@@ -1,0 +1,270 @@
+// Phase 7: Code Generator 테스트 (20개)
+
+import CodeGenerator from './codegen.free'
+import X86Backend from './x86_64.free'
+
+component CodeGeneratorTests {
+  let totalTests = 0
+  let passedTests = 0
+
+  fn assert(condition, message) -> void {
+    totalTests = totalTests + 1
+    if (condition) {
+      passedTests = passedTests + 1
+      println("✓ " + message)
+    } else {
+      println("✗ " + message)
+    }
+  }
+
+  fn assertEqual(actual, expected, message) -> void {
+    assert(actual == expected, message + " (expected: " + str(expected) + ", got: " + str(actual) + ")")
+  }
+
+  // Test 1: Empty IR
+  fn test1_emptyIR() -> void {
+    let ir = { instructions: [] }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.length > 0, "Test 1: Empty IR generates prologue/epilogue")
+    assert(asm.contains("push rbp"), "Test 1: Prologue present")
+    assert(asm.contains("ret"), "Test 1: Epilogue present")
+  }
+
+  // Test 2: PUSH instruction
+  fn test2_push() -> void {
+    let ir = {
+      instructions: [
+        { opcode: "PUSH", arg: 42 }
+      ]
+    }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.contains("push 42"), "Test 2: PUSH 42 generates correct ASM")
+  }
+
+  // Test 3: POP instruction
+  fn test3_pop() -> void {
+    let ir = {
+      instructions: [
+        { opcode: "POP", arg: "rax" }
+      ]
+    }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.contains("pop rax"), "Test 3: POP rax generates correct ASM")
+  }
+
+  // Test 4: ADD instruction
+  fn test4_add() -> void {
+    let ir = {
+      instructions: [
+        { opcode: "ADD", arg: 10 }
+      ]
+    }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.contains("add rax"), "Test 4: ADD generates add instruction")
+    assert(asm.contains("10"), "Test 4: ADD with value 10")
+  }
+
+  // Test 5: SUB instruction
+  fn test5_sub() -> void {
+    let ir = {
+      instructions: [
+        { opcode: "SUB", arg: 5 }
+      ]
+    }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.contains("sub rax"), "Test 5: SUB generates sub instruction")
+  }
+
+  // Test 6: MUL instruction
+  fn test6_mul() -> void {
+    let ir = {
+      instructions: [
+        { opcode: "MUL", arg: 2 }
+      ]
+    }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.contains("imul rax"), "Test 6: MUL generates imul instruction")
+  }
+
+  // Test 7: DIV instruction
+  fn test7_div() -> void {
+    let ir = {
+      instructions: [
+        { opcode: "DIV", arg: 4 }
+      ]
+    }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.contains("idiv"), "Test 7: DIV generates idiv instruction")
+  }
+
+  // Test 8: LOAD instruction
+  fn test8_load() -> void {
+    let ir = {
+      instructions: [
+        { opcode: "LOAD", arg: 0 }
+      ]
+    }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.contains("mov rax, ["), "Test 8: LOAD generates mov with memory operand")
+  }
+
+  // Test 9: STORE instruction
+  fn test9_store() -> void {
+    let ir = {
+      instructions: [
+        { opcode: "STORE", arg: 0 }
+      ]
+    }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.contains("pop rax") && asm.contains("mov ["), "Test 9: STORE generates pop and mov")
+  }
+
+  // Test 10: CALL instruction
+  fn test10_call() -> void {
+    let ir = {
+      instructions: [
+        { opcode: "CALL", arg: "printf" }
+      ]
+    }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.contains("call printf"), "Test 10: CALL generates call instruction")
+  }
+
+  // Test 11: RET instruction
+  fn test11_ret() -> void {
+    let ir = {
+      instructions: [
+        { opcode: "RET" }
+      ]
+    }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.contains("ret"), "Test 11: RET generates ret instruction")
+  }
+
+  // Test 12: LABEL instruction
+  fn test12_label() -> void {
+    let ir = {
+      instructions: [
+        { opcode: "LABEL", arg: "loop_start" }
+      ]
+    }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.contains("loop_start:"), "Test 12: LABEL generates label")
+  }
+
+  // Test 13: JMP instruction
+  fn test13_jmp() -> void {
+    let ir = {
+      instructions: [
+        { opcode: "JMP", arg: "loop_end" }
+      ]
+    }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.contains("jmp loop_end"), "Test 13: JMP generates jmp instruction")
+  }
+
+  // Test 14: JEQ instruction
+  fn test14_jeq() -> void {
+    let ir = {
+      instructions: [
+        { opcode: "JEQ", arg: "equal_label" }
+      ]
+    }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.contains("je equal_label"), "Test 14: JEQ generates je instruction")
+  }
+
+  // Test 15: Multiple instructions
+  fn test15_multiple() -> void {
+    let ir = {
+      instructions: [
+        { opcode: "PUSH", arg: 1 },
+        { opcode: "PUSH", arg: 2 },
+        { opcode: "ADD", arg: 0 },
+        { opcode: "RET" }
+      ]
+    }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.contains("push 1"), "Test 15: Multiple - push 1 present")
+    assert(asm.contains("push 2"), "Test 15: Multiple - push 2 present")
+    assert(asm.contains("add rax"), "Test 15: Multiple - add present")
+  }
+
+  // Test 16: Function prologue
+  fn test16_prologue() -> void {
+    let ir = { instructions: [] }
+    let asm = CodeGenerator.generate(ir)
+    let lines = asm.split("\n")
+    assertEqual(lines[0], "push rbp", "Test 16: Prologue - first line")
+    assert(asm.contains("mov rbp, rsp"), "Test 16: Prologue - mov rbp, rsp")
+    assert(asm.contains("sub rsp, 256"), "Test 16: Prologue - stack allocation")
+  }
+
+  // Test 17: opcode validation
+  fn test17_validation() -> void {
+    assert(CodeGenerator.isValidOpcode("PUSH"), "Test 17: PUSH is valid")
+    assert(CodeGenerator.isValidOpcode("ADD"), "Test 17: ADD is valid")
+    assert(!CodeGenerator.isValidOpcode("INVALID"), "Test 17: INVALID is not valid")
+  }
+
+  // Test 18: x86_64 backend - opcodeTable
+  fn test18_opcodeTable() -> void {
+    let addOpcode = X86Backend.getOpcode("add_r_r")
+    assert(addOpcode != nil, "Test 18: add_r_r exists in opcode table")
+  }
+
+  // Test 19: x86_64 backend - register encoding
+  fn test19_regEncoding() -> void {
+    let raxCode = X86Backend.getRegCode("rax")
+    assertEqual(raxCode, 0, "Test 19: RAX encoding is 0")
+    let rcxCode = X86Backend.getRegCode("rcx")
+    assertEqual(rcxCode, 1, "Test 19: RCX encoding is 1")
+  }
+
+  // Test 20: x86_64 backend - ABI
+  fn test20_abi() -> void {
+    assert(X86Backend.abi.argRegs.length == 6, "Test 20: ABI has 6 argument registers")
+    assert(X86Backend.abi.returnReg == "rax", "Test 20: ABI return register is RAX")
+  }
+
+  // 모든 테스트 실행
+  fn runAllTests() -> void {
+    println("\n╔════════════════════════════════════════════╗")
+    println("║   Phase 7: Code Generator 테스트 시작    ║")
+    println("╚════════════════════════════════════════════╝\n")
+
+    test1_emptyIR()
+    test2_push()
+    test3_pop()
+    test4_add()
+    test5_sub()
+    test6_mul()
+    test7_div()
+    test8_load()
+    test9_store()
+    test10_call()
+    test11_ret()
+    test12_label()
+    test13_jmp()
+    test14_jeq()
+    test15_multiple()
+    test16_prologue()
+    test17_validation()
+    test18_opcodeTable()
+    test19_regEncoding()
+    test20_abi()
+
+    println("\n╔════════════════════════════════════════════╗")
+    println("║   테스트 결과: " + str(passedTests) + "/" + str(totalTests) + " PASS          ║")
+    println("╚════════════════════════════════════════════╝\n")
+  }
+
+  export { runAllTests, assert, assertEqual }
+}
+
+// 테스트 실행 진입점
+fn main() {
+  CodeGeneratorTests.runAllTests()
+}
+
+main()

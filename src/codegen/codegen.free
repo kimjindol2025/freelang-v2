@@ -1,0 +1,156 @@
+// Phase 7: Code Generator
+// IR을 x86-64 어셈블리로 변환
+
+component CodeGenerator {
+  // x86-64 레지스터 정의
+  let registers = [
+    "rax", "rcx", "rdx", "rbx",
+    "rsp", "rbp", "rsi", "rdi",
+    "r8", "r9", "r10", "r11",
+    "r12", "r13", "r14", "r15"
+  ]
+
+  let callerSaved = ["rax", "rcx", "rdx", "rsi", "rdi", "r8", "r9", "r10", "r11"]
+  let calleeSaved = ["rbx", "rbp", "r12", "r13", "r14", "r15"]
+
+  // System V AMD64 ABI: 정수 인자
+  let argRegs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
+
+  // Code Generator 상태
+  let output = ""
+  let stackDepth = 0
+  let regAlloc = {}
+  let nextReg = 0
+
+  // 메인 생성 함수
+  fn generate(ir) -> string {
+    output = ""
+    stackDepth = 0
+    regAlloc = {}
+    nextReg = 0
+
+    // Function prologue
+    output = output + "push rbp\n"
+    output = output + "mov rbp, rsp\n"
+    output = output + "sub rsp, 256\n"  // 스택 프레임: 256바이트
+    stackDepth = 256
+
+    // 명령어 생성
+    if (ir.instructions != nil) {
+      for (let i = 0; i < ir.instructions.length; i = i + 1) {
+        output = output + genInstruction(ir.instructions[i])
+      }
+    }
+
+    // Function epilogue (RET가 마지막이면 생략)
+    if (ir.instructions != nil && ir.instructions.length > 0) {
+      let last = ir.instructions[ir.instructions.length - 1]
+      if (last.opcode != "RET") {
+        output = output + "mov rsp, rbp\n"
+        output = output + "pop rbp\n"
+        output = output + "ret\n"
+      }
+    } else {
+      output = output + "mov rsp, rbp\n"
+      output = output + "pop rbp\n"
+      output = output + "ret\n"
+    }
+
+    return output
+  }
+
+  // 개별 명령어 생성
+  fn genInstruction(instr) -> string {
+    let result = ""
+
+    if (instr.opcode == "PUSH") {
+      result = "push " + str(instr.arg) + "\n"
+      stackDepth = stackDepth + 8
+    } else if (instr.opcode == "POP") {
+      result = "pop " + instr.arg + "\n"
+      stackDepth = stackDepth - 8
+    } else if (instr.opcode == "ADD") {
+      result = "mov rax, [rsp]\n"
+      result = result + "add rax, " + str(instr.arg) + "\n"
+      result = result + "mov [rsp], rax\n"
+    } else if (instr.opcode == "SUB") {
+      result = "mov rax, [rsp]\n"
+      result = result + "sub rax, " + str(instr.arg) + "\n"
+      result = result + "mov [rsp], rax\n"
+    } else if (instr.opcode == "MUL") {
+      result = "mov rax, [rsp]\n"
+      result = result + "imul rax, " + str(instr.arg) + "\n"
+      result = result + "mov [rsp], rax\n"
+    } else if (instr.opcode == "DIV") {
+      result = "mov rax, [rsp]\n"
+      result = result + "xor rdx, rdx\n"
+      result = result + "mov rcx, " + str(instr.arg) + "\n"
+      result = result + "idiv rcx\n"
+      result = result + "mov [rsp], rax\n"
+    } else if (instr.opcode == "LOAD") {
+      result = "mov rax, [" + str(instr.arg) + "]\n"
+      result = result + "push rax\n"
+    } else if (instr.opcode == "STORE") {
+      result = "pop rax\n"
+      result = result + "mov [" + str(instr.arg) + "], rax\n"
+    } else if (instr.opcode == "CALL") {
+      // System V ABI: RDI=arg1, RSI=arg2, RDX=arg3, RCX=arg4, R8=arg5, R9=arg6
+      result = "call " + instr.arg + "\n"
+    } else if (instr.opcode == "RET") {
+      result = "mov rsp, rbp\n"
+      result = result + "pop rbp\n"
+      result = result + "ret\n"
+    } else if (instr.opcode == "LABEL") {
+      result = instr.arg + ":\n"
+    } else if (instr.opcode == "JMP") {
+      result = "jmp " + instr.arg + "\n"
+    } else if (instr.opcode == "JEQ") {
+      result = "cmp rax, rbx\n"
+      result = result + "je " + instr.arg + "\n"
+    } else {
+      result = "; Unknown opcode: " + instr.opcode + "\n"
+    }
+
+    return result
+  }
+
+  // 레지스터 할당 (향후 개선)
+  fn allocateReg(hint) -> string {
+    if (hint != nil) {
+      return hint
+    }
+    let reg = registers[nextReg]
+    nextReg = nextReg + 1
+    if (nextReg >= registers.length) {
+      nextReg = 0
+    }
+    return reg
+  }
+
+  // 스택 오프셋 계산
+  fn getStackOffset(varName) -> i64 {
+    if (regAlloc[varName] == nil) {
+      regAlloc[varName] = stackDepth
+      stackDepth = stackDepth + 8
+    }
+    return regAlloc[varName]
+  }
+
+  // 유틸리티: Opcode 유효성 검증
+  fn isValidOpcode(opcode) -> bool {
+    let valid = [
+      "PUSH", "POP", "ADD", "SUB", "MUL", "DIV",
+      "LOAD", "STORE", "CALL", "RET", "LABEL",
+      "JMP", "JEQ", "JNE", "JLT", "JGT"
+    ]
+    for (let i = 0; i < valid.length; i = i + 1) {
+      if (valid[i] == opcode) {
+        return true
+      }
+    }
+    return false
+  }
+
+  // 내보내기
+  export { generate, genInstruction, isValidOpcode }
+}

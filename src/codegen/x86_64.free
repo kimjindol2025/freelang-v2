@@ -1,0 +1,147 @@
+// Phase 7: x86-64 Opcode 테이블
+
+component X86_64Backend {
+  // x86-64 opcode 바이너리 인코딩 (REX prefix + opcode + modrm)
+  let opcodeTable = {
+    // 스택 연산
+    "push_r": { prefix: "", opcode: "50", modrm: nil },  // push r64
+    "pop_r": { prefix: "", opcode: "58", modrm: nil },   // pop r64
+
+    // 산술 연산 (dst, src)
+    "add_r_r": { prefix: "48", opcode: "01", modrm: true },    // add r64, r64
+    "add_r_i": { prefix: "48", opcode: "81", modrm: true },    // add r64, imm32
+    "sub_r_r": { prefix: "48", opcode: "29", modrm: true },    // sub r64, r64
+    "sub_r_i": { prefix: "48", opcode: "81", modrm: true },    // sub r64, imm32
+    "imul_r_r": { prefix: "48", opcode: "0faf", modrm: true }, // imul r64, r64
+    "imul_r_i": { prefix: "48", opcode: "69", modrm: true },   // imul r64, r64, imm32
+    "idiv_r": { prefix: "48", opcode: "f7", modrm: true },     // idiv r64
+
+    // 비교 / 논리 연산
+    "cmp_r_r": { prefix: "48", opcode: "39", modrm: true },    // cmp r64, r64
+    "cmp_r_i": { prefix: "48", opcode: "81", modrm: true },    // cmp r64, imm32
+    "and_r_r": { prefix: "48", opcode: "21", modrm: true },    // and r64, r64
+    "or_r_r": { prefix: "48", opcode: "09", modrm: true },     // or r64, r64
+    "xor_r_r": { prefix: "48", opcode: "31", modrm: true },    // xor r64, r64
+
+    // 메모리 연산
+    "mov_r_r": { prefix: "48", opcode: "89", modrm: true },    // mov r64, r64
+    "mov_r_i": { prefix: "48", opcode: "b8", modrm: nil },     // mov r64, imm64
+    "mov_r_m": { prefix: "48", opcode: "8b", modrm: true },    // mov r64, [m64]
+    "mov_m_r": { prefix: "48", opcode: "89", modrm: true },    // mov [m64], r64
+
+    // 제어흐름
+    "jmp": { prefix: "", opcode: "e9", modrm: nil },           // jmp rel32
+    "je": { prefix: "0f", opcode: "84", modrm: nil },          // je rel32
+    "jne": { prefix: "0f", opcode: "85", modrm: nil },         // jne rel32
+    "jl": { prefix: "0f", opcode: "8c", modrm: nil },          // jl rel32
+    "jle": { prefix: "0f", opcode: "8e", modrm: nil },         // jle rel32
+    "jg": { prefix: "0f", opcode: "8f", modrm: nil },          // jg rel32
+    "jge": { prefix: "0f", opcode: "8d", modrm: nil },         // jge rel32
+
+    // 함수 호출
+    "call": { prefix: "", opcode: "e8", modrm: nil },          // call rel32
+    "ret": { prefix: "", opcode: "c3", modrm: nil },           // ret
+
+    // 특수 명령어
+    "nop": { prefix: "", opcode: "90", modrm: nil },           // nop
+    "halt": { prefix: "", opcode: "f4", modrm: nil },          // hlt
+  }
+
+  // 레지스터 인코딩 (REX.B 적용 전)
+  let regEncoding = {
+    "rax": 0, "rcx": 1, "rdx": 2, "rbx": 3,
+    "rsp": 4, "rbp": 5, "rsi": 6, "rdi": 7,
+    "r8": 0,  "r9": 1,  "r10": 2, "r11": 3,
+    "r12": 4, "r13": 5, "r14": 6, "r15": 7
+  }
+
+  // ModR/M 바이트 계산
+  fn encodeModRM(mod, reg, rm) -> string {
+    let byte = (mod << 6) | (reg << 3) | rm
+    let hex = intToHex(byte)
+    return hex
+  }
+
+  // REX 프리픽스 계산
+  fn encodeRex(w, r, x, b) -> string {
+    if (w == 0 && r == 0 && x == 0 && b == 0) {
+      return ""
+    }
+    let prefix = 0x40 | (w << 3) | (r << 2) | (x << 1) | b
+    return intToHex(prefix)
+  }
+
+  // 정수를 16진수 문자열로 변환
+  fn intToHex(n) -> string {
+    let hex = "0123456789abcdef"
+    if (n == 0) { return "00" }
+    let result = ""
+    let negative = false
+    if (n < 0) {
+      negative = true
+      n = -n
+    }
+    while (n > 0) {
+      result = substr(hex, n % 16, 1) + result
+      n = n / 16
+    }
+    if (negative) { result = "-" + result }
+    // 2자리로 패딩
+    if (result.length == 1) { result = "0" + result }
+    return result
+  }
+
+  // Opcode 테이블 조회
+  fn getOpcode(mnemonic) -> object {
+    return opcodeTable[mnemonic]
+  }
+
+  // 레지스터 인코딩 조회
+  fn getRegCode(regName) -> i64 {
+    return regEncoding[regName]
+  }
+
+  // System V AMD64 ABI 정의
+  let abi = {
+    argRegs: ["rdi", "rsi", "rdx", "rcx", "r8", "r9"],
+    returnReg: "rax",
+    callerSavedRegs: ["rax", "rcx", "rdx", "rsi", "rdi", "r8", "r9", "r10", "r11"],
+    calleeSavedRegs: ["rbx", "rbp", "r12", "r13", "r14", "r15"],
+    stackAlignment: 16,  // 16바이트 정렬
+    redZoneSize: 128,    // RSP-128
+  }
+
+  // Function prologue 생성
+  fn emitPrologue(frameSize) -> string {
+    let asm = ""
+    asm = asm + "push rbp\n"
+    asm = asm + "mov rbp, rsp\n"
+    if (frameSize > 0) {
+      asm = asm + "sub rsp, " + str(frameSize) + "\n"
+    }
+    return asm
+  }
+
+  // Function epilogue 생성
+  fn emitEpilogue() -> string {
+    let asm = ""
+    asm = asm + "mov rsp, rbp\n"
+    asm = asm + "pop rbp\n"
+    asm = asm + "ret\n"
+    return asm
+  }
+
+  // 내보내기
+  export {
+    opcodeTable,
+    regEncoding,
+    encodeModRM,
+    encodeRex,
+    intToHex,
+    getOpcode,
+    getRegCode,
+    abi,
+    emitPrologue,
+    emitEpilogue
+  }
+}
