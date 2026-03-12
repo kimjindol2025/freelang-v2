@@ -153,6 +153,54 @@ component CodeGenerator {
       // OR: 논리 OR
       result = "mov rax, " + str(instr.arg1) + "\n"
       result = result + "or rax, " + str(instr.arg2) + "\n"
+    } else if (instr.opcode == "TRY_BEGIN") {
+      // TRY 블록 시작
+      result = ".L__try_begin_" + str(instr.id) + ":\n"
+    } else if (instr.opcode == "TRY_END") {
+      // TRY 블록 종료
+      result = ".L__try_end_" + str(instr.id) + ":\n"
+    } else if (instr.opcode == "CATCH") {
+      // CATCH 블록 (landingpad)
+      result = ".L__catch_" + str(instr.id) + ":  ; landingpad\n"
+    } else if (instr.opcode == "THROW") {
+      // THROW 예외
+      result = "mov rdi, " + str(instr.arg) + "  ; exception object\n"
+      result = result + "call __cxa_throw\n"
+      result = result + "ud2  ; unreachable\n"
+    } else if (instr.opcode == "FINALLY") {
+      // FINALLY 블록
+      result = ".L__finally_" + str(instr.id) + ":\n"
+    } else if (instr.opcode == "SWITCH") {
+      // SWITCH 문 시작
+      result = "; switch statement\n"
+      result = result + "mov eax, " + str(instr.arg) + "\n"
+    } else if (instr.opcode == "CASE") {
+      // CASE 라벨
+      result = ".L__case_" + str(instr.arg) + ":\n"
+    } else if (instr.opcode == "DEFAULT") {
+      // DEFAULT 케이스
+      result = ".L__default_case:\n"
+    } else if (instr.opcode == "SIMD_ADD") {
+      // SIMD 덧셈
+      result = "vpaddq ymm0, ymm0, [" + str(instr.arg) + "]\n"
+    } else if (instr.opcode == "SIMD_SUB") {
+      // SIMD 뺄셈
+      result = "vpsubq ymm0, ymm0, [" + str(instr.arg) + "]\n"
+    } else if (instr.opcode == "SIMD_MUL") {
+      // SIMD 곱셈
+      result = "vpmulq ymm0, ymm0, [" + str(instr.arg) + "]\n"
+    } else if (instr.opcode == "SIMD_AND") {
+      // SIMD AND
+      result = "vpand ymm0, ymm0, [" + str(instr.arg) + "]\n"
+    } else if (instr.opcode == "SIMD_XOR") {
+      // SIMD XOR
+      result = "vpxor ymm0, ymm0, [" + str(instr.arg) + "]\n"
+    } else if (instr.opcode == "SIMD_LOAD") {
+      // SIMD 로드 (정렬)
+      result = "vmovdqa ymm0, [" + str(instr.arg) + "]\n"
+    } else if (instr.opcode == "SIMD_STORE") {
+      // SIMD 저장 (정렬)
+      result = "vmovdqa [" + str(instr.arg) + "], ymm0\n"
     } else {
       result = "; Unknown opcode: " + instr.opcode + "\n"
     }
@@ -261,14 +309,22 @@ component CodeGenerator {
     return liveMap
   }
 
-  // 유틸리티: Opcode 유효성 검증 (확장)
+  // 유틸리티: Opcode 유효성 검증 (Week 2 확장)
   fn isValidOpcode(opcode) -> bool {
     let valid = [
+      // Week 1
       "PUSH", "POP", "ADD", "SUB", "MUL", "DIV",
       "LOAD", "STORE", "CALL", "RET", "LABEL",
       "JMP", "JEQ", "JNE", "JLT", "JLE", "JGT", "JGE",
       "CMP", "MOV", "XOR", "AND", "OR",
-      "LOOP", "LOOP_END"
+      "LOOP", "LOOP_END",
+      // Week 2: Exception Handling
+      "TRY_BEGIN", "TRY_END", "CATCH", "THROW", "FINALLY",
+      // Week 2: Switch/Jump Table
+      "SWITCH", "CASE", "DEFAULT",
+      // Week 2: Vector Instructions
+      "SIMD_ADD", "SIMD_SUB", "SIMD_MUL", "SIMD_AND", "SIMD_XOR",
+      "SIMD_LOAD", "SIMD_STORE"
     ]
     for (let i = 0; i < valid.length; i = i + 1) {
       if (valid[i] == opcode) {

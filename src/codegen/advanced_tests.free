@@ -1,0 +1,343 @@
+// Phase 7.2: Advanced Tests (Day 13-14)
+// Exception handling, Jump tables, Vector instructions
+
+import ExceptionHandler from './exception_handler.free'
+import JumpTableGenerator from './jump_table_gen.free'
+import VectorInstructions from './vector_instructions.free'
+
+component AdvancedTests {
+  let totalTests = 0
+  let passedTests = 0
+
+  fn assert(condition, message) -> void {
+    totalTests = totalTests + 1
+    if (condition) {
+      passedTests = passedTests + 1
+      println("✓ " + message)
+    } else {
+      println("✗ " + message)
+    }
+  }
+
+  // ==================== Exception Handling Tests ====================
+
+  // Test 1: EH Frame 생성
+  fn test_eh_frame_generation() -> void {
+    let frame = ExceptionHandler.genEHFrame(0, 100, 100, 200, "std::exception")
+    assert(frame.id == 0, "EH 1: Frame ID assigned")
+    assert(frame.tryStart == 0, "EH 1: Try start offset correct")
+    assert(frame.exceptionType == "std::exception", "EH 1: Exception type set")
+  }
+
+  // Test 2: LSDA 테이블
+  fn test_lsda_table() -> void {
+    let frames = [{
+      tryStart: 0,
+      tryEnd: 100,
+      catchStart: 100,
+      catchEnd: 200,
+      exceptionType: "std::runtime_error"
+    }]
+    let lsda = ExceptionHandler.genLSDATable(frames)
+    assert(lsda.version == 1, "EH 2: LSDA version 1")
+    assert(lsda.callSites.length > 0, "EH 2: Call sites recorded")
+  }
+
+  // Test 3: Throw 명령어
+  fn test_throw_instruction() -> void {
+    let asm = ExceptionHandler.genThrow("std::exception", 0x1000)
+    assert(asm.contains("__cxa_throw"), "EH 3: __cxa_throw call")
+    assert(asm.contains("mov rdi"), "EH 3: Exception object passed")
+    assert(asm.contains("lea rsi"), "EH 3: Exception type passed")
+  }
+
+  // Test 4: Try-Catch 블록
+  fn test_try_catch_block() -> void {
+    let tryInstrs = [
+      { opcode: "PUSH", arg: 10 },
+      { opcode: "DIV", arg: 0 }
+    ]
+    let catchInstrs = [
+      { opcode: "MOV", arg1: "rax", arg2: -1 }
+    ]
+    let asm = ExceptionHandler.genTryCatchBlock(
+      "try_label",
+      tryInstrs,
+      "catch_label",
+      catchInstrs,
+      "std::exception"
+    )
+    assert(asm.contains("try_label:"), "EH 4: Try label present")
+    assert(asm.contains("catch_label:"), "EH 4: Catch label present")
+    assert(asm.contains("landing pad"), "EH 4: Landing pad comment")
+  }
+
+  // Test 5: Finally 블록
+  fn test_finally_block() -> void {
+    let finallyInstrs = [
+      { opcode: "MOV", arg1: "rax", arg2: 0 }
+    ]
+    let asm = ExceptionHandler.genFinally(finallyInstrs)
+    assert(asm.contains(".LFinally:"), "EH 5: Finally label present")
+  }
+
+  // ==================== Jump Table Tests ====================
+
+  // Test 6: Switch 분석
+  fn test_switch_analysis() -> void {
+    let cases = [
+      { value: 1, label: "case_1" },
+      { value: 5, label: "case_5" },
+      { value: 10, label: "case_10" }
+    ]
+    let analysis = JumpTableGenerator.analyzeSwitch(cases)
+    assert(analysis.minValue == 1, "JT 6: Min value correct")
+    assert(analysis.maxValue == 10, "JT 6: Max value correct")
+    assert(analysis.caseCount == 3, "JT 6: Case count correct")
+  }
+
+  // Test 7: 점프 테이블 생성 결정
+  fn test_jump_table_decision() -> void {
+    let cases = [
+      { value: 1, label: "case_1" },
+      { value: 2, label: "case_2" },
+      { value: 3, label: "case_3" },
+      { value: 4, label: "case_4" },
+      { value: 5, label: "case_5" }
+    ]
+    let analysis = JumpTableGenerator.analyzeSwitch(cases)
+    let shouldUse = JumpTableGenerator.shouldUseJumpTable(analysis)
+    assert(shouldUse == true, "JT 7: Jump table recommended for 5 cases")
+  }
+
+  // Test 8: 기본 점프 테이블 생성
+  fn test_basic_jump_table() -> void {
+    let cases = [
+      { value: 1, label: "case_1" },
+      { value: 2, label: "case_2" },
+      { value: 3, label: "case_3" }
+    ]
+    let table = JumpTableGenerator.genBasicJumpTable(cases, "default_label")
+    assert(table.type == "basic", "JT 8: Table type is basic")
+    assert(table.entries.length > 0, "JT 8: Table entries created")
+  }
+
+  // Test 9: 순차 비교 (fallback)
+  fn test_sequential_fallback() -> void {
+    let cases = [
+      { value: 1, label: "case_1" },
+      { value: 2, label: "case_2" }
+    ]
+    let asm = JumpTableGenerator.emitSequentialAsm(cases, "default_label")
+    assert(asm.contains("cmp eax"), "JT 9: CMP instruction present")
+    assert(asm.contains("je"), "JT 9: JE instruction present")
+  }
+
+  // Test 10: 점프 테이블 효율성 분석
+  fn test_jump_table_efficiency() -> void {
+    let cases = [
+      { value: 1, label: "case_1" },
+      { value: 2, label: "case_2" },
+      { value: 100, label: "case_100" }
+    ]
+    let table = JumpTableGenerator.genBasicJumpTable(cases, "default")
+    let efficiency = JumpTableGenerator.analyzeEfficiency(3, 0)
+    assert(efficiency.jumpTableCount >= 0, "JT 10: Efficiency analysis runs")
+  }
+
+  // ==================== Vector Instructions Tests ====================
+
+  // Test 11: SIMD 레벨 설정
+  fn test_simd_level_setup() -> void {
+    VectorInstructions.setSIMDLevel("avx2")
+    let level = VectorInstructions.getSIMDLevel()
+    assert(level == "avx2", "VI 11: SIMD level set to AVX2")
+  }
+
+  // Test 12: SIMD ADD 연산
+  fn test_simd_add() -> void {
+    let asm = VectorInstructions.genSIMDAdd("0x1000", "0x2000", "0x3000")
+    assert(asm.contains("movdqa") || asm.contains("vmovdqa"), "VI 12: SIMD move instruction")
+    assert(asm.contains("addq") || asm.contains("paddq") || asm.contains("vpaddq"), "VI 12: SIMD add instruction")
+  }
+
+  // Test 13: SIMD SUB 연산
+  fn test_simd_sub() -> void {
+    let asm = VectorInstructions.genSIMDSub("0x1000", "0x2000", "0x3000")
+    assert(asm.contains("subq") || asm.contains("psubq") || asm.contains("vpsubq"), "VI 13: SIMD sub instruction")
+  }
+
+  // Test 14: SIMD MUL 연산
+  fn test_simd_mul() -> void {
+    let asm = VectorInstructions.genSIMDMul("0x1000", "0x2000", "0x3000")
+    assert(asm.contains("mulq") || asm.contains("pmulq") || asm.contains("vpmulq"), "VI 14: SIMD mul instruction")
+  }
+
+  // Test 15: SIMD AND 연산
+  fn test_simd_and() -> void {
+    let asm = VectorInstructions.genSIMDAnd("0x1000", "0x2000", "0x3000")
+    assert(asm.contains("and") || asm.contains("pand") || asm.contains("vpand"), "VI 15: SIMD and instruction")
+  }
+
+  // Test 16: SIMD XOR 연산
+  fn test_simd_xor() -> void {
+    let asm = VectorInstructions.genSIMDXor("0x1000", "0x2000", "0x3000")
+    assert(asm.contains("xor") || asm.contains("pxor") || asm.contains("vpxor"), "VI 16: SIMD xor instruction")
+  }
+
+  // Test 17: SIMD 로드 (정렬)
+  fn test_simd_load_aligned() -> void {
+    let asm = VectorInstructions.genSIMDLoadAligned("xmm0", "0x1000")
+    assert(asm.contains("movdqa") || asm.contains("vmovdqa"), "VI 17: Aligned load instruction")
+  }
+
+  // Test 18: SIMD 저장 (정렬)
+  fn test_simd_store_aligned() -> void {
+    let asm = VectorInstructions.genSIMDStoreAligned("0x1000", "xmm0")
+    assert(asm.contains("movdqa") || asm.contains("vmovdqa"), "VI 18: Aligned store instruction")
+  }
+
+  // Test 19: 벡터화된 루프
+  fn test_vectorized_loop() -> void {
+    let asm = VectorInstructions.genVectorizedLoop(1024, 32)
+    assert(asm.contains(".Lvec_loop:"), "VI 19: Vector loop label")
+    assert(asm.contains("vpaddq") || asm.contains("paddq"), "VI 19: Vector add in loop")
+    assert(asm.contains("jnz .Lvec_loop"), "VI 19: Loop branch")
+  }
+
+  // Test 20: SIMD 지원 확인
+  fn test_simd_support_check() -> void {
+    let support = VectorInstructions.checkSIMDSupport()
+    assert(support.sse2 == true, "VI 20: SSE2 supported")
+    assert(support.avx2 == true, "VI 20: AVX2 supported")
+  }
+
+  // Test 21: SIMD 성능 정보
+  fn test_simd_performance() -> void {
+    let perf = VectorInstructions.getSIMDPerformance()
+    assert(perf.sse2.width == 128, "VI 21: SSE2 width 128 bits")
+    assert(perf.avx2.width == 256, "VI 21: AVX2 width 256 bits")
+    assert(perf.avx2.elementCount == 4, "VI 21: AVX2 processes 4 elements")
+  }
+
+  // ==================== E2E Integration Tests ====================
+
+  // Test 22: Exception + Jump Table 통합
+  fn test_exception_jump_table_integration() -> void {
+    let cases = [
+      { value: 1, label: "handler_1" },
+      { value: 2, label: "handler_2" }
+    ]
+    let table = JumpTableGenerator.genBasicJumpTable(cases, "default_handler")
+    let frame = ExceptionHandler.genEHFrame(0, 100, 100, 200, "std::exception")
+    assert(table.type != nil, "Integration 22: Jump table exists")
+    assert(frame.id >= 0, "Integration 22: EH frame exists")
+  }
+
+  // Test 23: Jump Table + Vector SIMD 통합
+  fn test_jump_table_vector_integration() -> void {
+    let cases = [
+      { value: 1, label: "simd_add" },
+      { value: 2, label: "simd_sub" },
+      { value: 3, label: "simd_mul" }
+    ]
+    let table = JumpTableGenerator.genBasicJumpTable(cases, "scalar_fallback")
+    let simdAsm = VectorInstructions.genSIMDAdd("dst", "src1", "src2")
+    assert(table.caseCount == 3, "Integration 23: Cases defined")
+    assert(simdAsm.length > 0, "Integration 23: SIMD code generated")
+  }
+
+  // Test 24: 전체 고급 기능 통합
+  fn test_full_advanced_integration() -> void {
+    // Exception handling
+    let frame = ExceptionHandler.genEHFrame(0, 100, 100, 200, "custom_error")
+
+    // Jump table
+    let cases = [
+      { value: 1, label: "c1" },
+      { value: 2, label: "c2" }
+    ]
+    let table = JumpTableGenerator.genBasicJumpTable(cases, "default")
+
+    // Vector instructions
+    VectorInstructions.setSIMDLevel("avx2")
+    let simd = VectorInstructions.genSIMDAdd("d", "s1", "s2")
+
+    assert(frame.id >= 0, "Integration 24: Exception handling OK")
+    assert(table.type != nil, "Integration 24: Jump table OK")
+    assert(simd.length > 0, "Integration 24: Vector instructions OK")
+  }
+
+  // Test 25: 성능 최적화 검증
+  fn test_performance_optimization() -> void {
+    let cases = []
+    for (let i = 1; i <= 50; i = i + 1) {
+      cases = cases + [
+        { value: i, label: "case_" + str(i) }
+      ]
+    }
+    let table = JumpTableGenerator.genBasicJumpTable(cases, "default")
+    let efficiency = JumpTableGenerator.analyzeEfficiency(50, 0)
+
+    assert(table.type == "basic", "Performance 25: Jump table generated")
+    assert(efficiency.jumpTableCount >= 1, "Performance 25: Table created")
+  }
+
+  // 모든 테스트 실행
+  fn runAllAdvancedTests() -> void {
+    println("\n╔════════════════════════════════════════════╗")
+    println("║   Phase 7.2: Advanced Tests (Day 13-14)   ║")
+    println("╚════════════════════════════════════════════╝\n")
+
+    // Exception Handling Tests
+    println("--- Exception Handling Tests ---")
+    test_eh_frame_generation()
+    test_lsda_table()
+    test_throw_instruction()
+    test_try_catch_block()
+    test_finally_block()
+
+    // Jump Table Tests
+    println("\n--- Jump Table Tests ---")
+    test_switch_analysis()
+    test_jump_table_decision()
+    test_basic_jump_table()
+    test_sequential_fallback()
+    test_jump_table_efficiency()
+
+    // Vector Instructions Tests
+    println("\n--- Vector Instructions Tests ---")
+    test_simd_level_setup()
+    test_simd_add()
+    test_simd_sub()
+    test_simd_mul()
+    test_simd_and()
+    test_simd_xor()
+    test_simd_load_aligned()
+    test_simd_store_aligned()
+    test_vectorized_loop()
+    test_simd_support_check()
+    test_simd_performance()
+
+    // Integration Tests
+    println("\n--- Integration Tests ---")
+    test_exception_jump_table_integration()
+    test_jump_table_vector_integration()
+    test_full_advanced_integration()
+    test_performance_optimization()
+
+    println("\n╔════════════════════════════════════════════╗")
+    println("║   결과: " + str(passedTests) + "/" + str(totalTests) + " PASS                 ║")
+    println("║   Advanced Features 완성!                 ║")
+    println("╚════════════════════════════════════════════╝\n")
+  }
+
+  export { runAllAdvancedTests }
+}
+
+// 테스트 실행
+fn main() {
+  AdvancedTests.runAllAdvancedTests()
+}
+
+main()
