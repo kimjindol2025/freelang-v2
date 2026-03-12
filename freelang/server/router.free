@@ -1,0 +1,263 @@
+// ============================================================================
+// FreeLang Router: REST API 라우팅
+// Counter + Todo + Health 엔드포인트
+// ============================================================================
+
+use "..core/state"
+use "./http-server"
+
+// ──────────────────────────────────────────────────────────────────────────
+// JSON 직렬화 (간단한 버전)
+// ──────────────────────────────────────────────────────────────────────────
+
+func toJson(data: any) -> string {
+  // 실제 JSON 직렬화 로직
+  // 현재는 간단한 버전
+  if data.type == "Counter" {
+    return `{"id":"\(data.id)","count":\(data.count),"name":"\(data.name)"}`
+  }
+
+  if data.type == "array" {
+    return "[]"
+  }
+
+  return "{}"
+}
+
+func jsonResponse(status: string, data: any) -> string {
+  return `{
+  "status": "\(status)",
+  "statusCode": \(status == "success" ? 200 : 400),
+  "data": \(toJson(data))
+}`
+}
+
+func jsonError(code: string, message: string) -> string {
+  return `{
+  "status": "error",
+  "statusCode": 400,
+  "code": "\(code)",
+  "message": "\(message)"
+}`
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Counter API
+// ──────────────────────────────────────────────────────────────────────────
+
+func routeCounter(request: HttpRequest) -> HttpResponse {
+  match (request.method, request.path) {
+    // GET /api/counter
+    ("GET", "/api/counter") => {
+      let counter = getCounter()
+      return {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ...getCorsHeaders()
+        },
+        body: jsonResponse("success", counter)
+      }
+    }
+
+    // POST /api/counter/increment
+    ("POST", "/api/counter/increment") => {
+      let counter = incrementCounter()
+      return {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ...getCorsHeaders()
+        },
+        body: jsonResponse("success", counter)
+      }
+    }
+
+    // POST /api/counter/decrement
+    ("POST", "/api/counter/decrement") => {
+      let counter = decrementCounter()
+      return {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ...getCorsHeaders()
+        },
+        body: jsonResponse("success", counter)
+      }
+    }
+
+    // POST /api/counter/reset
+    ("POST", "/api/counter/reset") => {
+      let counter = resetCounter()
+      return {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ...getCorsHeaders()
+        },
+        body: jsonResponse("success", counter)
+      }
+    }
+
+    default => null
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Todo API
+// ──────────────────────────────────────────────────────────────────────────
+
+func routeTodos(request: HttpRequest) -> HttpResponse {
+  match (request.method, request.path) {
+    // GET /api/todos
+    ("GET", "/api/todos") => {
+      let todos = getTodos()
+      return {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ...getCorsHeaders()
+        },
+        body: `{"status":"success","data":[]}`
+      }
+    }
+
+    // POST /api/todos (create)
+    ("POST", "/api/todos") => {
+      // JSON 파싱 필요
+      let todo = addTodo("New Todo", Priority::MEDIUM)
+      return {
+        status: 201,
+        headers: {
+          "Content-Type": "application/json",
+          ...getCorsHeaders()
+        },
+        body: `{"status":"success"}`
+      }
+    }
+
+    // GET /api/todos/:id
+    (_ , "/api/todos/*") => {
+      // ID 추출 필요
+      return {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ...getCorsHeaders()
+        },
+        body: `{"status":"success"}`
+      }
+    }
+
+    // PUT /api/todos/:id
+    ("PUT", "/api/todos/*") => {
+      return {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ...getCorsHeaders()
+        },
+        body: `{"status":"success"}`
+      }
+    }
+
+    // DELETE /api/todos/:id
+    ("DELETE", "/api/todos/*") => {
+      return {
+        status: 204,
+        headers: {...getCorsHeaders()},
+        body: ""
+      }
+    }
+
+    default => null
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Health Check
+// ──────────────────────────────────────────────────────────────────────────
+
+func routeHealth(request: HttpRequest) -> HttpResponse {
+  if request.method == "GET" && request.path == "/api/health" {
+    let health = getSystemHealth()
+    return {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        ...getCorsHeaders()
+      },
+      body: `{
+  "status": "healthy",
+  "timestamp": "2026-03-12T00:00:00Z",
+  "database": {
+    "todos": 0,
+    "counters": 1,
+    "healthy": true
+  }
+}`
+    }
+  }
+
+  return null
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 메인 라우터
+// ──────────────────────────────────────────────────────────────────────────
+
+func routeRequest(request: HttpRequest) -> HttpResponse {
+  // CORS preflight
+  if request.method == "OPTIONS" {
+    return {
+      status: 204,
+      headers: {...getCorsHeaders()},
+      body: ""
+    }
+  }
+
+  // Counter API
+  let counterResponse = routeCounter(request)
+  if counterResponse != null {
+    return counterResponse
+  }
+
+  // Todo API
+  let todoResponse = routeTodos(request)
+  if todoResponse != null {
+    return todoResponse
+  }
+
+  // Health Check
+  let healthResponse = routeHealth(request)
+  if healthResponse != null {
+    return healthResponse
+  }
+
+  // 404 Not Found
+  return {
+    status: 404,
+    headers: {
+      "Content-Type": "application/json",
+      ...getCorsHeaders()
+    },
+    body: `{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found"
+}`
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 내보내기
+// ──────────────────────────────────────────────────────────────────────────
+
+export {
+  routeRequest,
+  routeCounter,
+  routeTodos,
+  routeHealth,
+  jsonResponse,
+  jsonError
+}

@@ -1,0 +1,313 @@
+// ============================================================================
+// FreeLang Core: 상태 관리 + 비즈니스 로직
+// 단독 실행 가능한 서버 상태 정의
+// ============================================================================
+
+use "..shared/types"
+
+// ──────────────────────────────────────────────────────────────────────────
+// 글로벌 상태
+// ──────────────────────────────────────────────────────────────────────────
+
+global {
+  counter: Counter = {
+    id: "main",
+    count: 0,
+    name: "Main Counter",
+    createdAt: now(),
+    updatedAt: now()
+  }
+
+  todos: array<Todo> = []
+
+  nextTodoId: number = 1
+
+  // 변경 이력 추적
+  history: array<StateEvent> = []
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Counter 함수들
+// ──────────────────────────────────────────────────────────────────────────
+
+func incrementCounter() -> Counter {
+  global.counter.count += 1
+  global.counter.updatedAt = now()
+
+  // 이벤트 기록
+  recordEvent(
+    EventType::COUNTER_INCREMENTED,
+    {
+      previousValue: global.counter.count - 1,
+      newValue: global.counter.count
+    }
+  )
+
+  return global.counter
+}
+
+func decrementCounter() -> Counter {
+  global.counter.count -= 1
+  global.counter.updatedAt = now()
+
+  recordEvent(
+    EventType::COUNTER_DECREMENTED,
+    {
+      previousValue: global.counter.count + 1,
+      newValue: global.counter.count
+    }
+  )
+
+  return global.counter
+}
+
+func resetCounter() -> Counter {
+  let oldCount = global.counter.count
+  global.counter.count = 0
+  global.counter.updatedAt = now()
+
+  recordEvent(
+    EventType::COUNTER_RESET,
+    {
+      previousValue: oldCount,
+      newValue: 0
+    }
+  )
+
+  return global.counter
+}
+
+func setCounter(value: number) -> Counter {
+  let oldCount = global.counter.count
+  global.counter.count = value
+  global.counter.updatedAt = now()
+
+  recordEvent(
+    EventType::COUNTER_RESET,
+    {
+      previousValue: oldCount,
+      newValue: value
+    }
+  )
+
+  return global.counter
+}
+
+func getCounter() -> Counter {
+  return global.counter
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Todo 함수들
+// ──────────────────────────────────────────────────────────────────────────
+
+func addTodo(text: string, priority: Priority) -> Todo {
+  let todo: Todo = {
+    id: global.nextTodoId,
+    text: text,
+    done: false,
+    priority: priority,
+    tags: [],
+    createdAt: now(),
+    updatedAt: now()
+  }
+
+  global.todos.push(todo)
+  global.nextTodoId += 1
+
+  recordEvent(
+    EventType::TODO_CREATED,
+    todo
+  )
+
+  return todo
+}
+
+func updateTodo(id: number, updates: record) -> Todo? {
+  for mut todo in global.todos {
+    if todo.id == id {
+      if updates.text {
+        todo.text = updates.text
+      }
+      if updates.priority {
+        todo.priority = updates.priority
+      }
+      if updates.tags {
+        todo.tags = updates.tags
+      }
+
+      todo.updatedAt = now()
+
+      recordEvent(
+        EventType::TODO_UPDATED,
+        { id: id, updates: updates }
+      )
+
+      return todo
+    }
+  }
+
+  return null
+}
+
+func toggleTodo(id: number) -> Todo? {
+  for mut todo in global.todos {
+    if todo.id == id {
+      todo.done = !todo.done
+      todo.updatedAt = now()
+
+      let eventType = todo.done ?
+        EventType::TODO_TOGGLED :
+        EventType::TODO_TOGGLED
+
+      recordEvent(eventType, { id: id, done: todo.done })
+
+      return todo
+    }
+  }
+
+  return null
+}
+
+func deleteTodo(id: number) -> bool {
+  for i in 0..global.todos.length {
+    if global.todos[i].id == id {
+      let deleted = global.todos[i]
+      global.todos.remove(i)
+
+      recordEvent(
+        EventType::TODO_DELETED,
+        { id: id }
+      )
+
+      return true
+    }
+  }
+
+  return false
+}
+
+func getTodos() -> array<Todo> {
+  return global.todos
+}
+
+func getTodoById(id: number) -> Todo? {
+  for todo in global.todos {
+    if todo.id == id {
+      return todo
+    }
+  }
+
+  return null
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 상태 조회
+// ──────────────────────────────────────────────────────────────────────────
+
+func getTodoStats() -> TodoStats {
+  let stats: TodoStats = {
+    total: global.todos.length,
+    done: 0,
+    pending: 0,
+    byPriority: {
+      high: 0,
+      medium: 0,
+      low: 0
+    },
+    byTag: {}
+  }
+
+  for todo in global.todos {
+    if todo.done {
+      stats.done += 1
+    } else {
+      stats.pending += 1
+    }
+
+    match todo.priority {
+      Priority::HIGH => stats.byPriority.high += 1
+      Priority::MEDIUM => stats.byPriority.medium += 1
+      Priority::LOW => stats.byPriority.low += 1
+    }
+
+    for tag in todo.tags {
+      if stats.byTag[tag] {
+        stats.byTag[tag] += 1
+      } else {
+        stats.byTag[tag] = 1
+      }
+    }
+  }
+
+  return stats
+}
+
+func getSystemHealth() -> SystemHealth {
+  return {
+    status: "healthy",
+    uptime: 0,
+    timestamp: now(),
+    database: {
+      todos: global.todos.length,
+      counters: 1,
+      healthy: true
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 내부 유틸리티
+// ──────────────────────────────────────────────────────────────────────────
+
+func recordEvent(eventType: EventType, payload: any) {
+  let event: StateEvent = {
+    type: eventType,
+    timestamp: now(),
+    payload: payload,
+    metadata: {
+      userId: "system",
+      source: "backend"
+    }
+  }
+
+  global.history.push(event)
+
+  // 최근 100개만 유지
+  if global.history.length > 100 {
+    global.history = global.history[global.history.length - 100..]
+  }
+}
+
+func clearHistory() {
+  global.history = []
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 내보내기 (다른 모듈에서 사용)
+// ──────────────────────────────────────────────────────────────────────────
+
+export {
+  // Counter
+  incrementCounter,
+  decrementCounter,
+  resetCounter,
+  setCounter,
+  getCounter,
+
+  // Todo
+  addTodo,
+  updateTodo,
+  toggleTodo,
+  deleteTodo,
+  getTodos,
+  getTodoById,
+
+  // 조회
+  getTodoStats,
+  getSystemHealth,
+
+  // 이벤트
+  recordEvent,
+  clearHistory
+}

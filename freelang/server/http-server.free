@@ -1,0 +1,539 @@
+// ============================================================================
+// FreeLang HTTP Server: 네이티브 웹 서버
+// 포트 3000에서 바인드, 정적 파일 + API 서빙
+// ============================================================================
+
+use "..core/state"
+use "./router"
+
+// ──────────────────────────────────────────────────────────────────────────
+// 상수
+// ──────────────────────────────────────────────────────────────────────────
+
+const PORT = 3000
+const LISTEN_ADDR = "127.0.0.1"
+const MAX_REQUEST_SIZE = 1024 * 1024  // 1MB
+
+// ──────────────────────────────────────────────────────────────────────────
+// HTTP 요청/응답 타입
+// ──────────────────────────────────────────────────────────────────────────
+
+record HttpRequest {
+  method: string        // "GET", "POST", "PUT", "DELETE", "PATCH"
+  path: string
+  query: map<string, string>
+  headers: map<string, string>
+  body: string
+}
+
+record HttpResponse {
+  status: number
+  headers: map<string, string>
+  body: string
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 내장 정적 파일
+// ──────────────────────────────────────────────────────────────────────────
+
+func getEmbeddedFile(path: string) -> string? {
+  match path {
+    "/" | "/index.html" => return getIndexHtml()
+    "/blog.html" => return getBlogHtml()
+    "/freelang-bridge.js" => return getFreelangBridgeJs()
+    "/main.js" => return getMainJs()
+    "/style.css" => return getStyleCss()
+    default => return null
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// HTML 임베드 (최소 구조)
+// ──────────────────────────────────────────────────────────────────────────
+
+func getIndexHtml() -> string {
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FreeLang + JS 통합 예제</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+            font-size: 2em;
+        }
+
+        .counter-display {
+            font-size: 3em;
+            font-weight: bold;
+            text-align: center;
+            color: #667eea;
+            margin: 30px 0;
+            font-family: 'Monaco', monospace;
+        }
+
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin: 30px 0;
+        }
+
+        button {
+            padding: 12px 20px;
+            font-size: 1em;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+            grid-column: 1 / -1;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .stats {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            font-size: 0.95em;
+        }
+
+        .stat-label {
+            color: #666;
+        }
+
+        .stat-value {
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            color: #999;
+            margin: 20px 0;
+        }
+
+        .loading.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 FreeLang + JS</h1>
+
+        <div class="counter-display" id="counter">0</div>
+
+        <div class="button-group">
+            <button class="btn-primary" id="btn-increment">+1 증가</button>
+            <button class="btn-secondary" id="btn-decrement">-1 감소</button>
+            <button class="btn-secondary" id="btn-reset">초기화</button>
+        </div>
+
+        <div class="loading" id="loading">
+            처리 중...
+        </div>
+
+        <div class="stats">
+            <div class="stat-item">
+                <span class="stat-label">상태:</span>
+                <span class="stat-value" id="status">준비됨</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">요청:</span>
+                <span class="stat-value" id="requests">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">응답시간:</span>
+                <span class="stat-value" id="response-time">-</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="freelang-bridge.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>`
+}
+
+func getBlogHtml() -> string {
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Blog - FreeLang</title>
+</head>
+<body>
+    <h1>Blog</h1>
+    <p>블로그는 준비 중입니다.</p>
+    <a href="/">홈으로</a>
+</body>
+</html>`
+}
+
+func getStyleCss() -> string {
+  return `/* 스타일 시트 */`
+}
+
+func getFreelangBridgeJs() -> string {
+  return `// FreeLang 브리지 객체
+window.freelang = {
+    apiBase: 'http://127.0.0.1:3000',
+
+    async request(method, path, data) {
+        const startTime = performance.now();
+        try {
+            const options = {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            };
+
+            if (data && method !== 'GET') {
+                options.body = JSON.stringify(data);
+            }
+
+            const response = await fetch(this.apiBase + path, options);
+            const result = await response.json();
+
+            const duration = (performance.now() - startTime).toFixed(2);
+            window.debug?.logRequest(method, path, duration);
+
+            return result;
+        } catch (error) {
+            console.error('Freelang request error:', error);
+            return { status: 'error', message: error.message };
+        }
+    },
+
+    counter: {
+        async get() {
+            return window.freelang.request('GET', '/api/counter');
+        },
+        async increment() {
+            return window.freelang.request('POST', '/api/counter/increment');
+        },
+        async decrement() {
+            return window.freelang.request('POST', '/api/counter/decrement');
+        },
+        async reset() {
+            return window.freelang.request('POST', '/api/counter/reset');
+        }
+    }
+};
+
+// 디버그 객체
+window.debug = {
+    requestCount: 0,
+    logRequest(method, path, duration) {
+        this.requestCount++;
+        console.log(\`[\${method}] \${path} - \${duration}ms (Total: \${this.requestCount})\`);
+    }
+};`
+}
+
+func getMainJs() -> string {
+  return `// 이벤트 핸들러 + 상태 관리
+let requestCount = 0;
+
+async function updateCounter() {
+    const result = await window.freelang.counter.get();
+    if (result.status === 'success') {
+        document.getElementById('counter').innerText = result.data.count;
+    }
+}
+
+async function handleIncrement() {
+    showLoading();
+    const result = await window.freelang.counter.increment();
+    if (result.status === 'success') {
+        updateCounter();
+        updateStats('증가됨');
+    }
+    hideLoading();
+}
+
+async function handleDecrement() {
+    showLoading();
+    const result = await window.freelang.counter.decrement();
+    if (result.status === 'success') {
+        updateCounter();
+        updateStats('감소됨');
+    }
+    hideLoading();
+}
+
+async function handleReset() {
+    showLoading();
+    const result = await window.freelang.counter.reset();
+    if (result.status === 'success') {
+        updateCounter();
+        updateStats('초기화됨');
+    }
+    hideLoading();
+}
+
+function updateStats(action) {
+    requestCount++;
+    document.getElementById('requests').innerText = requestCount;
+    document.getElementById('status').innerText = action;
+    document.getElementById('response-time').innerText = 'OK';
+}
+
+function showLoading() {
+    document.getElementById('loading').classList.add('active');
+}
+
+function hideLoading() {
+    document.getElementById('loading').classList.remove('active');
+}
+
+// 이벤트 리스너 등록
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('btn-increment').addEventListener('click', handleIncrement);
+    document.getElementById('btn-decrement').addEventListener('click', handleDecrement);
+    document.getElementById('btn-reset').addEventListener('click', handleReset);
+
+    // 초기 로드
+    updateCounter();
+    document.getElementById('status').innerText = '준비됨';
+});`
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 요청 파싱
+// ──────────────────────────────────────────────────────────────────────────
+
+func parseHttpRequest(rawRequest: string) -> HttpRequest {
+  let lines = rawRequest.split("\n")
+  let firstLine = lines[0].split(" ")
+
+  let method = firstLine[0]
+  let pathWithQuery = firstLine[1]
+  let pathParts = pathWithQuery.split("?")
+  let path = pathParts[0]
+  let query = parseQueryString(pathParts.length > 1 ? pathParts[1] : "")
+
+  let headers: map<string, string> = {}
+  let bodyStart = 0
+
+  for i in 1..lines.length {
+    if lines[i] == "" {
+      bodyStart = i + 1
+      break
+    }
+
+    let headerParts = lines[i].split(": ")
+    if headerParts.length == 2 {
+      headers[headerParts[0].toLowerCase()] = headerParts[1]
+    }
+  }
+
+  let body = bodyStart < lines.length ? lines[bodyStart..].join("\n") : ""
+
+  return {
+    method: method,
+    path: path,
+    query: query,
+    headers: headers,
+    body: body
+  }
+}
+
+func parseQueryString(query: string) -> map<string, string> {
+  let params: map<string, string> = {}
+
+  if query == "" {
+    return params
+  }
+
+  let parts = query.split("&")
+  for part in parts {
+    let pair = part.split("=")
+    if pair.length == 2 {
+      params[pair[0]] = pair[1]
+    }
+  }
+
+  return params
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 응답 생성
+// ──────────────────────────────────────────────────────────────────────────
+
+func buildHttpResponse(response: HttpResponse) -> string {
+  let status = getStatusText(response.status)
+  let result = "HTTP/1.1 \(response.status) \(status)\r\n"
+
+  result += "Server: FreeLang/1.0\r\n"
+  result += "Connection: close\r\n"
+  result += "Content-Length: \(response.body.length)\r\n"
+
+  for key, value in response.headers {
+    result += "\(key): \(value)\r\n"
+  }
+
+  result += "\r\n"
+  result += response.body
+
+  return result
+}
+
+func getStatusText(status: number) -> string {
+  match status {
+    200 => "OK"
+    201 => "Created"
+    400 => "Bad Request"
+    404 => "Not Found"
+    500 => "Internal Server Error"
+    default => "Unknown"
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// CORS 헤더
+// ──────────────────────────────────────────────────────────────────────────
+
+func getCorsHeaders() -> map<string, string> {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type"
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 서버 시작
+// ──────────────────────────────────────────────────────────────────────────
+
+func startServer() {
+  println("═══════════════════════════════════════════════════════")
+  println("🚀 FreeLang HTTP Server 시작")
+  println("═══════════════════════════════════════════════════════")
+  println("📍 주소: http://\(LISTEN_ADDR):\(PORT)")
+  println("═══════════════════════════════════════════════════════")
+
+  // 여기서 실제 TCP 서버 구현이 필요함
+  // 현재는 개념 증명용 스켈레톤
+  handleConnections()
+}
+
+func handleConnections() {
+  // TCP 수신 대기 루프
+  loop {
+    // 클라이언트 연결 수락
+    // rawRequest = readSocket()
+    // request = parseHttpRequest(rawRequest)
+    // response = handleRequest(request)
+    // writeSocket(buildHttpResponse(response))
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 라우팅
+// ──────────────────────────────────────────────────────────────────────────
+
+func handleRequest(request: HttpRequest) -> HttpResponse {
+  // 정적 파일 요청
+  if request.method == "GET" {
+    let file = getEmbeddedFile(request.path)
+    if file {
+      let contentType = getContentType(request.path)
+      return {
+        status: 200,
+        headers: {
+          "Content-Type": contentType,
+          ...getCorsHeaders()
+        },
+        body: file
+      }
+    }
+  }
+
+  // API 라우팅
+  return handleApiRequest(request)
+}
+
+func getContentType(path: string) -> string {
+  match path {
+    _ if path.endsWith(".html") => "text/html; charset=utf-8"
+    _ if path.endsWith(".js") => "application/javascript; charset=utf-8"
+    _ if path.endsWith(".css") => "text/css; charset=utf-8"
+    _ if path.endsWith(".json") => "application/json"
+    default => "text/plain"
+  }
+}
+
+func handleApiRequest(request: HttpRequest) -> HttpResponse {
+  // router 모듈에 위임
+  return routeRequest(request)
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 내보내기
+// ──────────────────────────────────────────────────────────────────────────
+
+export {
+  startServer,
+  handleRequest,
+  parseHttpRequest,
+  buildHttpResponse,
+  PORT,
+  LISTEN_ADDR
+}
