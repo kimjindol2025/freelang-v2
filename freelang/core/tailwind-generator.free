@@ -1,0 +1,392 @@
+// ============================================================================
+// Phase 12: CSS Generation Engine
+// 모든 Tailwind 설정을 CSS로 동적 생성
+// ============================================================================
+
+import { getTailwindConfig } from "./tailwind-config"
+import { generateAllUtilityClasses } from "./tailwind-utils"
+import { generateAllResponsiveClasses } from "./tailwind-responsive"
+import { generateAllStateClasses } from "./tailwind-states"
+
+// ──────────────────────────────────────────────────────────────────────────
+// CSS Variables Generator (CSS Custom Properties)
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateCSSVariables() -> any {
+  let config = getTailwindConfig()
+  let spacing = config["spacing"]
+  let colors = config["colors"]
+  let breakpoints = config["breakpoints"]
+  let fontSize = config["fontSize"]
+  let borderRadius = config["borderRadius"]
+  let shadows = config["shadows"]
+
+  let cssVars = ":root {\n"
+
+  // Spacing variables
+  cssVars = cssVars + "  /* Spacing Scale (4px units) */\n"
+  for key in spacing {
+    let value = spacing[key]
+    cssVars = cssVars + "  --spacing-\(key): \(value);\n"
+  }
+
+  // Color variables
+  cssVars = cssVars + "\n  /* Color Palette */\n"
+  for colorName in colors {
+    let colorObj = colors[colorName]
+    for shade in colorObj {
+      let hexValue = colorObj[shade]
+      cssVars = cssVars + "  --color-\(colorName)-\(shade): \(hexValue);\n"
+    }
+  }
+
+  // Font size variables
+  cssVars = cssVars + "\n  /* Font Sizes */\n"
+  for sizeKey in fontSize {
+    let sizeValue = fontSize[sizeKey]
+    cssVars = cssVars + "  --font-size-\(sizeKey): \(sizeValue);\n"
+  }
+
+  // Border radius variables
+  cssVars = cssVars + "\n  /* Border Radius */\n"
+  for radiusKey in borderRadius {
+    let radiusValue = borderRadius[radiusKey]
+    cssVars = cssVars + "  --border-radius-\(radiusKey): \(radiusValue);\n"
+  }
+
+  // Shadow variables
+  cssVars = cssVars + "\n  /* Shadows */\n"
+  for shadowKey in shadows {
+    let shadowValue = shadows[shadowKey]
+    cssVars = cssVars + "  --shadow-\(shadowKey): \(shadowValue);\n"
+  }
+
+  // Transition defaults
+  cssVars = cssVars + "\n  /* Transitions */\n"
+  cssVars = cssVars + "  --duration-default: 200ms;\n"
+  cssVars = cssVars + "  --timing-default: ease-in-out;\n"
+
+  cssVars = cssVars + "}\n"
+
+  return cssVars
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Reset/Normalize CSS
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateResetCSS() -> any {
+  let resetCSS = "/* Reset & Normalize */\n"
+    + "* {\n"
+    + "  margin: 0;\n"
+    + "  padding: 0;\n"
+    + "  box-sizing: border-box;\n"
+    + "}\n\n"
+    + "html {\n"
+    + "  -webkit-font-smoothing: antialiased;\n"
+    + "  -moz-osx-font-smoothing: grayscale;\n"
+    + "}\n\n"
+    + "body {\n"
+    + "  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;\n"
+    + "  line-height: 1.5;\n"
+    + "  color: #1f2937;\n"
+    + "  background-color: #ffffff;\n"
+    + "}\n\n"
+    + "img {\n"
+    + "  max-width: 100%;\n"
+    + "  height: auto;\n"
+    + "  display: block;\n"
+    + "}\n\n"
+    + "button, input, textarea, select {\n"
+    + "  font-family: inherit;\n"
+    + "  font-size: inherit;\n"
+    + "}\n\n"
+    + "button {\n"
+    + "  cursor: pointer;\n"
+    + "}\n\n"
+    + "a {\n"
+    + "  color: #3b82f6;\n"
+    + "  text-decoration: none;\n"
+    + "  transition: color 200ms ease-in-out;\n"
+    + "}\n\n"
+    + "a:hover {\n"
+    + "  color: #1d4ed8;\n"
+    + "}\n\n"
+    + "h1, h2, h3, h4, h5, h6 {\n"
+    + "  font-weight: 600;\n"
+    + "  line-height: 1.2;\n"
+    + "}\n"
+
+  return resetCSS
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Utility Classes Generator (기본 유틸리티)
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateUtilityCSS() -> any {
+  let utilities = generateAllUtilityClasses()
+  return utilities
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Responsive CSS Generator
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateResponsiveCSS() -> any {
+  let responsive = generateAllResponsiveClasses()
+  return responsive["css"]
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// State CSS Generator
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateStateCSS() -> any {
+  let states = generateAllStateClasses()
+  return states["css"]
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Component Default Styles
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateComponentStyles() -> any {
+  let componentCSS = "/* Component Base Styles */\n"
+    + ".button, button[type=button], button[type=submit], button[type=reset] {\n"
+    + "  display: inline-flex;\n"
+    + "  align-items: center;\n"
+    + "  justify-content: center;\n"
+    + "  padding: 12px 16px;\n"
+    + "  font-size: 14px;\n"
+    + "  font-weight: 500;\n"
+    + "  border: 1px solid transparent;\n"
+    + "  border-radius: 6px;\n"
+    + "  background-color: #3b82f6;\n"
+    + "  color: white;\n"
+    + "  cursor: pointer;\n"
+    + "  transition: all 200ms ease-in-out;\n"
+    + "}\n\n"
+    + ".button:hover, button[type=button]:hover, button[type=submit]:hover, button[type=reset]:hover {\n"
+    + "  background-color: #2563eb;\n"
+    + "  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);\n"
+    + "}\n\n"
+    + ".button:active, button[type=button]:active, button[type=submit]:active, button[type=reset]:active {\n"
+    + "  background-color: #1d4ed8;\n"
+    + "  transform: scale(0.98);\n"
+    + "}\n\n"
+    + ".button:disabled, button[type=button]:disabled, button[type=submit]:disabled, button[type=reset]:disabled {\n"
+    + "  opacity: 0.5;\n"
+    + "  cursor: not-allowed;\n"
+    + "  transform: none;\n"
+    + "}\n\n"
+    + "input, textarea {\n"
+    + "  padding: 8px 12px;\n"
+    + "  border: 1px solid #d1d5db;\n"
+    + "  border-radius: 6px;\n"
+    + "  font-size: 14px;\n"
+    + "  transition: all 200ms ease-in-out;\n"
+    + "}\n\n"
+    + "input:focus, textarea:focus {\n"
+    + "  outline: 2px solid #3b82f6;\n"
+    + "  outline-offset: 2px;\n"
+    + "  border-color: #3b82f6;\n"
+    + "  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);\n"
+    + "}\n\n"
+    + ".card {\n"
+    + "  background-color: white;\n"
+    + "  border: 1px solid #e5e7eb;\n"
+    + "  border-radius: 8px;\n"
+    + "  padding: 20px;\n"
+    + "  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);\n"
+    + "}\n\n"
+    + ".card:hover {\n"
+    + "  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);\n"
+    + "  border-color: #d1d5db;\n"
+    + "}\n\n"
+    + ".badge {\n"
+    + "  display: inline-block;\n"
+    + "  padding: 4px 8px;\n"
+    + "  border-radius: 4px;\n"
+    + "  font-size: 12px;\n"
+    + "  font-weight: 600;\n"
+    + "}\n\n"
+    + ".badge-primary {\n"
+    + "  background-color: #eff6ff;\n"
+    + "  color: #1e40af;\n"
+    + "}\n\n"
+    + ".badge-danger {\n"
+    + "  background-color: #fef2f2;\n"
+    + "  color: #991b1b;\n"
+    + "}\n\n"
+    + ".badge-success {\n"
+    + "  background-color: #f0fdf4;\n"
+    + "  color: #166534;\n"
+    + "}\n\n"
+    + ".container {\n"
+    + "  max-width: 1280px;\n"
+    + "  margin-left: auto;\n"
+    + "  margin-right: auto;\n"
+    + "  padding-left: 20px;\n"
+    + "  padding-right: 20px;\n"
+    + "}\n\n"
+    + "@media (max-width: 768px) {\n"
+    + "  .container {\n"
+    + "    padding-left: 16px;\n"
+    + "    padding-right: 16px;\n"
+    + "  }\n"
+    + "}\n"
+
+  return componentCSS
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Complete CSS Generation
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateCompleteTailwindCSS(theme: String) -> any {
+  let cssOutput = ""
+
+  // 1. CSS Variables & Root
+  cssOutput = cssOutput + generateCSSVariables() + "\n"
+
+  // 2. Reset & Normalize
+  cssOutput = cssOutput + generateResetCSS() + "\n"
+
+  // 3. Component Styles
+  cssOutput = cssOutput + generateComponentStyles() + "\n"
+
+  // 4. Utility Classes
+  cssOutput = cssOutput + "/* Utility Classes */\n"
+  cssOutput = cssOutput + generateUtilityCSS() + "\n"
+
+  // 5. Responsive Classes
+  cssOutput = cssOutput + "/* Responsive Utilities */\n"
+  cssOutput = cssOutput + generateResponsiveCSS() + "\n"
+
+  // 6. State Classes
+  cssOutput = cssOutput + "/* State Utilities */\n"
+  cssOutput = cssOutput + generateStateCSS() + "\n"
+
+  return cssOutput
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Light Theme CSS
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateLightThemeCSS() -> any {
+  return generateCompleteTailwindCSS("light")
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Dark Theme CSS
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateDarkThemeCSS() -> any {
+  let darkCSS = ""
+    + "/* Dark Theme Overrides */\n"
+    + "@media (prefers-color-scheme: dark) {\n"
+    + "  :root {\n"
+    + "    color-scheme: dark;\n"
+    + "  }\n\n"
+    + "  body {\n"
+    + "    background-color: #1f2937;\n"
+    + "    color: #f3f4f6;\n"
+    + "  }\n\n"
+    + "  .card {\n"
+    + "    background-color: #111827;\n"
+    + "    border-color: #374151;\n"
+    + "  }\n\n"
+    + "  input, textarea {\n"
+    + "    background-color: #1f2937;\n"
+    + "    border-color: #4b5563;\n"
+    + "    color: #f3f4f6;\n"
+    + "  }\n\n"
+    + "  input:focus, textarea:focus {\n"
+    + "    background-color: #111827;\n"
+    + "    border-color: #3b82f6;\n"
+    + "  }\n\n"
+    + "  a {\n"
+    + "    color: #60a5fa;\n"
+    + "  }\n\n"
+    + "  a:hover {\n"
+    + "    color: #93c5fd;\n"
+    + "  }\n"
+    + "}\n"
+    + ".dark {\n"
+    + "  color-scheme: dark;\n"
+    + "  background-color: #1f2937;\n"
+    + "  color: #f3f4f6;\n"
+    + "}\n"
+    + ".dark .card {\n"
+    + "  background-color: #111827;\n"
+    + "  border-color: #374151;\n"
+    + "}\n"
+
+  return darkCSS
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// CSS Size Calculator (CSS 파일 크기 계산)
+// ──────────────────────────────────────────────────────────────────────────
+
+func calculateCSSSize(css: String) -> any {
+  let size = css.length()
+  let sizeKB = size / 1024
+  let gzipEstimate = size * 0.25  // ~25% gzip ratio
+
+  return {
+    "raw": size,
+    "kilobytes": sizeKB,
+    "gzipEstimate": gzipEstimate / 1024
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// CSS Statistics
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateCSSStatistics() -> any {
+  let lightCSS = generateLightThemeCSS()
+  let darkCSS = generateDarkThemeCSS()
+  let lightStats = calculateCSSSize(lightCSS)
+  let darkStats = calculateCSSSize(darkCSS)
+
+  return {
+    "light": {
+      "size": lightStats["kilobytes"],
+      "gzipped": lightStats["gzipEstimate"],
+      "classes": "500+"
+    },
+    "dark": {
+      "size": darkStats["kilobytes"],
+      "gzipped": darkStats["gzipEstimate"],
+      "classes": "100+"
+    },
+    "total": {
+      "utilities": "500+",
+      "responsive": "150+",
+      "states": "200+",
+      "components": "10+"
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Export
+// ──────────────────────────────────────────────────────────────────────────
+
+export {
+  generateCSSVariables,
+  generateResetCSS,
+  generateUtilityCSS,
+  generateResponsiveCSS,
+  generateStateCSS,
+  generateComponentStyles,
+  generateCompleteTailwindCSS,
+  generateLightThemeCSS,
+  generateDarkThemeCSS,
+  calculateCSSSize,
+  generateCSSStatistics
+}

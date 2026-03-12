@@ -1,0 +1,417 @@
+// ============================================================================
+// Phase 13: Class Parser & JIT Compiler
+// HTML에서 사용된 Tailwind 클래스를 추출하여 필요한 CSS만 생성
+// ============================================================================
+
+import { getTailwindConfig } from "./tailwind-config"
+import { generateLightThemeCSS, generateDarkThemeCSS } from "./tailwind-generator"
+
+// ──────────────────────────────────────────────────────────────────────────
+// HTML Class Extractor
+// ──────────────────────────────────────────────────────────────────────────
+
+func extractClassesFromHTML(htmlContent: String) -> any {
+  let classRegex = "class=\"([^\"]*)\""
+  let matches = []
+  let classSet = {}
+
+  // Simple regex-like pattern matching
+  let lines = htmlContent.split("\n")
+
+  for line in lines {
+    if line.contains("class=") {
+      let startIdx = line.indexOf("class=\"")
+      if startIdx >= 0 {
+        let endIdx = line.indexOf("\"", startIdx + 7)
+        if endIdx > startIdx {
+          let classStr = line.substring(startIdx + 7, endIdx)
+          let classes = classStr.split(" ")
+
+          for cls in classes {
+            if cls.length() > 0 && cls != " " {
+              classSet[cls] = true
+            }
+          }
+        }
+      }
+    }
+  }
+
+  let classArray = []
+  for cls in classSet {
+    classArray.append(cls)
+  }
+
+  return classArray
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Class Category Detector
+// 클래스를 카테고리별로 분류
+// ──────────────────────────────────────────────────────────────────────────
+
+func classifyClass(className: String) -> any {
+  // 반응형 prefix 체크
+  if className.startsWith("sm-") || className.startsWith("md-") || className.startsWith("lg-") || className.startsWith("xl-") {
+    return "responsive"
+  }
+
+  // 상태 prefix 체크
+  if className.startsWith("hover-") {
+    return "hover"
+  }
+  if className.startsWith("active-") {
+    return "active"
+  }
+  if className.startsWith("focus-") {
+    return "focus"
+  }
+  if className.startsWith("disabled-") {
+    return "disabled"
+  }
+  if className.startsWith("group-") {
+    return "group"
+  }
+  if className.startsWith("dark-") {
+    return "dark"
+  }
+  if className.startsWith("transition") || className.startsWith("duration-") || className.startsWith("ease-") {
+    return "transition"
+  }
+
+  // Display 클래스
+  if className.contains("flex") || className.contains("grid") || className.contains("block") || className.contains("hidden") || className.contains("inline") {
+    return "display"
+  }
+
+  // Spacing 클래스
+  if className.startsWith("p-") || className.startsWith("m-") || className.startsWith("px-") || className.startsWith("py-") || className.startsWith("mx-") || className.startsWith("my-") {
+    return "spacing"
+  }
+
+  // Color 클래스
+  if className.startsWith("bg-") || className.startsWith("text-") || className.startsWith("border-") {
+    return "color"
+  }
+
+  // Size 클래스
+  if className.startsWith("w-") || className.startsWith("h-") || className.startsWith("text-") || className.startsWith("gap-") {
+    return "size"
+  }
+
+  // Flexbox 클래스
+  if className.contains("flex-") || className.contains("justify-") || className.contains("items-") {
+    return "flexbox"
+  }
+
+  // Grid 클래스
+  if className.contains("grid-") || className.contains("col-") {
+    return "grid"
+  }
+
+  // Border 클래스
+  if className.startsWith("border") || className.startsWith("rounded-") {
+    return "border"
+  }
+
+  // Shadow 클래스
+  if className.startsWith("shadow-") {
+    return "shadow"
+  }
+
+  // Typography 클래스
+  if className.startsWith("font-") || className.startsWith("text-") {
+    return "typography"
+  }
+
+  return "utility"
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Class Validator
+// Tailwind 시스템에서 지원하는 클래스인지 확인
+// ──────────────────────────────────────────────────────────────────────────
+
+func isValidTailwindClass(className: String) -> any {
+  // Reserved keywords that are not valid classes
+  let reserved = ["class", "id", "style", "data", "aria", "role", "tabindex"]
+
+  for keyword in reserved {
+    if className == keyword {
+      return false
+    }
+  }
+
+  // Check if it matches known patterns
+  let patterns = [
+    // Display
+    { pattern: "^(sm-|md-|lg-|xl-|)?(flex|grid|block|hidden|inline|inline-block)$" },
+    // Spacing
+    { pattern: "^(sm-|md-|lg-|xl-|)?(p|m|px|py|mx|my|mt|mb|ml|mr)(\\-[0-9]+)?$" },
+    // Colors
+    { pattern: "^(sm-|md-|lg-|xl-|)?(bg|text|border)\\-(gray|blue|red|green|yellow|purple)\\-(50|100|200|300|400|500|600|700|800|900)$" },
+    // Typography
+    { pattern: "^(sm-|md-|lg-|xl-|)?text\\-(xs|sm|base|lg|xl|2xl|3xl|4xl|5xl)$" },
+    // Size
+    { pattern: "^(sm-|md-|lg-|xl-|)?(w|h|gap|rounded)\\-[0-9a-z]+$" },
+    // State
+    { pattern: "^(hover|active|focus|disabled|group|dark|transition|duration|ease)\\-" },
+    // Flexbox
+    { pattern: "^(sm-|md-|lg-|xl-|)?(flex|justify|items|gap)\\-" },
+    // Grid
+    { pattern: "^(sm-|md-|lg-|xl-|)?grid\\-" }
+  ]
+
+  // Simple pattern matching
+  if className.startsWith("p-") || className.startsWith("m-") || className.startsWith("gap-") {
+    return true
+  }
+  if className.startsWith("bg-") || className.startsWith("text-") || className.startsWith("border-") {
+    return true
+  }
+  if className.contains("flex") || className.contains("grid") || className.contains("block") {
+    return true
+  }
+  if className.startsWith("hover-") || className.startsWith("focus-") || className.startsWith("active-") {
+    return true
+  }
+  if className.startsWith("sm-") || className.startsWith("md-") || className.startsWith("lg-") || className.startsWith("xl-") {
+    return true
+  }
+  if className.startsWith("rounded-") || className.startsWith("shadow-") {
+    return true
+  }
+  if className.startsWith("transition") || className.startsWith("duration-") || className.startsWith("ease-") {
+    return true
+  }
+  if className == "group" || className == "dark" {
+    return true
+  }
+
+  return false
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// CSS Rule Generator
+// 클래스명을 CSS 규칙으로 변환
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateCSSRule(className: String) -> any {
+  let config = getTailwindConfig()
+  let spacing = config["spacing"]
+  let colors = config["colors"]
+  let fontSize = config["fontSize"]
+  let borderRadius = config["borderRadius"]
+  let shadows = config["shadows"]
+
+  // Display classes
+  if className == "flex" {
+    return ".flex { display: flex; }"
+  }
+  if className == "grid" {
+    return ".grid { display: grid; }"
+  }
+  if className == "block" {
+    return ".block { display: block; }"
+  }
+  if className == "hidden" {
+    return ".hidden { display: none; }"
+  }
+  if className == "inline" {
+    return ".inline { display: inline; }"
+  }
+  if className == "inline-block" {
+    return ".inline-block { display: inline-block; }"
+  }
+
+  // Padding classes
+  if className.startsWith("p-") {
+    let scale = className.substring(2, className.length())
+    let value = spacing[scale]
+    if value {
+      return ".\(className) { padding: \(value); }"
+    }
+  }
+
+  // Margin classes
+  if className.startsWith("m-") && !className.startsWith("md-") {
+    let scale = className.substring(2, className.length())
+    let value = spacing[scale]
+    if value {
+      return ".\(className) { margin: \(value); }"
+    }
+  }
+
+  // Gap classes
+  if className.startsWith("gap-") {
+    let scale = className.substring(4, className.length())
+    let value = spacing[scale]
+    if value {
+      return ".\(className) { gap: \(value); }"
+    }
+  }
+
+  // Font size classes
+  if className.startsWith("text-") && !className.startsWith("text-") {
+    let sizeKey = className.substring(5, className.length())
+    let size = fontSize[sizeKey]
+    if size {
+      return ".\(className) { font-size: \(size); }"
+    }
+  }
+
+  // Background color classes
+  if className.startsWith("bg-") {
+    let rest = className.substring(3, className.length())
+    let parts = rest.split("-")
+    if parts.length() >= 2 {
+      let colorName = parts[0]
+      let shade = parts[1]
+      let color = colors[colorName]
+      if color {
+        let hexColor = color[shade]
+        if hexColor {
+          return ".\(className) { background-color: \(hexColor); }"
+        }
+      }
+    }
+  }
+
+  // Text color classes
+  if className.startsWith("text-") && className.contains("-") {
+    let rest = className.substring(5, className.length())
+    let parts = rest.split("-")
+    if parts.length() >= 2 {
+      let colorName = parts[0]
+      let shade = parts[1]
+      let color = colors[colorName]
+      if color {
+        let hexColor = color[shade]
+        if hexColor {
+          return ".\(className) { color: \(hexColor); }"
+        }
+      }
+    }
+  }
+
+  // Border color classes
+  if className.startsWith("border-") {
+    let rest = className.substring(7, className.length())
+    let parts = rest.split("-")
+    if parts.length() >= 2 {
+      let colorName = parts[0]
+      let shade = parts[1]
+      let color = colors[colorName]
+      if color {
+        let hexColor = color[shade]
+        if hexColor {
+          return ".\(className) { border-color: \(hexColor); }"
+        }
+      }
+    }
+  }
+
+  // Border radius classes
+  if className.startsWith("rounded-") {
+    let radiusKey = className.substring(8, className.length())
+    let radius = borderRadius[radiusKey]
+    if radius {
+      return ".\(className) { border-radius: \(radius); }"
+    }
+  }
+
+  // Shadow classes
+  if className.startsWith("shadow-") {
+    let shadowKey = className.substring(7, className.length())
+    let shadow = shadows[shadowKey]
+    if shadow {
+      return ".\(className) { box-shadow: \(shadow); }"
+    }
+  }
+
+  return ""
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// JIT CSS Generator
+// HTML에서 추출한 클래스만으로 CSS 생성
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateJITCSS(htmlContent: String) -> any {
+  let classes = extractClassesFromHTML(htmlContent)
+  let cssRules = []
+  let categories = {}
+
+  for className in classes {
+    if isValidTailwindClass(className) {
+      let category = classifyClass(className)
+      let rule = generateCSSRule(className)
+
+      if rule != "" {
+        cssRules.append(rule)
+
+        if !categories[category] {
+          categories[category] = []
+        }
+        categories[category].append(className)
+      }
+    }
+  }
+
+  let css = "/* Generated JIT CSS */\n"
+  for rule in cssRules {
+    css = css + rule + "\n"
+  }
+
+  return {
+    "css": css,
+    "classes": classes,
+    "validClasses": cssRules.length(),
+    "categories": categories
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Class Statistics
+// 클래스 사용 통계 분석
+// ──────────────────────────────────────────────────────────────────────────
+
+func analyzeClassUsage(htmlContent: String) -> any {
+  let classes = extractClassesFromHTML(htmlContent)
+  let statistics = {
+    "totalClasses": classes.length(),
+    "validClasses": 0,
+    "invalidClasses": 0,
+    "byCategory": {},
+    "unused": []
+  }
+
+  for className in classes {
+    let category = classifyClass(className)
+    if !statistics["byCategory"][category] {
+      statistics["byCategory"][category] = 0
+    }
+    statistics["byCategory"][category] = statistics["byCategory"][category] + 1
+
+    if isValidTailwindClass(className) {
+      statistics["validClasses"] = statistics["validClasses"] + 1
+    } else {
+      statistics["invalidClasses"] = statistics["invalidClasses"] + 1
+    }
+  }
+
+  return statistics
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Export
+// ──────────────────────────────────────────────────────────────────────────
+
+export {
+  extractClassesFromHTML,
+  classifyClass,
+  isValidTailwindClass,
+  generateCSSRule,
+  generateJITCSS,
+  analyzeClassUsage
+}

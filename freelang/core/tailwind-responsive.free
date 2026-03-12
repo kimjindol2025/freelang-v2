@@ -1,0 +1,473 @@
+// ============================================================================
+// Phase 10: Responsive System Implementation
+// 반응형 유틸리티 생성 - 5개 Breakpoint에 대한 @media query 기반 클래스
+// ============================================================================
+
+import { getBreakpoints, getSpacingScale, getColorPalette, getFontSizes, getBorderRadius } from "./tailwind-config"
+
+// ──────────────────────────────────────────────────────────────────────────
+// Responsive Display Classes
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateResponsiveDisplayClasses() -> any {
+  return {
+    "display": {
+      "xs": "",
+      "sm": "@media (min-width: 640px) { .sm-block { display: block; } .sm-flex { display: flex; } .sm-grid { display: grid; } .sm-hidden { display: none; } .sm-inline { display: inline; } .sm-inline-block { display: inline-block; } }",
+      "md": "@media (min-width: 768px) { .md-block { display: block; } .md-flex { display: flex; } .md-grid { display: grid; } .md-hidden { display: none; } .md-inline { display: inline; } .md-inline-block { display: inline-block; } }",
+      "lg": "@media (min-width: 1024px) { .lg-block { display: block; } .lg-flex { display: flex; } .lg-grid { display: grid; } .lg-hidden { display: none; } .lg-inline { display: inline; } .lg-inline-block { display: inline-block; } }",
+      "xl": "@media (min-width: 1280px) { .xl-block { display: block; } .xl-flex { display: flex; } .xl-grid { display: grid; } .xl-hidden { display: none; } .xl-inline { display: inline; } .xl-inline-block { display: inline-block; } }"
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Responsive Spacing Classes (Padding)
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateResponsivePaddingClasses() -> any {
+  let spacingScale = getSpacingScale()
+  let scales = ["0", "1", "2", "3", "4", "5", "6", "8", "10", "12"]
+
+  let sm_classes = ""
+  let md_classes = ""
+  let lg_classes = ""
+  let xl_classes = ""
+
+  for scale in scales {
+    let value = spacingScale[scale]
+    sm_classes = sm_classes + ".sm-p-\(scale) { padding: \(value); } "
+    sm_classes = sm_classes + ".sm-px-\(scale) { padding-left: \(value); padding-right: \(value); } "
+    sm_classes = sm_classes + ".sm-py-\(scale) { padding-top: \(value); padding-bottom: \(value); } "
+
+    md_classes = md_classes + ".md-p-\(scale) { padding: \(value); } "
+    md_classes = md_classes + ".md-px-\(scale) { padding-left: \(value); padding-right: \(value); } "
+    md_classes = md_classes + ".md-py-\(scale) { padding-top: \(value); padding-bottom: \(value); } "
+
+    lg_classes = lg_classes + ".lg-p-\(scale) { padding: \(value); } "
+    lg_classes = lg_classes + ".lg-px-\(scale) { padding-left: \(value); padding-right: \(value); } "
+    lg_classes = lg_classes + ".lg-py-\(scale) { padding-top: \(value); padding-bottom: \(value); } "
+
+    xl_classes = xl_classes + ".xl-p-\(scale) { padding: \(value); } "
+    xl_classes = xl_classes + ".xl-px-\(scale) { padding-left: \(value); padding-right: \(value); } "
+    xl_classes = xl_classes + ".xl-py-\(scale) { padding-top: \(value); padding-bottom: \(value); } "
+  }
+
+  return {
+    "sm": "@media (min-width: 640px) { \(sm_classes) }",
+    "md": "@media (min-width: 768px) { \(md_classes) }",
+    "lg": "@media (min-width: 1024px) { \(lg_classes) }",
+    "xl": "@media (min-width: 1280px) { \(xl_classes) }"
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Responsive Spacing Classes (Margin)
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateResponsiveMarginClasses() -> any {
+  let spacingScale = getSpacingScale()
+  let scales = ["0", "1", "2", "3", "4", "5", "6", "8"]
+
+  let sm_classes = ""
+  let md_classes = ""
+  let lg_classes = ""
+  let xl_classes = ""
+
+  for scale in scales {
+    let value = spacingScale[scale]
+    sm_classes = sm_classes + ".sm-m-\(scale) { margin: \(value); } "
+    sm_classes = sm_classes + ".sm-mx-\(scale) { margin-left: \(value); margin-right: \(value); } "
+    sm_classes = sm_classes + ".sm-my-\(scale) { margin-top: \(value); margin-bottom: \(value); } "
+
+    md_classes = md_classes + ".md-m-\(scale) { margin: \(value); } "
+    md_classes = md_classes + ".md-mx-\(scale) { margin-left: \(value); margin-right: \(value); } "
+    md_classes = md_classes + ".md-my-\(scale) { margin-top: \(value); margin-bottom: \(value); } "
+
+    lg_classes = lg_classes + ".lg-m-\(scale) { margin: \(value); } "
+    lg_classes = lg_classes + ".lg-mx-\(scale) { margin-left: \(value); margin-right: \(value); } "
+    lg_classes = lg_classes + ".lg-my-\(scale) { margin-top: \(value); margin-bottom: \(value); } "
+
+    xl_classes = xl_classes + ".xl-m-\(scale) { margin: \(value); } "
+    xl_classes = xl_classes + ".xl-mx-\(scale) { margin-left: \(value); margin-right: \(value); } "
+    xl_classes = xl_classes + ".xl-my-\(scale) { margin-top: \(value); margin-bottom: \(value); } "
+  }
+
+  return {
+    "sm": "@media (min-width: 640px) { \(sm_classes) }",
+    "md": "@media (min-width: 768px) { \(md_classes) }",
+    "lg": "@media (min-width: 1024px) { \(lg_classes) }",
+    "xl": "@media (min-width: 1280px) { \(xl_classes) }"
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Responsive Font Size Classes
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateResponsiveFontSizeClasses() -> any {
+  let fontSizes = getFontSizes()
+  let sizeKeys = ["xs", "sm", "base", "lg", "xl", "2xl", "3xl", "4xl", "5xl"]
+
+  let sm_classes = ""
+  let md_classes = ""
+  let lg_classes = ""
+  let xl_classes = ""
+
+  for key in sizeKeys {
+    let size = fontSizes[key]
+    sm_classes = sm_classes + ".sm-text-\(key) { font-size: \(size); } "
+    md_classes = md_classes + ".md-text-\(key) { font-size: \(size); } "
+    lg_classes = lg_classes + ".lg-text-\(key) { font-size: \(size); } "
+    xl_classes = xl_classes + ".xl-text-\(key) { font-size: \(size); } "
+  }
+
+  return {
+    "sm": "@media (min-width: 640px) { \(sm_classes) }",
+    "md": "@media (min-width: 768px) { \(md_classes) }",
+    "lg": "@media (min-width: 1024px) { \(lg_classes) }",
+    "xl": "@media (min-width: 1280px) { \(xl_classes) }"
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Responsive Width & Height Classes
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateResponsiveSizeClasses() -> any {
+  let spacingScale = getSpacingScale()
+  let widths = ["2", "4", "6", "8", "12", "16"]
+
+  let sm_classes = ""
+  let md_classes = ""
+  let lg_classes = ""
+  let xl_classes = ""
+
+  // Width classes
+  for w in widths {
+    let value = spacingScale[w]
+    sm_classes = sm_classes + ".sm-w-\(w) { width: \(value); } "
+    md_classes = md_classes + ".md-w-\(w) { width: \(value); } "
+    lg_classes = lg_classes + ".lg-w-\(w) { width: \(value); } "
+    xl_classes = xl_classes + ".xl-w-\(w) { width: \(value); } "
+  }
+
+  // Height classes
+  for h in widths {
+    let value = spacingScale[h]
+    sm_classes = sm_classes + ".sm-h-\(h) { height: \(value); } "
+    md_classes = md_classes + ".md-h-\(h) { height: \(value); } "
+    lg_classes = lg_classes + ".lg-h-\(h) { height: \(value); } "
+    xl_classes = xl_classes + ".xl-h-\(h) { height: \(value); } "
+  }
+
+  return {
+    "sm": "@media (min-width: 640px) { \(sm_classes) }",
+    "md": "@media (min-width: 768px) { \(md_classes) }",
+    "lg": "@media (min-width: 1024px) { \(lg_classes) }",
+    "xl": "@media (min-width: 1280px) { \(xl_classes) }"
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Responsive Flexbox Classes
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateResponsiveFlexClasses() -> any {
+  let sm_classes = ".sm-flex-row { flex-direction: row; } "
+    + ".sm-flex-col { flex-direction: column; } "
+    + ".sm-flex-wrap { flex-wrap: wrap; } "
+    + ".sm-flex-nowrap { flex-wrap: nowrap; } "
+    + ".sm-justify-start { justify-content: flex-start; } "
+    + ".sm-justify-center { justify-content: center; } "
+    + ".sm-justify-end { justify-content: flex-end; } "
+    + ".sm-justify-between { justify-content: space-between; } "
+    + ".sm-justify-around { justify-content: space-around; } "
+    + ".sm-items-start { align-items: flex-start; } "
+    + ".sm-items-center { align-items: center; } "
+    + ".sm-items-end { align-items: flex-end; } "
+    + ".sm-gap-2 { gap: 8px; } "
+    + ".sm-gap-4 { gap: 16px; } "
+    + ".sm-gap-6 { gap: 24px; } "
+
+  let md_classes = ".md-flex-row { flex-direction: row; } "
+    + ".md-flex-col { flex-direction: column; } "
+    + ".md-flex-wrap { flex-wrap: wrap; } "
+    + ".md-flex-nowrap { flex-wrap: nowrap; } "
+    + ".md-justify-start { justify-content: flex-start; } "
+    + ".md-justify-center { justify-content: center; } "
+    + ".md-justify-end { justify-content: flex-end; } "
+    + ".md-justify-between { justify-content: space-between; } "
+    + ".md-justify-around { justify-content: space-around; } "
+    + ".md-items-start { align-items: flex-start; } "
+    + ".md-items-center { align-items: center; } "
+    + ".md-items-end { align-items: flex-end; } "
+    + ".md-gap-2 { gap: 8px; } "
+    + ".md-gap-4 { gap: 16px; } "
+    + ".md-gap-6 { gap: 24px; } "
+
+  let lg_classes = ".lg-flex-row { flex-direction: row; } "
+    + ".lg-flex-col { flex-direction: column; } "
+    + ".lg-flex-wrap { flex-wrap: wrap; } "
+    + ".lg-flex-nowrap { flex-wrap: nowrap; } "
+    + ".lg-justify-start { justify-content: flex-start; } "
+    + ".lg-justify-center { justify-content: center; } "
+    + ".lg-justify-end { justify-content: flex-end; } "
+    + ".lg-justify-between { justify-content: space-between; } "
+    + ".lg-justify-around { justify-content: space-around; } "
+    + ".lg-items-start { align-items: flex-start; } "
+    + ".lg-items-center { align-items: center; } "
+    + ".lg-items-end { align-items: flex-end; } "
+    + ".lg-gap-2 { gap: 8px; } "
+    + ".lg-gap-4 { gap: 16px; } "
+    + ".lg-gap-6 { gap: 24px; } "
+
+  let xl_classes = ".xl-flex-row { flex-direction: row; } "
+    + ".xl-flex-col { flex-direction: column; } "
+    + ".xl-flex-wrap { flex-wrap: wrap; } "
+    + ".xl-flex-nowrap { flex-wrap: nowrap; } "
+    + ".xl-justify-start { justify-content: flex-start; } "
+    + ".xl-justify-center { justify-content: center; } "
+    + ".xl-justify-end { justify-content: flex-end; } "
+    + ".xl-justify-between { justify-content: space-between; } "
+    + ".xl-justify-around { justify-content: space-around; } "
+    + ".xl-items-start { align-items: flex-start; } "
+    + ".xl-items-center { align-items: center; } "
+    + ".xl-items-end { align-items: flex-end; } "
+    + ".xl-gap-2 { gap: 8px; } "
+    + ".xl-gap-4 { gap: 16px; } "
+    + ".xl-gap-6 { gap: 24px; } "
+
+  return {
+    "sm": "@media (min-width: 640px) { \(sm_classes) }",
+    "md": "@media (min-width: 768px) { \(md_classes) }",
+    "lg": "@media (min-width: 1024px) { \(lg_classes) }",
+    "xl": "@media (min-width: 1280px) { \(xl_classes) }"
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Responsive Grid Classes
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateResponsiveGridClasses() -> any {
+  let sm_classes = ".sm-grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); } "
+    + ".sm-grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } "
+    + ".sm-grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } "
+    + ".sm-grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } "
+    + ".sm-gap-2 { gap: 8px; } "
+    + ".sm-gap-4 { gap: 16px; } "
+    + ".sm-gap-6 { gap: 24px; } "
+
+  let md_classes = ".md-grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); } "
+    + ".md-grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } "
+    + ".md-grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } "
+    + ".md-grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } "
+    + ".md-gap-2 { gap: 8px; } "
+    + ".md-gap-4 { gap: 16px; } "
+    + ".md-gap-6 { gap: 24px; } "
+
+  let lg_classes = ".lg-grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); } "
+    + ".lg-grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } "
+    + ".lg-grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } "
+    + ".lg-grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } "
+    + ".lg-gap-2 { gap: 8px; } "
+    + ".lg-gap-4 { gap: 16px; } "
+    + ".lg-gap-6 { gap: 24px; } "
+
+  let xl_classes = ".xl-grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); } "
+    + ".xl-grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } "
+    + ".xl-grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } "
+    + ".xl-grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } "
+    + ".xl-gap-2 { gap: 8px; } "
+    + ".xl-gap-4 { gap: 16px; } "
+    + ".xl-gap-6 { gap: 24px; } "
+
+  return {
+    "sm": "@media (min-width: 640px) { \(sm_classes) }",
+    "md": "@media (min-width: 768px) { \(md_classes) }",
+    "lg": "@media (min-width: 1024px) { \(lg_classes) }",
+    "xl": "@media (min-width: 1280px) { \(xl_classes) }"
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Responsive Text Alignment & Decoration
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateResponsiveTextClasses() -> any {
+  let sm_classes = ".sm-text-left { text-align: left; } "
+    + ".sm-text-center { text-align: center; } "
+    + ".sm-text-right { text-align: right; } "
+    + ".sm-text-justify { text-align: justify; } "
+    + ".sm-font-bold { font-weight: 700; } "
+    + ".sm-font-normal { font-weight: 400; } "
+    + ".sm-italic { font-style: italic; } "
+    + ".sm-not-italic { font-style: normal; } "
+    + ".sm-underline { text-decoration: underline; } "
+
+  let md_classes = ".md-text-left { text-align: left; } "
+    + ".md-text-center { text-align: center; } "
+    + ".md-text-right { text-align: right; } "
+    + ".md-text-justify { text-align: justify; } "
+    + ".md-font-bold { font-weight: 700; } "
+    + ".md-font-normal { font-weight: 400; } "
+    + ".md-italic { font-style: italic; } "
+    + ".md-not-italic { font-style: normal; } "
+    + ".md-underline { text-decoration: underline; } "
+
+  let lg_classes = ".lg-text-left { text-align: left; } "
+    + ".lg-text-center { text-align: center; } "
+    + ".lg-text-right { text-align: right; } "
+    + ".lg-text-justify { text-align: justify; } "
+    + ".lg-font-bold { font-weight: 700; } "
+    + ".lg-font-normal { font-weight: 400; } "
+    + ".lg-italic { font-style: italic; } "
+    + ".lg-not-italic { font-style: normal; } "
+    + ".lg-underline { text-decoration: underline; } "
+
+  let xl_classes = ".xl-text-left { text-align: left; } "
+    + ".xl-text-center { text-align: center; } "
+    + ".xl-text-right { text-align: right; } "
+    + ".xl-text-justify { text-align: justify; } "
+    + ".xl-font-bold { font-weight: 700; } "
+    + ".xl-font-normal { font-weight: 400; } "
+    + ".xl-italic { font-style: italic; } "
+    + ".xl-not-italic { font-style: normal; } "
+    + ".xl-underline { text-decoration: underline; } "
+
+  return {
+    "sm": "@media (min-width: 640px) { \(sm_classes) }",
+    "md": "@media (min-width: 768px) { \(md_classes) }",
+    "lg": "@media (min-width: 1024px) { \(lg_classes) }",
+    "xl": "@media (min-width: 1280px) { \(xl_classes) }"
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Responsive Border & Radius Classes
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateResponsiveBorderClasses() -> any {
+  let borderRadius = getBorderRadius()
+  let radiusKeys = ["sm", "default", "md", "lg", "xl", "2xl", "3xl"]
+
+  let sm_classes = ""
+  let md_classes = ""
+  let lg_classes = ""
+  let xl_classes = ""
+
+  for key in radiusKeys {
+    let radius = borderRadius[key]
+    sm_classes = sm_classes + ".sm-rounded-\(key) { border-radius: \(radius); } "
+    md_classes = md_classes + ".md-rounded-\(key) { border-radius: \(radius); } "
+    lg_classes = lg_classes + ".lg-rounded-\(key) { border-radius: \(radius); } "
+    xl_classes = xl_classes + ".xl-rounded-\(key) { border-radius: \(radius); } "
+  }
+
+  return {
+    "sm": "@media (min-width: 640px) { \(sm_classes) }",
+    "md": "@media (min-width: 768px) { \(md_classes) }",
+    "lg": "@media (min-width: 1024px) { \(lg_classes) }",
+    "xl": "@media (min-width: 1280px) { \(xl_classes) }"
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 모든 반응형 클래스 통합
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateAllResponsiveClasses() -> any {
+  let displayClasses = generateResponsiveDisplayClasses()
+  let paddingClasses = generateResponsivePaddingClasses()
+  let marginClasses = generateResponsiveMarginClasses()
+  let fontClasses = generateResponsiveFontSizeClasses()
+  let sizeClasses = generateResponsiveSizeClasses()
+  let flexClasses = generateResponsiveFlexClasses()
+  let gridClasses = generateResponsiveGridClasses()
+  let textClasses = generateResponsiveTextClasses()
+  let borderClasses = generateResponsiveBorderClasses()
+
+  let cssOutput = ""
+    + displayClasses["sm"] + "\n"
+    + displayClasses["md"] + "\n"
+    + displayClasses["lg"] + "\n"
+    + displayClasses["xl"] + "\n"
+    + paddingClasses["sm"] + "\n"
+    + paddingClasses["md"] + "\n"
+    + paddingClasses["lg"] + "\n"
+    + paddingClasses["xl"] + "\n"
+    + marginClasses["sm"] + "\n"
+    + marginClasses["md"] + "\n"
+    + marginClasses["lg"] + "\n"
+    + marginClasses["xl"] + "\n"
+    + fontClasses["sm"] + "\n"
+    + fontClasses["md"] + "\n"
+    + fontClasses["lg"] + "\n"
+    + fontClasses["xl"] + "\n"
+    + sizeClasses["sm"] + "\n"
+    + sizeClasses["md"] + "\n"
+    + sizeClasses["lg"] + "\n"
+    + sizeClasses["xl"] + "\n"
+    + flexClasses["sm"] + "\n"
+    + flexClasses["md"] + "\n"
+    + flexClasses["lg"] + "\n"
+    + flexClasses["xl"] + "\n"
+    + gridClasses["sm"] + "\n"
+    + gridClasses["md"] + "\n"
+    + gridClasses["lg"] + "\n"
+    + gridClasses["xl"] + "\n"
+    + textClasses["sm"] + "\n"
+    + textClasses["md"] + "\n"
+    + textClasses["lg"] + "\n"
+    + textClasses["xl"] + "\n"
+    + borderClasses["sm"] + "\n"
+    + borderClasses["md"] + "\n"
+    + borderClasses["lg"] + "\n"
+    + borderClasses["xl"] + "\n"
+
+  return {
+    "css": cssOutput,
+    "breakpoints": {
+      "sm": "640px",
+      "md": "768px",
+      "lg": "1024px",
+      "xl": "1280px"
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 반응형 클래스 추출 (HTML에서 사용된 클래스만 선별)
+// ──────────────────────────────────────────────────────────────────────────
+
+func extractResponsiveClasses(className: String) -> any {
+  let classArray = className.split(" ")
+  let responsiveClasses = []
+
+  for cls in classArray {
+    if cls.startsWith("sm-") || cls.startsWith("md-") || cls.startsWith("lg-") || cls.startsWith("xl-") {
+      responsiveClasses.append(cls)
+    }
+  }
+
+  return responsiveClasses
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Export
+// ──────────────────────────────────────────────────────────────────────────
+
+export {
+  generateResponsiveDisplayClasses,
+  generateResponsivePaddingClasses,
+  generateResponsiveMarginClasses,
+  generateResponsiveFontSizeClasses,
+  generateResponsiveSizeClasses,
+  generateResponsiveFlexClasses,
+  generateResponsiveGridClasses,
+  generateResponsiveTextClasses,
+  generateResponsiveBorderClasses,
+  generateAllResponsiveClasses,
+  extractResponsiveClasses
+}

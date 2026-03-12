@@ -1,0 +1,512 @@
+// ============================================================================
+// FreeLang UI Generator: 고급 페이지 생성 엔진
+// 검색, 관리자 대시보드, 프로필, 테마 선택기
+// ============================================================================
+
+use "../core/css-generator"
+
+// ──────────────────────────────────────────────────────────────────────────
+// 검색 페이지
+// ──────────────────────────────────────────────────────────────────────────
+
+func getSearchPage() -> string {
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>검색 - FreeLang 블로그</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        .search-container { max-width: 600px; margin: 40px auto; }
+        .search-box { display: flex; gap: 10px; margin-bottom: 20px; }
+        .search-box input { flex: 1; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px; }
+        .search-box button { padding: 12px 24px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; }
+        .search-box button:hover { background: #5568d3; }
+        .filters { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .filter-tag { padding: 8px 12px; background: #f0f4ff; border: 1px solid #667eea; border-radius: 20px; cursor: pointer; font-size: 14px; }
+        .filter-tag:hover { background: #667eea; color: white; }
+        .results { display: grid; gap: 20px; }
+        .result-item { padding: 20px; background: white; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .result-title { font-size: 18px; font-weight: bold; color: #667eea; margin-bottom: 8px; }
+        .result-meta { font-size: 12px; color: #999; margin-bottom: 8px; }
+        .result-snippet { color: #555; line-height: 1.6; margin-bottom: 10px; }
+        .result-tags { display: flex; gap: 8px; }
+        .tag { padding: 4px 8px; background: #f0f4ff; border-radius: 4px; font-size: 12px; color: #667eea; }
+        .pagination { display: flex; gap: 10px; justify-content: center; margin-top: 30px; }
+        .page-btn { padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 4px; cursor: pointer; }
+        .page-btn.active { background: #667eea; color: white; border-color: #667eea; }
+        .no-results { text-align: center; padding: 40px; color: #999; }
+    </style>
+</head>
+<body>
+    <div class="search-container">
+        <h1>🔍 블로그 검색</h1>
+
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="제목, 내용, 태그로 검색...">
+            <button onclick="search()">검색</button>
+        </div>
+
+        <div class="filters">
+            <div class="filter-tag" onclick="filterByCategory('기술')">기술</div>
+            <div class="filter-tag" onclick="filterByCategory('튜토리얼')">튜토리얼</div>
+            <div class="filter-tag" onclick="filterByCategory('뉴스')">뉴스</div>
+            <div class="filter-tag" onclick="clearFilters()">전체</div>
+        </div>
+
+        <div id="results" class="results">
+            <p class="no-results">검색어를 입력하면 결과가 표시됩니다.</p>
+        </div>
+
+        <div class="pagination" id="pagination"></div>
+    </div>
+
+    <script>
+        let allBlogs = [];
+        let filteredBlogs = [];
+        let currentPage = 1;
+        const itemsPerPage = 10;
+
+        async function loadBlogs() {
+            const response = await fetch('/api/blogs/all');
+            const data = await response.json();
+            allBlogs = data.data.blogs || [];
+        }
+
+        function search() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            if (!query) {
+                document.getElementById('results').innerHTML = '<p class="no-results">검색어를 입력하세요.</p>';
+                return;
+            }
+
+            filteredBlogs = allBlogs.filter(blog =>
+                blog.title.toLowerCase().includes(query) ||
+                blog.content.toLowerCase().includes(query) ||
+                blog.summary.toLowerCase().includes(query) ||
+                (blog.tags && blog.tags.some(tag => tag.toLowerCase().includes(query)))
+            );
+
+            currentPage = 1;
+            displayResults();
+        }
+
+        function filterByCategory(category) {
+            filteredBlogs = allBlogs.filter(blog => blog.category === category);
+            currentPage = 1;
+            displayResults();
+        }
+
+        function clearFilters() {
+            filteredBlogs = [];
+            document.getElementById('results').innerHTML = '<p class="no-results">검색어를 입력하면 결과가 표시됩니다.</p>';
+            document.getElementById('pagination').innerHTML = '';
+        }
+
+        function displayResults() {
+            if (filteredBlogs.length === 0) {
+                document.getElementById('results').innerHTML = '<p class="no-results">검색 결과가 없습니다.</p>';
+                return;
+            }
+
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            const pageItems = filteredBlogs.slice(start, end);
+
+            const html = pageItems.map(blog => \`
+                <div class="result-item">
+                    <div class="result-title">\${blog.title}</div>
+                    <div class="result-meta">\${blog.author} · \${blog.category} · 조회수 \${blog.viewCount}</div>
+                    <div class="result-snippet">\${blog.summary}</div>
+                    <div class="result-tags">
+                        \${(blog.tags || []).map(tag => \`<span class="tag">\${tag}</span>\`).join('')}
+                    </div>
+                </div>
+            \`).join('');
+
+            document.getElementById('results').innerHTML = html;
+            displayPagination();
+        }
+
+        function displayPagination() {
+            const totalPages = Math.ceil(filteredBlogs.length / itemsPerPage);
+            const pagination = document.getElementById('pagination');
+            pagination.innerHTML = '';
+
+            for (let i = 1; i <= totalPages; i++) {
+                const btn = document.createElement('button');
+                btn.className = 'page-btn' + (i === currentPage ? ' active' : '');
+                btn.textContent = i;
+                btn.onclick = () => {
+                    currentPage = i;
+                    displayResults();
+                };
+                pagination.appendChild(btn);
+            }
+        }
+
+        loadBlogs();
+    </script>
+</body>
+</html>`
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 관리자 대시보드
+// ──────────────────────────────────────────────────────────────────────────
+
+func getAdminDashboard() -> string {
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>관리자 대시보드 - FreeLang</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        .admin-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; }
+        .admin-title { font-size: 28px; font-weight: bold; margin: 0; }
+        .admin-subtitle { font-size: 14px; opacity: 0.9; margin-top: 8px; }
+        .admin-container { max-width: 1200px; margin: 0 auto; padding: 30px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-left: 4px solid #667eea; }
+        .stat-label { font-size: 14px; color: #999; margin-bottom: 8px; }
+        .stat-value { font-size: 32px; font-weight: bold; color: #333; }
+        .stat-change { font-size: 12px; color: #48bb78; margin-top: 8px; }
+        .section { margin-bottom: 30px; }
+        .section-title { font-size: 20px; font-weight: bold; color: #333; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #f0f4ff; }
+        .blog-table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .blog-table th { background: #f7fafc; padding: 15px; text-align: left; font-weight: bold; color: #333; border-bottom: 2px solid #e2e8f0; }
+        .blog-table td { padding: 15px; border-bottom: 1px solid #e2e8f0; }
+        .blog-table tbody tr:hover { background: #f7fafc; }
+        .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .status-draft { background: #fed7d7; color: #c53030; }
+        .status-published { background: #c6f6d5; color: #22543d; }
+        .action-btn { padding: 6px 12px; margin-right: 5px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .btn-edit { background: #4299e1; color: white; }
+        .btn-delete { background: #f56565; color: white; }
+        .btn-publish { background: #48bb78; color: white; }
+        .activity-feed { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .activity-item { padding: 15px; border-left: 3px solid #667eea; margin-bottom: 15px; background: #f7fafc; border-radius: 4px; }
+        .activity-time { font-size: 12px; color: #999; }
+        .activity-text { color: #333; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <div class="admin-header">
+        <h1 class="admin-title">📊 관리자 대시보드</h1>
+        <p class="admin-subtitle">블로그 및 시스템 관리</p>
+    </div>
+
+    <div class="admin-container">
+        <!-- 통계 카드 -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">전체 블로그</div>
+                <div class="stat-value" id="totalBlogs">0</div>
+                <div class="stat-change">↑ 증가 추세</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">발행된 블로그</div>
+                <div class="stat-value" id="publishedBlogs">0</div>
+                <div class="stat-change">↑ 10% 이상</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">초안 블로그</div>
+                <div class="stat-value" id="draftBlogs">0</div>
+                <div class="stat-change">→ 변화 없음</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">총 조회수</div>
+                <div class="stat-value" id="totalViews">0</div>
+                <div class="stat-change">↑ 꾸준한 증가</div>
+            </div>
+        </div>
+
+        <!-- 블로그 관리 -->
+        <div class="section">
+            <h2 class="section-title">📝 블로그 관리</h2>
+            <table class="blog-table">
+                <thead>
+                    <tr>
+                        <th>제목</th>
+                        <th>상태</th>
+                        <th>작성자</th>
+                        <th>조회수</th>
+                        <th>작성일</th>
+                        <th>작업</th>
+                    </tr>
+                </thead>
+                <tbody id="blogList"></tbody>
+            </table>
+        </div>
+
+        <!-- 최근 활동 -->
+        <div class="section">
+            <h2 class="section-title">🔔 최근 활동</h2>
+            <div class="activity-feed">
+                <div class="activity-item">
+                    <div class="activity-time">오늘 10:30</div>
+                    <div class="activity-text">새 블로그 "FreeLang CSS 생성" 발행</div>
+                </div>
+                <div class="activity-item">
+                    <div class="activity-time">어제 15:45</div>
+                    <div class="activity-text">블로그 "HTTP 서버 구현" 수정됨</div>
+                </div>
+                <div class="activity-item">
+                    <div class="activity-time">3일 전 09:20</div>
+                    <div class="activity-text">새 블로그 "타입 시스템" 초안 작성</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadDashboard() {
+            const response = await fetch('/api/blogs/all');
+            const data = await response.json();
+            const blogs = data.data.blogs || [];
+
+            const published = blogs.filter(b => b.status === 'PUBLISHED').length;
+            const draft = blogs.filter(b => b.status === 'DRAFT').length;
+            const totalViews = blogs.reduce((sum, b) => sum + (b.viewCount || 0), 0);
+
+            document.getElementById('totalBlogs').textContent = blogs.length;
+            document.getElementById('publishedBlogs').textContent = published;
+            document.getElementById('draftBlogs').textContent = draft;
+            document.getElementById('totalViews').textContent = totalViews;
+
+            displayBlogTable(blogs);
+        }
+
+        function displayBlogTable(blogs) {
+            const tbody = document.getElementById('blogList');
+            tbody.innerHTML = blogs.map(blog => \`
+                <tr>
+                    <td>\${blog.title}</td>
+                    <td><span class="status-badge status-\${blog.status.toLowerCase()}">\${blog.status}</span></td>
+                    <td>\${blog.author}</td>
+                    <td>\${blog.viewCount || 0}</td>
+                    <td>\${new Date(blog.createdAt).toLocaleDateString('ko-KR')}</td>
+                    <td>
+                        <button class="action-btn btn-edit">수정</button>
+                        <button class="action-btn btn-delete">삭제</button>
+                        \${blog.status === 'DRAFT' ? '<button class="action-btn btn-publish">발행</button>' : ''}
+                    </td>
+                </tr>
+            \`).join('');
+        }
+
+        loadDashboard();
+    </script>
+</body>
+</html>`
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 프로필 페이지
+// ──────────────────────────────────────────────────────────────────────────
+
+func getProfilePage() -> string {
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>프로필 - FreeLang</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        .profile-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px 20px; text-align: center; }
+        .profile-avatar { width: 120px; height: 120px; border-radius: 50%; background: rgba(255,255,255,0.2); margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; font-size: 60px; }
+        .profile-name { font-size: 28px; font-weight: bold; margin: 0; }
+        .profile-role { font-size: 16px; opacity: 0.9; margin-top: 5px; }
+        .profile-container { max-width: 900px; margin: 0 auto; padding: 30px; }
+        .profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px; }
+        .profile-section { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .section-title { font-size: 18px; font-weight: bold; color: #333; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #f0f4ff; }
+        .info-item { margin-bottom: 15px; }
+        .info-label { font-size: 12px; color: #999; text-transform: uppercase; }
+        .info-value { font-size: 16px; font-weight: 500; color: #333; margin-top: 5px; }
+        .stats-row { display: flex; justify-content: space-around; margin-bottom: 20px; }
+        .stat { text-align: center; }
+        .stat-number { font-size: 28px; font-weight: bold; color: #667eea; }
+        .stat-name { font-size: 12px; color: #999; margin-top: 5px; }
+        .bio { color: #555; line-height: 1.6; }
+        .skills { display: flex; gap: 10px; flex-wrap: wrap; }
+        .skill-tag { padding: 8px 12px; background: #f0f4ff; border: 1px solid #667eea; border-radius: 20px; color: #667eea; font-size: 14px; }
+        .full-width { grid-column: 1 / -1; }
+        .edit-btn { background: #667eea; color: white; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .edit-btn:hover { background: #5568d3; }
+    </style>
+</head>
+<body>
+    <div class="profile-header">
+        <div class="profile-avatar">👨‍💻</div>
+        <h1 class="profile-name">개발자</h1>
+        <p class="profile-role">FreeLang 커뮤니티 관리자</p>
+    </div>
+
+    <div class="profile-container">
+        <div class="profile-grid">
+            <!-- 통계 -->
+            <div class="profile-section">
+                <div class="section-title">📈 활동 통계</div>
+                <div class="stats-row">
+                    <div class="stat">
+                        <div class="stat-number" id="userBlogs">12</div>
+                        <div class="stat-name">작성한 블로그</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">2.3K</div>
+                        <div class="stat-name">총 조회수</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">158</div>
+                        <div class="stat-name">총 좋아요</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 정보 -->
+            <div class="profile-section">
+                <div class="section-title">ℹ️ 프로필 정보</div>
+                <div class="info-item">
+                    <div class="info-label">이메일</div>
+                    <div class="info-value">dev@freelang.io</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">가입일</div>
+                    <div class="info-value">2026년 1월 15일</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">위치</div>
+                    <div class="info-value">서울, 대한민국</div>
+                </div>
+            </div>
+
+            <!-- 소개 -->
+            <div class="profile-section full-width">
+                <div class="section-title">📝 소개</div>
+                <p class="bio">
+                    FreeLang 커뮤니티의 활발한 멤버입니다.
+                    시스템 프로그래밍, 웹 개발, 그리고 오픈소스 프로젝트에 관심이 있습니다.
+                    최신 기술 트렌드를 따라가며 함께 성장하고 싶습니다.
+                </p>
+            </div>
+
+            <!-- 기술 스택 -->
+            <div class="profile-section full-width">
+                <div class="section-title">🛠️ 기술 스택</div>
+                <div class="skills">
+                    <span class="skill-tag">FreeLang</span>
+                    <span class="skill-tag">HTTP Server</span>
+                    <span class="skill-tag">Web Development</span>
+                    <span class="skill-tag">TypeScript</span>
+                    <span class="skill-tag">React</span>
+                    <span class="skill-tag">Node.js</span>
+                    <span class="skill-tag">CSS</span>
+                    <span class="skill-tag">System Programming</span>
+                </div>
+            </div>
+
+            <!-- 최근 블로그 -->
+            <div class="profile-section full-width">
+                <div class="section-title">📚 최근 작성한 블로그</div>
+                <div id="recentBlogs" style="display: grid; gap: 15px;"></div>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px;">
+            <button class="edit-btn">프로필 수정</button>
+        </div>
+    </div>
+
+    <script>
+        async function loadProfile() {
+            const response = await fetch('/api/blogs/all');
+            const data = await response.json();
+            const blogs = data.data.blogs || [];
+
+            const recentBlogsHtml = blogs.slice(0, 3).map(blog => \`
+                <div style="padding: 15px; background: #f7fafc; border-left: 4px solid #667eea; border-radius: 4px;">
+                    <div style="font-weight: bold; color: #333;">\${blog.title}</div>
+                    <div style="font-size: 12px; color: #999; margin-top: 5px;">
+                        \${new Date(blog.createdAt).toLocaleDateString('ko-KR')} · 조회수 \${blog.viewCount}
+                    </div>
+                </div>
+            \`).join('');
+
+            document.getElementById('recentBlogs').innerHTML = recentBlogsHtml;
+            document.getElementById('userBlogs').textContent = blogs.length;
+        }
+
+        loadProfile();
+    </script>
+</body>
+</html>`
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 테마 선택기 (동적 테마 변경)
+// ──────────────────────────────────────────────────────────────────────────
+
+func getThemeSwitcher() -> string {
+  return `
+<div style="position: fixed; bottom: 30px; right: 30px; display: flex; gap: 10px; z-index: 1000;">
+    <button onclick="switchTheme('light')" style="
+        padding: 12px 16px;
+        background: white;
+        border: 2px solid #667eea;
+        border-radius: 50px;
+        cursor: pointer;
+        font-weight: bold;
+        color: #667eea;
+        transition: all 0.3s ease;
+    " id="themeLight">☀️ Light</button>
+
+    <button onclick="switchTheme('dark')" style="
+        padding: 12px 16px;
+        background: #333;
+        border: 2px solid #333;
+        border-radius: 50px;
+        cursor: pointer;
+        font-weight: bold;
+        color: white;
+        transition: all 0.3s ease;
+    " id="themeDark">🌙 Dark</button>
+</div>
+
+<script>
+function switchTheme(theme) {
+    const stylesheet = document.querySelector('link[rel="stylesheet"]');
+    if (theme === 'dark') {
+        stylesheet.href = '/styles-dark.css';
+        localStorage.setItem('theme', 'dark');
+        document.body.style.colorScheme = 'dark';
+    } else {
+        stylesheet.href = '/styles.css';
+        localStorage.setItem('theme', 'light');
+        document.body.style.colorScheme = 'light';
+    }
+}
+
+// 저장된 테마 로드
+window.addEventListener('DOMContentLoaded', () => {
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    switchTheme(savedTheme);
+});
+</script>
+`
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Export
+// ──────────────────────────────────────────────────────────────────────────
+
+export {
+  getSearchPage,
+  getAdminDashboard,
+  getProfilePage,
+  getThemeSwitcher
+}

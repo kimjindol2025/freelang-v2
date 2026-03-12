@@ -3,6 +3,8 @@
 // ============================================================================
 
 use "../core/state"
+use "../core/css-generator"
+use "../core/ui-generator"
 
 // ──────────────────────────────────────────────────────────────────────────
 // 메인 요청 핸들러
@@ -173,6 +175,24 @@ func handleEngineRequest(request: any) -> any {
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // CSS 스타일시트
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  if method == "GET" && path == "/styles.css" {
+    let css = generateFullCSS("light")
+    let headers = getCorsHeaders()
+    headers["Content-Type"] = "text/css; charset=utf-8"
+    return buildResponse(200, headers, css)
+  }
+
+  if method == "GET" && path == "/styles-dark.css" {
+    let css = generateFullCSS("dark")
+    let headers = getCorsHeaders()
+    headers["Content-Type"] = "text/css; charset=utf-8"
+    return buildResponse(200, headers, css)
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // 정적 파일
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -185,6 +205,27 @@ func handleEngineRequest(request: any) -> any {
 
   if method == "GET" && path == "/blog.html" {
     let html = getBlogHtml()
+    let headers = getCorsHeaders()
+    headers["Content-Type"] = "text/html; charset=utf-8"
+    return buildResponse(200, headers, html)
+  }
+
+  if method == "GET" && path == "/search.html" {
+    let html = getSearchPage()
+    let headers = getCorsHeaders()
+    headers["Content-Type"] = "text/html; charset=utf-8"
+    return buildResponse(200, headers, html)
+  }
+
+  if method == "GET" && path == "/admin.html" {
+    let html = getAdminDashboard()
+    let headers = getCorsHeaders()
+    headers["Content-Type"] = "text/html; charset=utf-8"
+    return buildResponse(200, headers, html)
+  }
+
+  if method == "GET" && path == "/profile.html" {
+    let html = getProfilePage()
     let headers = getCorsHeaders()
     headers["Content-Type"] = "text/html; charset=utf-8"
     return buildResponse(200, headers, html)
@@ -256,30 +297,136 @@ func getIndexHtml() -> string {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>FreeLang HTTP Engine - Counter Demo</title>
+    <title>FreeLang HTTP Engine - Home</title>
+    <link rel="stylesheet" href="/styles.css">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
-        .container { background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); padding: 40px; max-width: 500px; width: 100%; }
-        h1 { color: #333; text-align: center; margin-bottom: 30px; }
+        body { margin: 0; padding: 0; }
+        .navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .navbar-container { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .navbar-brand { font-size: 24px; font-weight: bold; }
+        .navbar-menu { display: flex; gap: 20px; }
+        .navbar-menu a { color: white; text-decoration: none; padding: 8px 12px; border-radius: 4px; transition: all 0.3s; }
+        .navbar-menu a:hover { background: rgba(255,255,255,0.2); }
+        .hero { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 60px 20px; text-align: center; }
+        .hero-title { font-size: 40px; font-weight: bold; margin: 0 0 20px 0; }
+        .hero-subtitle { font-size: 18px; opacity: 0.9; margin-bottom: 30px; }
+        .hero-buttons { display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; }
+        .hero-btn { padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 16px; text-decoration: none; display: inline-block; }
+        .btn-primary { background: white; color: #667eea; }
+        .btn-secondary { background: rgba(255,255,255,0.2); color: white; border: 2px solid white; }
+        .btn-primary:hover { background: #f0f4ff; }
+        .btn-secondary:hover { background: rgba(255,255,255,0.3); }
+        .container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; }
+        .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 30px; margin-bottom: 40px; }
+        .feature { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); text-align: center; }
+        .feature-icon { font-size: 40px; margin-bottom: 15px; }
+        .feature-title { font-size: 18px; font-weight: bold; color: #333; margin-bottom: 10px; }
+        .feature-text { color: #666; line-height: 1.6; }
+        .demo-section { background: #f7fafc; padding: 40px 20px; border-radius: 8px; margin-bottom: 30px; }
+        .counter-demo { background: white; padding: 40px; border-radius: 8px; max-width: 400px; margin: 0 auto; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
         .counter { font-size: 3em; text-align: center; color: #667eea; margin: 30px 0; font-weight: bold; }
         button { width: 100%; padding: 12px; margin: 10px 0; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; background: #667eea; color: white; }
         button:hover { background: #5568d3; }
+        .footer { background: #1a202c; color: white; padding: 20px; text-align: center; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🚀 FreeLang HTTP Engine</h1>
-        <div class="counter" id="counter">0</div>
-        <button onclick="increment()">+1 증가</button>
-        <button onclick="decrement()">-1 감소</button>
-        <button onclick="reset()">초기화</button>
-        <p style="text-align: center; margin-top: 30px; color: #999;">100% FreeLang (Node.js 불필요)</p>
+    <!-- 네비게이션 -->
+    <div class="navbar">
+        <div class="navbar-container">
+            <div class="navbar-brand">🚀 FreeLang</div>
+            <div class="navbar-menu">
+                <a href="/">홈</a>
+                <a href="/blog.html">블로그</a>
+                <a href="/search.html">검색</a>
+                <a href="/profile.html">프로필</a>
+                <a href="/admin.html">관리자</a>
+            </div>
+        </div>
     </div>
+
+    <!-- 헤로 섹션 -->
+    <div class="hero">
+        <h1 class="hero-title">FreeLang HTTP Engine</h1>
+        <p class="hero-subtitle">Node.js 없이 100% FreeLang으로 만든 웹 서버</p>
+        <div class="hero-buttons">
+            <a href="/blog.html" class="hero-btn btn-primary">블로그 읽기</a>
+            <a href="/search.html" class="hero-btn btn-secondary">검색하기</a>
+        </div>
+    </div>
+
+    <!-- 메인 콘텐츠 -->
+    <div class="container">
+        <!-- 특징 -->
+        <div class="features">
+            <div class="feature">
+                <div class="feature-icon">⚡</div>
+                <div class="feature-title">빠른 성능</div>
+                <div class="feature-text">순수 FreeLang으로 구현된 가벼운 HTTP 서버</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🎨</div>
+                <div class="feature-title">동적 CSS</div>
+                <div class="feature-text">런타임에 CSS를 동적으로 생성하는 테마 시스템</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🔒</div>
+                <div class="feature-title">안전성</div>
+                <div class="feature-text">0 외부 의존성, 자체 검증된 코드</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">📱</div>
+                <div class="feature-title">반응형</div>
+                <div class="feature-text">모든 디바이스에 최적화된 인터페이스</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🌙</div>
+                <div class="feature-title">다크 모드</div>
+                <div class="feature-text">시스템 설정에 따른 자동 테마 변경</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🚀</div>
+                <div class="feature-title">배포 용이</div>
+                <div class="feature-text">단일 바이너리로 어디서나 실행</div>
+            </div>
+        </div>
+
+        <!-- Counter 데모 -->
+        <div class="demo-section">
+            <h2 style="text-align: center; color: #333; margin-top: 0;">📊 Counter Demo</h2>
+            <div class="counter-demo">
+                <div class="counter" id="counter">0</div>
+                <button onclick="increment()">+1 증가</button>
+                <button onclick="decrement()">-1 감소</button>
+                <button onclick="reset()">초기화</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 푸터 -->
+    <div class="footer">
+        <p>© 2026 FreeLang Project. Made with ❤️ in Korea.</p>
+    </div>
+
     <script>
-        async function increment() { const res = await fetch('/api/counter/increment', { method: 'POST' }); location.reload(); }
-        async function decrement() { const res = await fetch('/api/counter/decrement', { method: 'POST' }); location.reload(); }
-        async function reset() { const res = await fetch('/api/counter/reset', { method: 'POST' }); location.reload(); }
-        fetch('/api/counter').then(r => r.json()).then(d => document.getElementById('counter').innerText = d.data.count || '0');
+        async function increment() {
+            await fetch('/api/counter/increment', { method: 'POST' });
+            loadCounter();
+        }
+        async function decrement() {
+            await fetch('/api/counter/decrement', { method: 'POST' });
+            loadCounter();
+        }
+        async function reset() {
+            await fetch('/api/counter/reset', { method: 'POST' });
+            loadCounter();
+        }
+        function loadCounter() {
+            fetch('/api/counter').then(r => r.json()).then(d => {
+                document.getElementById('counter').innerText = d.data.count || '0';
+            });
+        }
+        loadCounter();
     </script>
 </body>
 </html>`
@@ -292,6 +439,7 @@ func getBlogHtml() -> string {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Blog - FreeLang</title>
+    <link rel="stylesheet" href="/styles.css">
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f5f5; padding: 40px 20px; }
         .container { max-width: 800px; margin: 0 auto; background: white; border-radius: 8px; padding: 40px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }

@@ -1,0 +1,336 @@
+// ============================================================================
+// Phase 11: State Utilities Implementation
+// Pseudo-class 기반 상태 유틸리티 (hover, active, focus, disabled, etc)
+// ============================================================================
+
+import { getColorPalette, getSpacingScale, getShadows } from "./tailwind-config"
+
+// ──────────────────────────────────────────────────────────────────────────
+// Hover State Classes
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateHoverClasses() -> any {
+  let colors = getColorPalette()
+  let colorNames = ["gray", "blue", "red", "green", "yellow", "purple"]
+  let shades = ["50", "100", "200", "300", "400", "500", "600", "700", "800", "900"]
+
+  let hoverCSS = ""
+
+  // Hover background colors
+  for colorName in colorNames {
+    for shade in shades {
+      let hexColor = colors[colorName][shade]
+      hoverCSS = hoverCSS + ".hover-bg-\(colorName)-\(shade):hover { background-color: \(hexColor); transition: background-color 200ms ease-in-out; } "
+    }
+  }
+
+  // Hover text colors
+  for colorName in colorNames {
+    for shade in shades {
+      let hexColor = colors[colorName][shade]
+      hoverCSS = hoverCSS + ".hover-text-\(colorName)-\(shade):hover { color: \(hexColor); transition: color 200ms ease-in-out; } "
+    }
+  }
+
+  // Hover border colors
+  for colorName in colorNames {
+    for shade in shades {
+      let hexColor = colors[colorName][shade]
+      hoverCSS = hoverCSS + ".hover-border-\(colorName)-\(shade):hover { border-color: \(hexColor); transition: border-color 200ms ease-in-out; } "
+    }
+  }
+
+  // Additional hover effects
+  hoverCSS = hoverCSS + ".hover-opacity-50:hover { opacity: 0.5; } "
+    + ".hover-opacity-75:hover { opacity: 0.75; } "
+    + ".hover-opacity-100:hover { opacity: 1; } "
+    + ".hover-shadow-lg:hover { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); } "
+    + ".hover-scale-105:hover { transform: scale(1.05); } "
+    + ".hover-scale-110:hover { transform: scale(1.1); } "
+    + ".hover-translate-y-1:hover { transform: translateY(-4px); } "
+    + ".hover-translate-y-2:hover { transform: translateY(-8px); } "
+    + ".hover-underline:hover { text-decoration: underline; } "
+
+  return hoverCSS
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Active State Classes
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateActiveClasses() -> any {
+  let colors = getColorPalette()
+  let colorNames = ["gray", "blue", "red", "green", "yellow", "purple"]
+  let shades = ["50", "100", "200", "300", "400", "500", "600", "700", "800", "900"]
+
+  let activeCSS = ""
+
+  // Active background colors
+  for colorName in colorNames {
+    for shade in shades {
+      let hexColor = colors[colorName][shade]
+      activeCSS = activeCSS + ".active-bg-\(colorName)-\(shade):active { background-color: \(hexColor); } "
+    }
+  }
+
+  // Active text colors
+  for colorName in colorNames {
+    for shade in shades {
+      let hexColor = colors[colorName][shade]
+      activeCSS = activeCSS + ".active-text-\(colorName)-\(shade):active { color: \(hexColor); } "
+    }
+  }
+
+  // Additional active effects
+  activeCSS = activeCSS + ".active-scale-95:active { transform: scale(0.95); } "
+    + ".active-scale-90:active { transform: scale(0.9); } "
+    + ".active-shadow-inner:active { box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06); } "
+    + ".active-ring:active { outline: 2px solid rgba(59, 130, 246, 0.5); outline-offset: 2px; } "
+
+  return activeCSS
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Focus State Classes
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateFocusClasses() -> any {
+  let colors = getColorPalette()
+  let focusCSS = ""
+
+  // Focus outline colors
+  focusCSS = focusCSS + ".focus-ring:focus { outline: 2px solid \(colors["blue"]["500"]); outline-offset: 2px; } "
+    + ".focus-ring-blue:focus { outline: 2px solid \(colors["blue"]["500"]); } "
+    + ".focus-ring-red:focus { outline: 2px solid \(colors["red"]["500"]); } "
+    + ".focus-ring-green:focus { outline: 2px solid \(colors["green"]["500"]); } "
+    + ".focus-ring-purple:focus { outline: 2px solid \(colors["purple"]["500"]); } "
+
+  // Focus shadow effects
+  focusCSS = focusCSS + ".focus-shadow:focus { box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); } "
+    + ".focus-shadow-blue:focus { box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); } "
+    + ".focus-shadow-red:focus { box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1); } "
+    + ".focus-shadow-green:focus { box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1); } "
+
+  // Input focus effects
+  focusCSS = focusCSS + ".focus-visible:focus-visible { outline: 2px solid \(colors["blue"]["500"]); outline-offset: 2px; } "
+    + ".focus-border-blue:focus { border-color: \(colors["blue"]["500"]); } "
+    + ".focus-border-red:focus { border-color: \(colors["red"]["500"]); } "
+    + ".focus-border-green:focus { border-color: \(colors["green"]["500"]); } "
+    + ".focus-bg-blue-50:focus { background-color: \(colors["blue"]["50"]); } "
+
+  return focusCSS
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Disabled State Classes
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateDisabledClasses() -> any {
+  let colors = getColorPalette()
+  let disabledCSS = ""
+
+  disabledCSS = disabledCSS + ".disabled:disabled, .disabled[disabled] { opacity: 0.5; cursor: not-allowed; } "
+    + ".disabled-bg-gray-200:disabled, .disabled-bg-gray-200[disabled] { background-color: \(colors["gray"]["200"]); } "
+    + ".disabled-text-gray-500:disabled, .disabled-text-gray-500[disabled] { color: \(colors["gray"]["500"]); } "
+    + ".disabled-border-gray-300:disabled, .disabled-border-gray-300[disabled] { border-color: \(colors["gray"]["300"]); } "
+    + ".disabled-pointer-events-none:disabled, .disabled-pointer-events-none[disabled] { pointer-events: none; } "
+    + ".disabled-no-hover:disabled:hover, .disabled-no-hover[disabled]:hover { transform: none; background-color: \(colors["gray"]["200"]); } "
+
+  return disabledCSS
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Group Hover/Focus Classes (부모 hover시 자식 스타일 변경)
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateGroupStateClasses() -> any {
+  let colors = getColorPalette()
+  let groupCSS = ""
+
+  // Group hover
+  groupCSS = groupCSS + ".group:hover .group-hover-opacity-100 { opacity: 1; } "
+    + ".group:hover .group-hover-translate-x-1 { transform: translateX(4px); } "
+    + ".group:hover .group-hover-text-gray-700 { color: \(colors["gray"]["700"]); } "
+    + ".group:hover .group-hover-bg-blue-50 { background-color: \(colors["blue"]["50"]); } "
+
+  // Group focus
+  groupCSS = groupCSS + ".group:focus .group-focus-text-red-500 { color: \(colors["red"]["500"]); } "
+    + ".group:focus-within .group-focus-within-bg-yellow-50 { background-color: \(colors["yellow"]["50"]); } "
+
+  return groupCSS
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// First, Last, Nth-child Classes
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateChildStateClasses() -> any {
+  let childStateCSS = ""
+
+  childStateCSS = childStateCSS + ".first:first-child { margin-top: 0; } "
+    + ".last:last-child { margin-bottom: 0; } "
+    + ".even:nth-child(even) { background-color: #f9fafb; } "
+    + ".odd:nth-child(odd) { background-color: #ffffff; } "
+
+  // Border utilities for child elements
+  childStateCSS = childStateCSS + ".first-border-t-0:first-child { border-top: none; } "
+    + ".last-border-b-0:last-child { border-bottom: none; } "
+    + ".not-last:not(:last-child) { border-bottom: 1px solid #e5e7eb; } "
+
+  return childStateCSS
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Dark Mode State Classes
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateDarkModeClasses() -> any {
+  let colors = getColorPalette()
+  let darkModeCSS = ""
+
+  // Dark mode container
+  darkModeCSS = darkModeCSS + "@media (prefers-color-scheme: dark) { "
+
+  // Dark bg/text utilities
+  darkModeCSS = darkModeCSS + ".dark:bg-gray-900 { background-color: \(colors["gray"]["900"]); } "
+    + ".dark:text-white { color: #ffffff; } "
+    + ".dark:border-gray-700 { border-color: \(colors["gray"]["700"]); } "
+    + ".dark:bg-gray-800 { background-color: \(colors["gray"]["800"]); } "
+    + ".dark:text-gray-200 { color: \(colors["gray"]["200"]); } "
+    + ".dark:hover:bg-gray-700:hover { background-color: \(colors["gray"]["700"]); } "
+    + ".dark:shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); } "
+
+  darkModeCSS = darkModeCSS + "} "
+
+  // Explicit dark class (for manual dark mode toggle)
+  darkModeCSS = darkModeCSS + ".dark .dark-bg-gray-900 { background-color: \(colors["gray"]["900"]); } "
+    + ".dark .dark-text-white { color: #ffffff; } "
+    + ".dark .dark-border-gray-700 { border-color: \(colors["gray"]["700"]); } "
+    + ".dark .dark-bg-gray-800 { background-color: \(colors["gray"]["800"]); } "
+    + ".dark .dark-text-gray-200 { color: \(colors["gray"]["200"]); } "
+
+  return darkModeCSS
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Transition/Animation State Classes
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateTransitionClasses() -> any {
+  let transitionCSS = ""
+
+  transitionCSS = transitionCSS + ".transition { transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform; transition-duration: 200ms; transition-timing-function: ease-in-out; } "
+    + ".transition-all { transition-property: all; transition-duration: 200ms; transition-timing-function: ease-in-out; } "
+    + ".transition-colors { transition-property: background-color, border-color, color, fill, stroke; transition-duration: 200ms; transition-timing-function: ease-in-out; } "
+    + ".transition-opacity { transition-property: opacity; transition-duration: 200ms; transition-timing-function: ease-in-out; } "
+    + ".transition-transform { transition-property: transform; transition-duration: 200ms; transition-timing-function: ease-in-out; } "
+    + ".transition-shadow { transition-property: box-shadow; transition-duration: 200ms; transition-timing-function: ease-in-out; } "
+    + ".duration-75 { transition-duration: 75ms; } "
+    + ".duration-100 { transition-duration: 100ms; } "
+    + ".duration-150 { transition-duration: 150ms; } "
+    + ".duration-200 { transition-duration: 200ms; } "
+    + ".duration-300 { transition-duration: 300ms; } "
+    + ".duration-500 { transition-duration: 500ms; } "
+    + ".ease-linear { transition-timing-function: linear; } "
+    + ".ease-in { transition-timing-function: cubic-bezier(0.4, 0, 1, 1); } "
+    + ".ease-out { transition-timing-function: cubic-bezier(0, 0, 0.2, 1); } "
+    + ".ease-in-out { transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); } "
+
+  return transitionCSS
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 모든 상태 유틸리티 통합
+// ──────────────────────────────────────────────────────────────────────────
+
+func generateAllStateClasses() -> any {
+  let hoverClasses = generateHoverClasses()
+  let activeClasses = generateActiveClasses()
+  let focusClasses = generateFocusClasses()
+  let disabledClasses = generateDisabledClasses()
+  let groupStateClasses = generateGroupStateClasses()
+  let childStateClasses = generateChildStateClasses()
+  let darkModeClasses = generateDarkModeClasses()
+  let transitionClasses = generateTransitionClasses()
+
+  let allStateCSS = ""
+    + "/* Hover States */\n"
+    + hoverClasses + "\n"
+    + "/* Active States */\n"
+    + activeClasses + "\n"
+    + "/* Focus States */\n"
+    + focusClasses + "\n"
+    + "/* Disabled States */\n"
+    + disabledClasses + "\n"
+    + "/* Group States */\n"
+    + groupStateClasses + "\n"
+    + "/* Child States */\n"
+    + childStateClasses + "\n"
+    + "/* Dark Mode */\n"
+    + darkModeClasses + "\n"
+    + "/* Transitions */\n"
+    + transitionClasses + "\n"
+
+  return {
+    "css": allStateCSS,
+    "categories": {
+      "hover": hoverClasses,
+      "active": activeClasses,
+      "focus": focusClasses,
+      "disabled": disabledClasses,
+      "group": groupStateClasses,
+      "child": childStateClasses,
+      "dark": darkModeClasses,
+      "transition": transitionClasses
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// State Prefix 확인 (클래스에서 상태 유형 감지)
+// ──────────────────────────────────────────────────────────────────────────
+
+func detectStatePrefix(className: String) -> any {
+  if className.startsWith("hover-") {
+    return "hover"
+  }
+  if className.startsWith("active-") {
+    return "active"
+  }
+  if className.startsWith("focus-") {
+    return "focus"
+  }
+  if className.startsWith("disabled-") {
+    return "disabled"
+  }
+  if className.startsWith("group-") {
+    return "group"
+  }
+  if className.startsWith("first-") || className.startsWith("last-") || className.startsWith("even-") || className.startsWith("odd-") {
+    return "child"
+  }
+  if className.startsWith("dark-") {
+    return "dark"
+  }
+  if className.startsWith("transition") || className.startsWith("duration-") || className.startsWith("ease-") {
+    return "transition"
+  }
+  return "none"
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Export
+// ──────────────────────────────────────────────────────────────────────────
+
+export {
+  generateHoverClasses,
+  generateActiveClasses,
+  generateFocusClasses,
+  generateDisabledClasses,
+  generateGroupStateClasses,
+  generateChildStateClasses,
+  generateDarkModeClasses,
+  generateTransitionClasses,
+  generateAllStateClasses,
+  detectStatePrefix
+}
