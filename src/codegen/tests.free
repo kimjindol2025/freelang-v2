@@ -227,6 +227,112 @@ component CodeGeneratorTests {
     assert(X86Backend.abi.returnReg == "rax", "Test 20: ABI return register is RAX")
   }
 
+  // Test 21: JNE instruction (Day 2)
+  fn test21_jne() -> void {
+    let ir = {
+      instructions: [
+        { opcode: "JNE", arg: "not_equal_label" }
+      ]
+    }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.contains("jne not_equal_label"), "Test 21: JNE generates jne instruction")
+  }
+
+  // Test 22: JLT instruction
+  fn test22_jlt() -> void {
+    let ir = {
+      instructions: [
+        { opcode: "JLT", arg: "less_than_label" }
+      ]
+    }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.contains("jl less_than_label"), "Test 22: JLT generates jl instruction")
+  }
+
+  // Test 23: CMP instruction
+  fn test23_cmp() -> void {
+    let ir = {
+      instructions: [
+        { opcode: "CMP", arg1: 5, arg2: 10 }
+      ]
+    }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.contains("cmp rax"), "Test 23: CMP generates cmp instruction")
+  }
+
+  // Test 24: MOV instruction
+  fn test24_mov() -> void {
+    let ir = {
+      instructions: [
+        { opcode: "MOV", arg1: "rax", arg2: 42 }
+      ]
+    }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.contains("mov rax, 42"), "Test 24: MOV generates mov instruction")
+  }
+
+  // Test 25: XOR instruction
+  fn test25_xor() -> void {
+    let ir = {
+      instructions: [
+        { opcode: "XOR", arg1: 7, arg2: 3 }
+      ]
+    }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.contains("xor rax"), "Test 25: XOR generates xor instruction")
+  }
+
+  // Test 26: AND instruction
+  fn test26_and() -> void {
+    let ir = {
+      instructions: [
+        { opcode: "AND", arg1: 15, arg2: 7 }
+      ]
+    }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.contains("and rax"), "Test 26: AND generates and instruction")
+  }
+
+  // Test 27: OR instruction
+  fn test27_or() -> void {
+    let ir = {
+      instructions: [
+        { opcode: "OR", arg1: 8, arg2: 4 }
+      ]
+    }
+    let asm = CodeGenerator.generate(ir)
+    assert(asm.contains("or rax"), "Test 27: OR generates or instruction")
+  }
+
+  // Test 28: Instruction optimization - push/pop
+  fn test28_optimize_push_pop() -> void {
+    let instrs = [
+      { opcode: "PUSH", arg: 100 },
+      { opcode: "POP", arg: "rax" }
+    ]
+    let optimized = CodeGenerator.optimizeInstructions(instrs)
+    assert(optimized[0].opcode == "MOV", "Test 28: push/pop optimized to mov")
+    assert(optimized.length == 1, "Test 28: Optimization reduces instruction count")
+  }
+
+  // Test 29: Instruction optimization - add 0
+  fn test29_optimize_add_zero() -> void {
+    let instrs = [
+      { opcode: "ADD", arg: 0 }
+    ]
+    let optimized = CodeGenerator.optimizeInstructions(instrs)
+    assert(optimized.length == 0, "Test 29: add 0 removed")
+  }
+
+  // Test 30: Instruction optimization - mul 1
+  fn test30_optimize_mul_one() -> void {
+    let instrs = [
+      { opcode: "MUL", arg: 1 }
+    ]
+    let optimized = CodeGenerator.optimizeInstructions(instrs)
+    assert(optimized.length == 0, "Test 30: mul 1 removed")
+  }
+
   // 모든 테스트 실행
   fn runAllTests() -> void {
     println("\n╔════════════════════════════════════════════╗")
@@ -253,9 +359,20 @@ component CodeGeneratorTests {
     test18_opcodeTable()
     test19_regEncoding()
     test20_abi()
+    test21_jne()
+    test22_jlt()
+    test23_cmp()
+    test24_mov()
+    test25_xor()
+    test26_and()
+    test27_or()
+    test28_optimize_push_pop()
+    test29_optimize_add_zero()
+    test30_optimize_mul_one()
 
     println("\n╔════════════════════════════════════════════╗")
     println("║   테스트 결과: " + str(passedTests) + "/" + str(totalTests) + " PASS          ║")
+    println("║   총 " + str(totalTests) + "개 테스트 완료 (Day 2-3)               ║")
     println("╚════════════════════════════════════════════╝\n")
   }
 
