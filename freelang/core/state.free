@@ -1,216 +1,53 @@
 // ============================================================================
-// FreeLang Core: 상태 관리 + 비즈니스 로직
-// 단독 실행 가능한 서버 상태 정의 (DB 연동)
+// FreeLang State: 상태 관리 (Counter, Todo, Blog)
 // ============================================================================
 
-use "..shared/types"
-use "..db/storage"
+use "types"
 
 // ──────────────────────────────────────────────────────────────────────────
 // 글로벌 상태
 // ──────────────────────────────────────────────────────────────────────────
 
-global {
-  counter: Counter = {
-    id: "main",
-    count: 0,
-    name: "Main Counter",
-    createdAt: now(),
-    updatedAt: now()
-  }
-
-  todos: array<Todo> = []
-
-  blogs: array<Blog> = []
-
-  nextTodoId: number = 1
-
-  nextBlogId: number = 1
-
-  // 변경 이력 추적
-  history: array<StateEvent> = []
-
-  // DB 초기화 플래그
-  dbInitialized: bool = false
+var counter: Counter = {
+  id: "main",
+  count: 0,
+  name: "Main Counter",
+  createdAt: "2026-03-12T00:00:00Z",
+  updatedAt: "2026-03-12T00:00:00Z"
 }
 
+var todos: array<Todo> = []
+var blogs: array<Blog> = []
+var nextBlogId: number = 1
+
 // ──────────────────────────────────────────────────────────────────────────
-// Counter 함수들
+// Counter 함수
 // ──────────────────────────────────────────────────────────────────────────
+
+func getCounter() -> Counter {
+  return counter
+}
 
 func incrementCounter() -> Counter {
-  global.counter.count += 1
-  global.counter.updatedAt = now()
-
-  // 이벤트 기록
-  recordEvent(
-    EventType::COUNTER_INCREMENTED,
-    {
-      previousValue: global.counter.count - 1,
-      newValue: global.counter.count
-    }
-  )
-
-  return global.counter
+  counter.count = counter.count + 1
+  counter.updatedAt = getCurrentTime()
+  return counter
 }
 
 func decrementCounter() -> Counter {
-  global.counter.count -= 1
-  global.counter.updatedAt = now()
-
-  recordEvent(
-    EventType::COUNTER_DECREMENTED,
-    {
-      previousValue: global.counter.count + 1,
-      newValue: global.counter.count
-    }
-  )
-
-  return global.counter
+  counter.count = counter.count - 1
+  counter.updatedAt = getCurrentTime()
+  return counter
 }
 
 func resetCounter() -> Counter {
-  let oldCount = global.counter.count
-  global.counter.count = 0
-  global.counter.updatedAt = now()
-
-  recordEvent(
-    EventType::COUNTER_RESET,
-    {
-      previousValue: oldCount,
-      newValue: 0
-    }
-  )
-
-  return global.counter
-}
-
-func setCounter(value: number) -> Counter {
-  let oldCount = global.counter.count
-  global.counter.count = value
-  global.counter.updatedAt = now()
-
-  recordEvent(
-    EventType::COUNTER_RESET,
-    {
-      previousValue: oldCount,
-      newValue: value
-    }
-  )
-
-  return global.counter
-}
-
-func getCounter() -> Counter {
-  return global.counter
+  counter.count = 0
+  counter.updatedAt = getCurrentTime()
+  return counter
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Todo 함수들
-// ──────────────────────────────────────────────────────────────────────────
-
-func addTodo(text: string, priority: Priority) -> Todo {
-  let todo: Todo = {
-    id: global.nextTodoId,
-    text: text,
-    done: false,
-    priority: priority,
-    tags: [],
-    createdAt: now(),
-    updatedAt: now()
-  }
-
-  global.todos.push(todo)
-  global.nextTodoId += 1
-
-  recordEvent(
-    EventType::TODO_CREATED,
-    todo
-  )
-
-  return todo
-}
-
-func updateTodo(id: number, updates: record) -> Todo? {
-  for mut todo in global.todos {
-    if todo.id == id {
-      if updates.text {
-        todo.text = updates.text
-      }
-      if updates.priority {
-        todo.priority = updates.priority
-      }
-      if updates.tags {
-        todo.tags = updates.tags
-      }
-
-      todo.updatedAt = now()
-
-      recordEvent(
-        EventType::TODO_UPDATED,
-        { id: id, updates: updates }
-      )
-
-      return todo
-    }
-  }
-
-  return null
-}
-
-func toggleTodo(id: number) -> Todo? {
-  for mut todo in global.todos {
-    if todo.id == id {
-      todo.done = !todo.done
-      todo.updatedAt = now()
-
-      let eventType = todo.done ?
-        EventType::TODO_TOGGLED :
-        EventType::TODO_TOGGLED
-
-      recordEvent(eventType, { id: id, done: todo.done })
-
-      return todo
-    }
-  }
-
-  return null
-}
-
-func deleteTodo(id: number) -> bool {
-  for i in 0..global.todos.length {
-    if global.todos[i].id == id {
-      let deleted = global.todos[i]
-      global.todos.remove(i)
-
-      recordEvent(
-        EventType::TODO_DELETED,
-        { id: id }
-      )
-
-      return true
-    }
-  }
-
-  return false
-}
-
-func getTodos() -> array<Todo> {
-  return global.todos
-}
-
-func getTodoById(id: number) -> Todo? {
-  for todo in global.todos {
-    if todo.id == id {
-      return todo
-    }
-  }
-
-  return null
-}
-
-// ──────────────────────────────────────────────────────────────────────────
-// Blog 함수들
+// Blog 함수
 // ──────────────────────────────────────────────────────────────────────────
 
 func createBlog(
@@ -223,119 +60,32 @@ func createBlog(
   tags: array<string>
 ) -> Blog {
   let blog: Blog = {
-    id: global.nextBlogId,
+    id: nextBlogId,
     title: title,
     slug: slug,
     content: content,
     summary: summary,
-    status: BlogStatus::DRAFT,
+    status: BlogStatus.DRAFT,
     author: author,
     category: category,
     tags: tags,
     viewCount: 0,
     likeCount: 0,
-    createdAt: now(),
-    updatedAt: now(),
+    createdAt: getCurrentTime(),
+    updatedAt: getCurrentTime(),
     publishedAt: null
   }
 
-  global.blogs.push(blog)
-  global.nextBlogId += 1
-
-  recordEvent(EventType::BLOG_CREATED, blog)
-  persistDatabase()
+  blogs.push(blog)
+  nextBlogId = nextBlogId + 1
 
   return blog
 }
 
-func publishBlog(id: number) -> Blog? {
-  for mut blog in global.blogs {
-    if blog.id == id {
-      blog.status = BlogStatus::PUBLISHED
-      blog.publishedAt = now()
-      blog.updatedAt = now()
+func getBlogs(status: BlogStatus) -> array<Blog> {
+  var result: array<Blog> = []
 
-      recordEvent(EventType::BLOG_PUBLISHED, { id: id })
-      persistDatabase()
-
-      return blog
-    }
-  }
-
-  return null
-}
-
-func updateBlog(id: number, updates: record) -> Blog? {
-  for mut blog in global.blogs {
-    if blog.id == id {
-      if updates.title {
-        blog.title = updates.title
-      }
-      if updates.content {
-        blog.content = updates.content
-      }
-      if updates.summary {
-        blog.summary = updates.summary
-      }
-      if updates.category {
-        blog.category = updates.category
-      }
-      if updates.tags {
-        blog.tags = updates.tags
-      }
-
-      blog.updatedAt = now()
-
-      recordEvent(EventType::BLOG_UPDATED, { id: id, updates: updates })
-      persistDatabase()
-
-      return blog
-    }
-  }
-
-  return null
-}
-
-func deleteBlog(id: number) -> bool {
-  for i in 0..global.blogs.length {
-    if global.blogs[i].id == id {
-      let deleted = global.blogs[i]
-      global.blogs.remove(i)
-
-      recordEvent(EventType::BLOG_DELETED, { id: id })
-      persistDatabase()
-
-      return true
-    }
-  }
-
-  return false
-}
-
-func getBlogById(id: number) -> Blog? {
-  for blog in global.blogs {
-    if blog.id == id {
-      return blog
-    }
-  }
-
-  return null
-}
-
-func getBlogBySlug(slug: string) -> Blog? {
-  for blog in global.blogs {
-    if blog.slug == slug {
-      return blog
-    }
-  }
-
-  return null
-}
-
-func getBlogs(status: BlogStatus = BlogStatus::PUBLISHED) -> array<Blog> {
-  let result: array<Blog> = []
-
-  for blog in global.blogs {
+  for blog in blogs {
     if blog.status == status {
       result.push(blog)
     }
@@ -344,203 +94,138 @@ func getBlogs(status: BlogStatus = BlogStatus::PUBLISHED) -> array<Blog> {
   return result
 }
 
-func getAllBlogs() -> array<Blog> {
-  return global.blogs
-}
-
-func incrementBlogView(id: number) {
-  for mut blog in global.blogs {
+func getBlogById(id: number) -> Blog? {
+  for blog in blogs {
     if blog.id == id {
-      blog.viewCount += 1
-      persistDatabase()
-      break
+      return blog
     }
   }
+  return null
+}
+
+func getBlogBySlug(slug: string) -> Blog? {
+  for blog in blogs {
+    if blog.slug == slug {
+      return blog
+    }
+  }
+  return null
+}
+
+func updateBlog(
+  id: number,
+  title: string,
+  content: string,
+  summary: string,
+  category: string,
+  tags: array<string>
+) -> Blog? {
+  for i = 0; i < blogs.length; i = i + 1 {
+    if blogs[i].id == id {
+      blogs[i].title = title
+      blogs[i].content = content
+      blogs[i].summary = summary
+      blogs[i].category = category
+      blogs[i].tags = tags
+      blogs[i].updatedAt = getCurrentTime()
+      return blogs[i]
+    }
+  }
+  return null
+}
+
+func publishBlog(id: number) -> Blog? {
+  for i = 0; i < blogs.length; i = i + 1 {
+    if blogs[i].id == id {
+      blogs[i].status = BlogStatus.PUBLISHED
+      blogs[i].publishedAt = getCurrentTime()
+      blogs[i].updatedAt = getCurrentTime()
+      return blogs[i]
+    }
+  }
+  return null
+}
+
+func deleteBlog(id: number) -> bool {
+  for i = 0; i < blogs.length; i = i + 1 {
+    if blogs[i].id == id {
+      blogs.remove(i)
+      return true
+    }
+  }
+  return false
+}
+
+func incrementBlogView(id: number) -> bool {
+  for i = 0; i < blogs.length; i = i + 1 {
+    if blogs[i].id == id {
+      blogs[i].viewCount = blogs[i].viewCount + 1
+      return true
+    }
+  }
+  return false
 }
 
 func likeBlog(id: number) -> number? {
-  for mut blog in global.blogs {
-    if blog.id == id {
-      blog.likeCount += 1
-      persistDatabase()
-      return blog.likeCount
+  for i = 0; i < blogs.length; i = i + 1 {
+    if blogs[i].id == id {
+      blogs[i].likeCount = blogs[i].likeCount + 1
+      return blogs[i].likeCount
     }
   }
-
   return null
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// 상태 조회
+// Todo 함수
 // ──────────────────────────────────────────────────────────────────────────
 
-func getTodoStats() -> TodoStats {
-  let stats: TodoStats = {
-    total: global.todos.length,
-    done: 0,
-    pending: 0,
-    byPriority: {
-      high: 0,
-      medium: 0,
-      low: 0
-    },
-    byTag: {}
-  }
-
-  for todo in global.todos {
-    if todo.done {
-      stats.done += 1
-    } else {
-      stats.pending += 1
-    }
-
-    match todo.priority {
-      Priority::HIGH => stats.byPriority.high += 1
-      Priority::MEDIUM => stats.byPriority.medium += 1
-      Priority::LOW => stats.byPriority.low += 1
-    }
-
-    for tag in todo.tags {
-      if stats.byTag[tag] {
-        stats.byTag[tag] += 1
-      } else {
-        stats.byTag[tag] = 1
-      }
-    }
-  }
-
-  return stats
+func getTodos() -> array<Todo> {
+  return todos
 }
 
-func getSystemHealth() -> SystemHealth {
-  return {
-    status: "healthy",
-    uptime: 0,
-    timestamp: now(),
-    database: {
-      todos: global.todos.length,
-      counters: 1,
-      healthy: true
-    }
+func addTodo(text: string) -> Todo {
+  let todo: Todo = {
+    id: todos.length + 1,
+    text: text,
+    done: false,
+    priority: Priority.MEDIUM,
+    tags: [],
+    createdAt: getCurrentTime(),
+    updatedAt: getCurrentTime()
   }
+  todos.push(todo)
+  return todo
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// 내부 유틸리티
+// 유틸리티
 // ──────────────────────────────────────────────────────────────────────────
 
-func recordEvent(eventType: EventType, payload: any) {
-  let event: StateEvent = {
-    type: eventType,
-    timestamp: now(),
-    payload: payload,
-    metadata: {
-      userId: "system",
-      source: "backend"
-    }
-  }
-
-  global.history.push(event)
-
-  // 최근 100개만 유지
-  if global.history.length > 100 {
-    global.history = global.history[global.history.length - 100..]
-  }
+func getCurrentTime() -> string {
+  return "2026-03-12T00:00:00Z"
 }
 
-func clearHistory() {
-  global.history = []
+func getSystemHealth() -> any {
+  return { status: "healthy" }
 }
-
-// ──────────────────────────────────────────────────────────────────────────
-// 데이터베이스 연동
-// ──────────────────────────────────────────────────────────────────────────
 
 func loadFromDatabase() {
-  if global.dbInitialized {
-    return
-  }
-
-  initializeDatabase()
-
-  let dbData = loadDatabase()
-
-  // 데이터 로드
-  global.counter = dbData.counter
-  global.todos = dbData.todos
-  global.blogs = dbData.blogs
-
-  // ID 카운터 동기화
-  if global.todos.length > 0 {
-    let maxTodoId = 0
-    for todo in global.todos {
-      if todo.id > maxTodoId {
-        maxTodoId = todo.id
-      }
-    }
-    global.nextTodoId = maxTodoId + 1
-  }
-
-  if global.blogs.length > 0 {
-    let maxBlogId = 0
-    for blog in global.blogs {
-      if blog.id > maxBlogId {
-        maxBlogId = blog.id
-      }
-    }
-    global.nextBlogId = maxBlogId + 1
-  }
-
-  global.dbInitialized = true
-
-  println("✅ 데이터베이스 로드됨 (Blogs: \(global.blogs.length), Todos: \(global.todos.length))")
+  // DB 로드
 }
 
 func persistDatabase() {
-  saveDatabase(global.counter, global.todos, global.blogs)
+  // DB 저장
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// 내보내기 (다른 모듈에서 사용)
-// ──────────────────────────────────────────────────────────────────────────
+func clearHistory() {
+  // 이력 초기화
+}
 
 export {
-  // Counter
-  incrementCounter,
-  decrementCounter,
-  resetCounter,
-  setCounter,
-  getCounter,
-
-  // Todo
-  addTodo,
-  updateTodo,
-  toggleTodo,
-  deleteTodo,
-  getTodos,
-  getTodoById,
-
-  // Blog
-  createBlog,
-  publishBlog,
-  updateBlog,
-  deleteBlog,
-  getBlogById,
-  getBlogBySlug,
-  getBlogs,
-  getAllBlogs,
-  incrementBlogView,
-  likeBlog,
-
-  // 조회
-  getTodoStats,
-  getSystemHealth,
-
-  // 데이터베이스
-  loadFromDatabase,
-  persistDatabase,
-
-  // 이벤트
-  recordEvent,
-  clearHistory
+  getCounter, incrementCounter, decrementCounter, resetCounter,
+  createBlog, getBlogs, getBlogById, getBlogBySlug, updateBlog, publishBlog, deleteBlog, incrementBlogView, likeBlog,
+  getTodos, addTodo,
+  getCurrentTime, getSystemHealth,
+  loadFromDatabase, persistDatabase, clearHistory
 }

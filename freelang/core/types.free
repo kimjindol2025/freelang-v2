@@ -1,0 +1,136 @@
+// ============================================================================
+// FreeLang Types: 핵심 데이터 타입 정의
+// Counter, Todo, Blog, Event 등 모든 타입
+// ============================================================================
+
+// ──────────────────────────────────────────────────────────────────────────
+// Counter
+// ──────────────────────────────────────────────────────────────────────────
+
+record Counter {
+  id: string
+  count: number
+  name: string
+  createdAt: string
+  updatedAt: string
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Todo
+// ──────────────────────────────────────────────────────────────────────────
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+record Todo {
+  id: number
+  text: string
+  done: bool
+  priority: Priority
+  tags: array<string>
+  createdAt: string
+  updatedAt: string
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Blog
+// ──────────────────────────────────────────────────────────────────────────
+
+enum BlogStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+record Blog {
+  id: number
+  title: string
+  slug: string
+  content: string
+  summary: string
+  status: BlogStatus
+  author: string
+  category: string
+  tags: array<string>
+  viewCount: number
+  likeCount: number
+  createdAt: string
+  updatedAt: string
+  publishedAt: string?
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Event (변경 이력)
+// ──────────────────────────────────────────────────────────────────────────
+
+enum EventType {
+  COUNTER_INCREMENTED
+  COUNTER_DECREMENTED
+  COUNTER_RESET
+  TODO_CREATED
+  TODO_UPDATED
+  TODO_DELETED
+  TODO_TOGGLED
+  BLOG_CREATED
+  BLOG_UPDATED
+  BLOG_DELETED
+  BLOG_PUBLISHED
+  BLOG_ARCHIVED
+}
+
+record StateEvent {
+  type: EventType
+  timestamp: string
+  data: any
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Database Schema
+// ──────────────────────────────────────────────────────────────────────────
+
+record DatabaseSchema {
+  counter: Counter
+  todos: array<Todo>
+  blogs: array<Blog>
+  events: array<StateEvent>
+  metadata: map<string, any>
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// System Health
+// ──────────────────────────────────────────────────────────────────────────
+
+enum HealthStatus {
+  HEALTHY
+  DEGRADED
+  OFFLINE
+}
+
+record SystemHealth {
+  status: HealthStatus
+  timestamp: string
+  uptime: number
+  memoryUsage: number
+  activeConnections: number
+  totalRequests: number
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Export
+// ──────────────────────────────────────────────────────────────────────────
+
+export {
+  Counter,
+  Todo,
+  Priority,
+  Blog,
+  BlogStatus,
+  StateEvent,
+  EventType,
+  DatabaseSchema,
+  SystemHealth,
+  HealthStatus
+}

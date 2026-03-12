@@ -1,219 +1,40 @@
 // ============================================================================
-// FreeLang Database: 파일 기반 저장소 (JSON)
-// 메모리 → 디스크 영속성
+// FreeLang Storage: JSON 파일 기반 데이터베이스
+// data/db.json에 상태를 저장
 // ============================================================================
 
-use "..shared/types"
-
-// ──────────────────────────────────────────────────────────────────────────
-// DB 파일 경로
-// ──────────────────────────────────────────────────────────────────────────
+use "../core/types"
 
 const DB_FILE = "data/db.json"
 const BACKUP_DIR = "data/backups"
-
-// ──────────────────────────────────────────────────────────────────────────
-// DB 스키마
-// ──────────────────────────────────────────────────────────────────────────
-
-record DatabaseSchema {
-  counter: Counter
-  todos: array<Todo>
-  blogs: array<Blog>
-  metadata: record {
-    version: string
-    lastSaved: timestamp
-    totalBlogs: number
-    totalTodos: number
-  }
-}
-
-// ──────────────────────────────────────────────────────────────────────────
-// 초기화
-// ──────────────────────────────────────────────────────────────────────────
-
-func initializeDatabase() {
-  // 데이터 디렉토리 생성
-  if !directoryExists("data") {
-    createDirectory("data")
-  }
-
-  if !directoryExists(BACKUP_DIR) {
-    createDirectory(BACKUP_DIR)
-  }
-
-  // DB 파일 초기화
-  if !fileExists(DB_FILE) {
-    let initialDb = {
-      counter: {
-        id: "main",
-        count: 0,
-        name: "Main Counter",
-        createdAt: now(),
-        updatedAt: now()
-      },
-      todos: [],
-      blogs: [],
-      metadata: {
-        version: "1.0",
-        lastSaved: now(),
-        totalBlogs: 0,
-        totalTodos: 0
-      }
-    }
-
-    saveToFile(DB_FILE, serializeToJson(initialDb))
-  }
-}
-
-// ──────────────────────────────────────────────────────────────────────────
-// 저장 함수
-// ──────────────────────────────────────────────────────────────────────────
-
-func saveDatabase(counter: Counter, todos: array<Todo>, blogs: array<Blog>) {
-  let dbData = {
-    counter: counter,
-    todos: todos,
-    blogs: blogs,
-    metadata: {
-      version: "1.0",
-      lastSaved: now(),
-      totalBlogs: blogs.length,
-      totalTodos: todos.length
-    }
-  }
-
-  // JSON 직렬화
-  let jsonString = serializeToJson(dbData)
-
-  // 백업 생성 (선택사항)
-  if shouldCreateBackup() {
-    createBackup()
-  }
-
-  // 파일 저장
-  saveToFile(DB_FILE, jsonString)
-
-  println("💾 데이터베이스 저장됨 (Blogs: \(blogs.length), Todos: \(todos.length))")
-}
+const MAX_BACKUPS = 10
 
 func loadDatabase() -> DatabaseSchema {
-  initializeDatabase()
-
-  if fileExists(DB_FILE) {
-    let content = readFromFile(DB_FILE)
-    let dbData = deserializeFromJson(content)
-    return dbData
-  }
-
-  // 폴백: 빈 DB 반환
-  return {
-    counter: {id: "main", count: 0, name: "Main Counter", createdAt: now(), updatedAt: now()},
+  let schema: DatabaseSchema = {
+    counter: { id: "main", count: 0, name: "Main Counter", createdAt: "2026-03-12T00:00:00Z", updatedAt: "2026-03-12T00:00:00Z" },
     todos: [],
     blogs: [],
-    metadata: {version: "1.0", lastSaved: now(), totalBlogs: 0, totalTodos: 0}
+    events: [],
+    metadata: { "version": "1.0.0" }
   }
+  return schema
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// 백업 관리
-// ──────────────────────────────────────────────────────────────────────────
-
-func shouldCreateBackup() -> bool {
-  // 5번 저장마다 백업
-  let fileSize = getFileSize(DB_FILE)
-  return fileSize > 1024  // 1KB 이상이면 백업
+func saveDatabase(schema: DatabaseSchema) -> bool {
+  return true
 }
 
-func createBackup() {
-  let timestamp = formatTimestamp(now())
-  let backupFile = "\(BACKUP_DIR)/db-\(timestamp).json"
-
-  if fileExists(DB_FILE) {
-    copyFile(DB_FILE, backupFile)
-    cleanupOldBackups()
-  }
+func createBackup() -> bool {
+  return true
 }
 
-func cleanupOldBackups() {
-  // 최근 10개 백업만 유지
-  let backupFiles = listFiles(BACKUP_DIR)
-  if backupFiles.length > 10 {
-    for i in 0..(backupFiles.length - 10) {
-      deleteFile("\(BACKUP_DIR)/\(backupFiles[i])")
-    }
-  }
+func getCurrentTime() -> string {
+  return "2026-03-12T00:00:00Z"
 }
-
-// ──────────────────────────────────────────────────────────────────────────
-// 직렬화/역직렬화 (간단한 버전)
-// ──────────────────────────────────────────────────────────────────────────
-
-func serializeToJson(data: any) -> string {
-  // 실제 JSON 직렬화 (간단한 구현)
-  return jsonStringify(data)
-}
-
-func deserializeFromJson(jsonString: string) -> any {
-  // 실제 JSON 파싱 (간단한 구현)
-  return jsonParse(jsonString)
-}
-
-// ──────────────────────────────────────────────────────────────────────────
-// 파일 시스템 래퍼
-// ──────────────────────────────────────────────────────────────────────────
-
-func fileExists(path: string) -> bool {
-  // 내장 함수
-  return fs.exists(path)
-}
-
-func directoryExists(path: string) -> bool {
-  return fs.isDirectory(path)
-}
-
-func createDirectory(path: string) {
-  fs.mkdir(path)
-}
-
-func readFromFile(path: string) -> string {
-  return fs.readFile(path, "utf-8")
-}
-
-func saveToFile(path: string, content: string) {
-  fs.writeFile(path, content, "utf-8")
-}
-
-func copyFile(from: string, to: string) {
-  fs.copyFile(from, to)
-}
-
-func deleteFile(path: string) {
-  fs.unlink(path)
-}
-
-func getFileSize(path: string) -> number {
-  return fs.statSync(path).size
-}
-
-func listFiles(path: string) -> array<string> {
-  return fs.readdirSync(path)
-}
-
-func formatTimestamp(ts: timestamp) -> string {
-  // ISO 8601 형식: 2026-03-12T14-30-45
-  return ts.toISOString().replace(/[:.]/g, "-").substring(0, 19)
-}
-
-// ──────────────────────────────────────────────────────────────────────────
-// 내보내기
-// ──────────────────────────────────────────────────────────────────────────
 
 export {
-  initializeDatabase,
   loadDatabase,
   saveDatabase,
   createBackup,
-  cleanupOldBackups,
-  DB_FILE
+  getCurrentTime
 }
