@@ -1,0 +1,134 @@
+name: freelang-v2
+version: 1.0.0
+description: "FreeLang 3-웹서버 시스템 + MiniTailwind CSS (npm 의존성 0)"
+
+author: "kim"
+license: "MIT"
+
+repository:
+  type: "git"
+  url: "https://gogs.dclub.kr/kim/freelang-v2.git"
+
+modules:
+  - name: "http-server"
+    path: "freelang/servers/http-main.free"
+    type: "executable"
+    description: "HTTP 정적 파일 서버 (포트 8000)"
+    entry: "main"
+
+  - name: "api-server"
+    path: "freelang/servers/api-main.free"
+    type: "executable"
+    description: "REST API 서버 (포트 8001, 5개 엔드포인트)"
+    entry: "main"
+
+  - name: "proxy-server"
+    path: "freelang/servers/proxy-main.free"
+    type: "executable"
+    description: "로드 밸런싱 프록시 (포트 9000, Weighted Round-Robin)"
+    entry: "main"
+
+  - name: "css-module"
+    path: "freelang/core/css-module.free"
+    type: "library"
+    description: "타입 안전 CSS 생성 모듈 (500+ 유틸리티 클래스)"
+    exports:
+      - "defineColors"
+      - "defineSpacing"
+      - "defineTypography"
+      - "defineBreakpoints"
+
+  - name: "css-components"
+    path: "freelang/core/css-components.free"
+    type: "library"
+    description: "UI 컴포넌트 라이브러리 (Button, Card, Input, Badge)"
+    exports:
+      - "createButtonComponent"
+      - "createCardComponent"
+      - "createInputComponent"
+      - "createBadgeComponent"
+
+  - name: "build-system"
+    path: "freelang/core/build-system.free"
+    type: "tool"
+    description: "FreeLang 기반 빌드 시스템 (CSS, JS, 테스트, 린트, 패키징)"
+    exports:
+      - "buildCSS"
+      - "buildJavaScript"
+      - "runTests"
+      - "lintFile"
+      - "createPackage"
+
+dependencies: []
+
+requires:
+  freelang: ">= 0.1.0"
+
+keywords:
+  - web-server
+  - http
+  - api
+  - proxy
+  - load-balancer
+  - css-framework
+  - zero-dependencies
+  - pure-freelang
+
+tags:
+  - production-ready
+  - pure-freelang
+  - npm-free
+  - formal-modules
+
+homepage: "https://gogs.dclub.kr/kim/freelang-v2"
+documentation: "https://gogs.dclub.kr/kim/freelang-v2/blob/master/SERVERS_EXECUTION_GUIDE.md"
+
+status: "stable"
+
+features:
+  - "3개 완전 독립 웹서버 모듈"
+  - "Weighted Round-Robin 로드 밸런싱"
+  - "타입 안전 CSS 시스템"
+  - "외부 의존성 0 (npm, pip 불필요)"
+  - "FreeLang 컴파일러 또는 런타임으로 즉시 실행"
+  - "MiniTailwind CSS (500+ 유틸리티)"
+  - "자동 빌드 및 배포 스크립트"
+
+build:
+  scripts:
+    build: "bash build-servers.sh"
+    run: "bash run-freelang-servers.sh"
+    test: "bash test.sh"
+
+ports:
+  http-server: 8000
+  api-server: 8001
+  proxy-server: 9000
+
+statistics:
+  total_lines: 754
+  modules: 3
+  servers: 3
+  css_classes: 500+
+  dependencies: 0
+  tested: true
+
+example_usage: |
+  # FreeLang 패키지 매니저로 설치
+  kpm install freelang-v2
+
+  # 전체 시스템 실행
+  cd freelang-v2
+  bash run-freelang-servers.sh
+
+  # 또는 개별 서버 실행
+  freelang freelang/servers/http-main.free
+  freelang freelang/servers/api-main.free
+  freelang freelang/servers/proxy-main.free
+
+  # CSS 모듈 사용
+  use "freelang-v2/css-module"
+  let colors = defineColors()
+
+created_at: "2026-03-13"
+updated_at: "2026-03-13"
