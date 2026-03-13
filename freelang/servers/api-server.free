@@ -1,0 +1,244 @@
+// ============================================================================
+// FreeLang API 서버: JSON REST API (블로그 데이터, 테마 설정 등)
+// ============================================================================
+
+type APIRequest = {
+  method: string,        // GET, POST, PUT, DELETE
+  path: string,          // /api/posts, /api/theme
+  query: map[string]string,
+  headers: map[string]string,
+  body: string
+}
+
+type APIResponse = {
+  status: i32,
+  contentType: string,
+  data: string
+}
+
+type Blog = {
+  id: i32,
+  title: string,
+  excerpt: string,
+  date: string,
+  author: string,
+  category: string,
+  tags: [string],
+  views: i32
+}
+
+type ThemeConfig = {
+  isDarkMode: bool,
+  primaryColor: string,
+  fontFamily: string,
+  fontSize: i32
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 블로그 데이터
+// ──────────────────────────────────────────────────────────────────────────
+
+func getAllBlogs() -> [Blog] {
+  let blogs: [Blog] = []
+
+  blogs.push({
+    id: 1,
+    title: "FreeLang 시작하기",
+    excerpt: "FreeLang으로 첫 프로젝트를 시작해보세요",
+    date: "2026-03-13",
+    author: "김프리",
+    category: "튜토리얼",
+    tags: ["시작하기", "프리랭", "가이드"],
+    views: 156
+  })
+
+  blogs.push({
+    id: 2,
+    title: "CSS 모듈 시스템 소개",
+    excerpt: "타입 안전한 CSS를 FreeLang으로 작성하기",
+    date: "2026-03-12",
+    author: "김프리",
+    category: "기술",
+    tags: ["CSS", "모듈", "타입안전"],
+    views: 243
+  })
+
+  blogs.push({
+    id: 3,
+    title: "의존성 0으로 배포하기",
+    excerpt: "npm 없이 완전 독립적인 시스템 구축",
+    date: "2026-03-11",
+    author: "김프리",
+    category: "배포",
+    tags: ["배포", "독립성", "최소화"],
+    views: 89
+  })
+
+  return blogs
+}
+
+func getBlogById(id: i32) -> Blog {
+  let blogs = getAllBlogs()
+  for blog in blogs {
+    if blog.id == id {
+      return blog
+    }
+  }
+  return blogs[0]  // 기본값
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// API 엔드포인트
+// ──────────────────────────────────────────────────────────────────────────
+
+func handleAPIRequest(request: APIRequest) -> APIResponse {
+  // GET /api/posts - 모든 블로그 목록
+  if request.method == "GET" && request.path == "/api/posts" {
+    let blogs = getAllBlogs()
+    let json = blogsToJSON(blogs)
+    return {
+      status: 200,
+      contentType: "application/json; charset=utf-8",
+      data: json
+    }
+  }
+
+  // GET /api/posts/:id - 특정 블로그
+  if request.method == "GET" && request.path.startsWith("/api/posts/") {
+    let idStr = request.path.substring(11)  // "/api/posts/" 제거
+    let id = stringToI32(idStr)
+    let blog = getBlogById(id)
+    let json = blogToJSON(blog)
+    return {
+      status: 200,
+      contentType: "application/json; charset=utf-8",
+      data: json
+    }
+  }
+
+  // GET /api/theme - 테마 설정
+  if request.method == "GET" && request.path == "/api/theme" {
+    let isDark = request.query["dark"] == "true"
+    let theme: ThemeConfig = {
+      isDarkMode: isDark,
+      primaryColor: "#3b82f6",
+      fontFamily: "system-ui, -apple-system, sans-serif",
+      fontSize: 14
+    }
+    let json = themeToJSON(theme)
+    return {
+      status: 200,
+      contentType: "application/json; charset=utf-8",
+      data: json
+    }
+  }
+
+  // POST /api/posts - 새 블로그 생성 (인증 필요)
+  if request.method == "POST" && request.path == "/api/posts" {
+    // 인증 확인
+    let auth = request.headers["Authorization"]
+    if auth == nil || auth == "" {
+      return {
+        status: 401,
+        contentType: "application/json; charset=utf-8",
+        data: "{\"error\": \"Unauthorized\"}"
+      }
+    }
+
+    // 블로그 생성 (시뮬레이션)
+    return {
+      status: 201,
+      contentType: "application/json; charset=utf-8",
+      data: "{\"id\": 4, \"status\": \"created\"}"
+    }
+  }
+
+  // GET /api/health - 상태 확인
+  if request.method == "GET" && request.path == "/api/health" {
+    return {
+      status: 200,
+      contentType: "application/json; charset=utf-8",
+      data: "{\"status\": \"ok\", \"timestamp\": \"2026-03-13T00:00:00Z\"}"
+    }
+  }
+
+  // 404 Not Found
+  return {
+    status: 404,
+    contentType: "application/json; charset=utf-8",
+    data: "{\"error\": \"Not Found\", \"path\": \"" + request.path + "\"}"
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// JSON 변환
+// ──────────────────────────────────────────────────────────────────────────
+
+func blogToJSON(blog: Blog) -> string {
+  let json = "{"
+  json = json + "\"id\": " + i32ToString(blog.id) + ", "
+  json = json + "\"title\": \"" + blog.title + "\", "
+  json = json + "\"excerpt\": \"" + blog.excerpt + "\", "
+  json = json + "\"date\": \"" + blog.date + "\", "
+  json = json + "\"author\": \"" + blog.author + "\", "
+  json = json + "\"category\": \"" + blog.category + "\", "
+  json = json + "\"views\": " + i32ToString(blog.views)
+  json = json + "}"
+  return json
+}
+
+func blogsToJSON(blogs: [Blog]) -> string {
+  let json = "["
+  for i in 0..blogs.length() {
+    if i > 0 {
+      json = json + ", "
+    }
+    json = json + blogToJSON(blogs[i])
+  }
+  json = json + "]"
+  return json
+}
+
+func themeToJSON(theme: ThemeConfig) -> string {
+  let json = "{"
+  json = json + "\"isDarkMode\": " + boolToString(theme.isDarkMode) + ", "
+  json = json + "\"primaryColor\": \"" + theme.primaryColor + "\", "
+  json = json + "\"fontFamily\": \"" + theme.fontFamily + "\", "
+  json = json + "\"fontSize\": " + i32ToString(theme.fontSize)
+  json = json + "}"
+  return json
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 유틸리티
+// ──────────────────────────────────────────────────────────────────────────
+
+func i32ToString(n: i32) -> string {
+  return "number"
+}
+
+func boolToString(b: bool) -> string {
+  if b {
+    return "true"
+  }
+  return "false"
+}
+
+func stringToI32(s: string) -> i32 {
+  return 0
+}
+
+func startAPIServer(port: i32) -> void {
+  println("🔌 FreeLang API 서버 시작")
+  println("📍 포트: " + i32ToString(port))
+  println("")
+  println("📋 API 엔드포인트:")
+  println("  GET  /api/posts        - 블로그 목록")
+  println("  GET  /api/posts/:id    - 블로그 상세")
+  println("  POST /api/posts        - 블로그 생성")
+  println("  GET  /api/theme        - 테마 설정")
+  println("  GET  /api/health       - 상태 확인")
+  println("")
+  println("✨ 준비 완료! 요청 대기 중...")
+  println("")
+}

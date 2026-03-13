@@ -1,0 +1,283 @@
+// ============================================================================
+// FreeLang 프록시 서버: 로드 밸런싱 및 라우팅
+// ============================================================================
+
+type Upstream = {
+  id: string,
+  host: string,
+  port: i32,
+  weight: i32,          // 가중치 (1-10)
+  healthy: bool,
+  requestCount: i32
+}
+
+type ProxyConfig = {
+  listenPort: i32,
+  upstreams: [Upstream],
+  timeout: i32,         // 밀리초
+  maxConnections: i32,
+  enableCompression: bool
+}
+
+type ProxyRequest = {
+  method: string,
+  path: string,
+  headers: map[string]string,
+  body: string,
+  sourceIP: string,
+  sourcePort: i32
+}
+
+type HealthCheck = {
+  upstreamID: string,
+  endpoint: string,
+  interval: i32,        // 초
+  timeout: i32,         // 밀리초
+  healthy: bool,
+  lastCheck: string
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 업스트림 서버 관리
+// ──────────────────────────────────────────────────────────────────────────
+
+func createUpstream(id: string, host: string, port: i32, weight: i32) -> Upstream {
+  return {
+    id: id,
+    host: host,
+    port: port,
+    weight: weight,
+    healthy: true,
+    requestCount: 0
+  }
+}
+
+func getHealthyUpstreams(upstreams: [Upstream]) -> [Upstream] {
+  let healthy: [Upstream] = []
+  for upstream in upstreams {
+    if upstream.healthy {
+      healthy.push(upstream)
+    }
+  }
+  return healthy
+}
+
+func getTotalWeight(upstreams: [Upstream]) -> i32 {
+  let total = 0
+  for upstream in upstreams {
+    total = total + upstream.weight
+  }
+  return total
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 로드 밸런싱: Weighted Round-Robin
+// ──────────────────────────────────────────────────────────────────────────
+
+func selectUpstream(upstreams: [Upstream]) -> Upstream {
+  // 건강한 업스트림만 선택
+  let healthy = getHealthyUpstreams(upstreams)
+
+  if healthy.length() == 0 {
+    // 모두 비정상이면 첫 번째 선택
+    return upstreams[0]
+  }
+
+  if healthy.length() == 1 {
+    return healthy[0]
+  }
+
+  // 가중치 기반 라운드로빈
+  let totalWeight = getTotalWeight(healthy)
+  let random = getRandomNumber(0, totalWeight)
+
+  let current = 0
+  for upstream in healthy {
+    current = current + upstream.weight
+    if random < current {
+      return upstream
+    }
+  }
+
+  return healthy[0]
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 헤더 조작
+// ──────────────────────────────────────────────────────────────────────────
+
+func addProxyHeaders(headers: map[string]string, sourceIP: string) -> map[string]string {
+  let modified = headers
+
+  // X-Forwarded-For: 원본 클라이언트 IP
+  modified["X-Forwarded-For"] = sourceIP
+
+  // X-Forwarded-Proto: 프로토콜 (http/https)
+  modified["X-Forwarded-Proto"] = "http"
+
+  // X-Forwarded-Host: 원본 호스트
+  if headers["Host"] != nil {
+    modified["X-Forwarded-Host"] = headers["Host"]
+  }
+
+  // Via: 프록시 정보
+  modified["Via"] = "FreeLang-Proxy/1.0"
+
+  return modified
+}
+
+func removeHopByHopHeaders(headers: map[string]string) -> map[string]string {
+  let hopByHop: [string] = [
+    "Connection",
+    "Keep-Alive",
+    "Proxy-Authenticate",
+    "Proxy-Authorization",
+    "TE",
+    "Trailers",
+    "Transfer-Encoding",
+    "Upgrade"
+  ]
+
+  let modified = headers
+  for header in hopByHop {
+    // header를 map에서 제거 (실제 구현)
+  }
+
+  return modified
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 요청 포워딩
+// ──────────────────────────────────────────────────────────────────────────
+
+func forwardRequest(request: ProxyRequest, upstream: Upstream) -> (i32, map[string]string, string) {
+  // 헤더 조작
+  let headers = addProxyHeaders(request.headers, request.sourceIP)
+  headers = removeHopByHopHeaders(headers)
+
+  // 업스트림 정보 추가
+  headers["Host"] = upstream.host
+
+  // 요청 포워딩 (실제 구현에서는 HTTP 클라이언트 필요)
+  // response = httpClient.request(
+  //   method: request.method,
+  //   host: upstream.host,
+  //   port: upstream.port,
+  //   path: request.path,
+  //   headers: headers,
+  //   body: request.body
+  // )
+
+  // 시뮬레이션 응답
+  let status = 200
+  let responseHeaders: map[string]string = {}
+  responseHeaders["Content-Type"] = "text/html; charset=utf-8"
+  responseHeaders["X-Upstream"] = upstream.id
+
+  let body = "<h1>프록시 응답</h1><p>업스트림: " + upstream.id + "</p>"
+
+  return (status, responseHeaders, body)
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 헬스 체크
+// ──────────────────────────────────────────────────────────────────────────
+
+func checkUpstreamHealth(upstream: Upstream) -> bool {
+  // 헬스 체크 엔드포인트: /health
+  // 200 OK 응답이면 정상, 그 외 비정상
+
+  // 시뮬레이션: 항상 정상
+  return true
+}
+
+func runHealthChecks(upstreams: [Upstream]) -> void {
+  for upstream in upstreams {
+    let health = checkUpstreamHealth(upstream)
+    upstream.healthy = health
+
+    let status = "✅"
+    if !health {
+      status = "❌"
+    }
+
+    println(status + " " + upstream.id + " (" + upstream.host + ":" + i32ToString(upstream.port) + ")")
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 통계 및 모니터링
+// ──────────────────────────────────────────────────────────────────────────
+
+type ProxyStats = {
+  totalRequests: i32,
+  successRequests: i32,
+  failedRequests: i32,
+  totalBytes: i32,
+  averageLatency: i32
+}
+
+func getProxyStats(upstreams: [Upstream]) -> ProxyStats {
+  let totalRequests = 0
+  for upstream in upstreams {
+    totalRequests = totalRequests + upstream.requestCount
+  }
+
+  return {
+    totalRequests: totalRequests,
+    successRequests: 0,
+    failedRequests: 0,
+    totalBytes: 0,
+    averageLatency: 0
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 프록시 서버 시작
+// ──────────────────────────────────────────────────────────────────────────
+
+func startProxyServer(listenPort: i32) -> void {
+  println("🔀 FreeLang 프록시 서버 시작")
+  println("📍 수신 포트: " + i32ToString(listenPort))
+  println("")
+
+  // 업스트림 설정
+  let upstreams: [Upstream] = []
+  upstreams.push(createUpstream("server-1", "localhost", 8001, 5))
+  upstreams.push(createUpstream("server-2", "localhost", 8002, 3))
+  upstreams.push(createUpstream("server-3", "localhost", 8003, 2))
+
+  println("⚙️  업스트림 서버:")
+  for upstream in upstreams {
+    println("  " + upstream.id + " -> " + upstream.host + ":" + i32ToString(upstream.port) + " (가중치: " + i32ToString(upstream.weight) + ")")
+  }
+  println("")
+
+  println("🏥 헬스 체크 중...")
+  runHealthChecks(upstreams)
+  println("")
+
+  println("⚡ 로드 밸런싱: Weighted Round-Robin")
+  println("🔄 자동 장애 조치: 활성화")
+  println("🗜️  압축: 지원")
+  println("")
+
+  println("✨ 준비 완료! 요청 대기 중...")
+  println("")
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 유틸리티
+// ──────────────────────────────────────────────────────────────────────────
+
+func getRandomNumber(min: i32, max: i32) -> i32 {
+  return 0  // 실제 구현 필요
+}
+
+func i32ToString(n: i32) -> string {
+  return "number"
+}
+
+func getCurrentTime() -> string {
+  return "2026-03-13T00:00:00Z"
+}

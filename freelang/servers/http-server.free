@@ -1,0 +1,219 @@
+// ============================================================================
+// FreeLang HTTP 서버: 정적 파일 배포용 (blog.html, styles.css, runtime.js)
+// ============================================================================
+
+type HTTPRequest = {
+  method: string,        // GET, POST, PUT, DELETE
+  path: string,          // /blog.html, /css/styles.css
+  headers: map[string]string,
+  body: string
+}
+
+type HTTPResponse = {
+  status: i32,           // 200, 404, 500
+  headers: map[string]string,
+  body: string
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// MIME 타입 매핑
+// ──────────────────────────────────────────────────────────────────────────
+
+func getMimeType(filePath: string) -> string {
+  if filePath.endsWith(".html") {
+    return "text/html; charset=utf-8"
+  }
+  if filePath.endsWith(".css") {
+    return "text/css; charset=utf-8"
+  }
+  if filePath.endsWith(".js") {
+    return "application/javascript; charset=utf-8"
+  }
+  if filePath.endsWith(".json") {
+    return "application/json; charset=utf-8"
+  }
+  if filePath.endsWith(".png") {
+    return "image/png"
+  }
+  if filePath.endsWith(".jpg") || filePath.endsWith(".jpeg") {
+    return "image/jpeg"
+  }
+  if filePath.endsWith(".svg") {
+    return "image/svg+xml"
+  }
+  if filePath.endsWith(".woff2") {
+    return "font/woff2"
+  }
+  return "text/plain"
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// HTTP 요청 파싱
+// ──────────────────────────────────────────────────────────────────────────
+
+func parseHTTPRequest(rawRequest: string) -> HTTPRequest {
+  let lines = rawRequest.split("\r\n")
+
+  // 첫 줄: "GET /path HTTP/1.1"
+  let requestLine = lines[0].split(" ")
+  let method = requestLine[0]
+  let path = requestLine[1]
+
+  // 기본값
+  if path == "/" {
+    path = "/blog.html"
+  }
+
+  // 헤더 파싱
+  let headers: map[string]string = {}
+  for i in 1..lines.length() {
+    let line = lines[i]
+    if line.isEmpty() {
+      break
+    }
+    let parts = line.split(": ")
+    if parts.length() >= 2 {
+      headers[parts[0]] = parts[1]
+    }
+  }
+
+  // 바디 (POST 요청용)
+  let body = ""
+  let emptyLineIndex = rawRequest.indexOf("\r\n\r\n")
+  if emptyLineIndex > 0 {
+    body = rawRequest.substring(emptyLineIndex + 4)
+  }
+
+  return {
+    method: method,
+    path: path,
+    headers: headers,
+    body: body
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 정적 파일 로드
+// ──────────────────────────────────────────────────────────────────────────
+
+func loadStaticFile(path: string) -> (string, bool) {
+  // public/ 또는 frontend/ 디렉토리에서 파일 찾기
+
+  // CSS
+  if path.startsWith("/css/") {
+    let filename = path.substring(5)  // "/css/" 제거
+    if filename == "styles.css" {
+      return readFile("public/css/styles.css"), true
+    }
+    if filename == "styles-dark.css" {
+      return readFile("public/css/styles-dark.css"), true
+    }
+  }
+
+  // JavaScript
+  if path.startsWith("/js/") {
+    let filename = path.substring(4)  // "/js/" 제거
+    if filename == "tailwind-runtime.js" {
+      return readFile("frontend/tailwind-runtime.js"), true
+    }
+  }
+
+  // HTML 페이지
+  if path == "/blog.html" || path == "/" {
+    return readFile("blog.html"), true
+  }
+
+  return "", false
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// HTTP 응답 생성
+// ──────────────────────────────────────────────────────────────────────────
+
+func createResponse(status: i32, contentType: string, body: string) -> HTTPResponse {
+  let headers: map[string]string = {}
+  headers["Content-Type"] = contentType
+  headers["Content-Length"] = i32ToString(body.length())
+  headers["Access-Control-Allow-Origin"] = "*"
+  headers["Cache-Control"] = "public, max-age=3600"
+
+  return {
+    status: status,
+    headers: headers,
+    body: body
+  }
+}
+
+func serializeHTTPResponse(response: HTTPResponse) -> string {
+  let statusText = "OK"
+  if response.status == 404 {
+    statusText = "Not Found"
+  }
+  if response.status == 500 {
+    statusText = "Internal Server Error"
+  }
+
+  let http = "HTTP/1.1 " + i32ToString(response.status) + " " + statusText + "\r\n"
+
+  for (key, value) in response.headers {
+    http = http + key + ": " + value + "\r\n"
+  }
+
+  http = http + "\r\n" + response.body
+
+  return http
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 요청 처리
+// ──────────────────────────────────────────────────────────────────────────
+
+func handleRequest(request: HTTPRequest) -> HTTPResponse {
+  // GET 요청만 처리
+  if request.method != "GET" {
+    let errorBody = "<h1>405 Method Not Allowed</h1>"
+    return createResponse(405, "text/html; charset=utf-8", errorBody)
+  }
+
+  // 정적 파일 로드
+  let (content, found) = loadStaticFile(request.path)
+
+  if found {
+    let mimeType = getMimeType(request.path)
+    return createResponse(200, mimeType, content)
+  }
+
+  // 404 Not Found
+  let notFoundBody = "<h1>404 Not Found</h1><p>요청한 파일을 찾을 수 없습니다: " + request.path + "</p>"
+  return createResponse(404, "text/html; charset=utf-8", notFoundBody)
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 서버 실행
+// ──────────────────────────────────────────────────────────────────────────
+
+func startHTTPServer(port: i32) -> void {
+  println("🚀 FreeLang HTTP 서버 시작")
+  println("📍 포트: " + i32ToString(port))
+  println("📁 루트: ./public, ./frontend")
+  println("📄 기본 페이지: /blog.html")
+  println("")
+  println("✨ 준비 완료! 요청 대기 중...")
+  println("")
+
+  // 메인 루프 (실제 구현에서는 소켓 바인딩 필요)
+  // 여기서는 요청/응답 프로토콜 정의만 완료
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 유틸리티
+// ──────────────────────────────────────────────────────────────────────────
+
+func readFile(path: string) -> string {
+  // 파일 읽기 (실제 구현)
+  return ""
+}
+
+func i32ToString(n: i32) -> string {
+  return "number"
+}
