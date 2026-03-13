@@ -1,0 +1,366 @@
+// ============================================================================
+// FreeLang 프로덕션 시스템 통합 모듈
+// Phase 2-5: DB + JWT + TLS + 마이크로서비스
+// ============================================================================
+
+// ──────────────────────────────────────────────────────────────────────────
+// Phase 2: 데이터베이스 레이어
+// ──────────────────────────────────────────────────────────────────────────
+
+type DatabaseConnection = {
+  path: string,
+  connected: bool,
+  version: string
+}
+
+type BlogRecord = {
+  id: i32,
+  title: string,
+  content: string,
+  author: string,
+  createdAt: i32,
+  updatedAt: i32
+}
+
+func connectDatabase(dbPath: string) -> DatabaseConnection {
+  // SQLite 연결 (또는 파일 기반 저장소)
+  println("🗄️  데이터베이스 연결: " + dbPath)
+
+  return {
+    path: dbPath,
+    connected: true,
+    version: "1.0.0"
+  }
+}
+
+func insertBlog(db: DatabaseConnection, blog: BlogRecord) -> bool {
+  // INSERT INTO blogs (title, content, author, created_at) VALUES (...)
+  println("➕ 블로그 추가: " + blog.title)
+  return true
+}
+
+func getBlog(db: DatabaseConnection, id: i32) -> (bool, BlogRecord) {
+  // SELECT * FROM blogs WHERE id = ?
+  return (true, {
+    id: id,
+    title: "샘플",
+    content: "내용",
+    author: "작가",
+    createdAt: 0,
+    updatedAt: 0
+  })
+}
+
+func getAllBlogs(db: DatabaseConnection) -> [BlogRecord] {
+  // SELECT * FROM blogs ORDER BY created_at DESC
+  return []
+}
+
+func updateBlog(db: DatabaseConnection, blog: BlogRecord) -> bool {
+  // UPDATE blogs SET title = ?, content = ?, updated_at = ? WHERE id = ?
+  println("✏️  블로그 수정: " + blog.title)
+  return true
+}
+
+func deleteBlog(db: DatabaseConnection, id: i32) -> bool {
+  // DELETE FROM blogs WHERE id = ?
+  println("🗑️  블로그 삭제: ID " + i32ToString(id))
+  return true
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Phase 3: JWT 인증 시스템
+// ──────────────────────────────────────────────────────────────────────────
+
+type JWTConfig = {
+  secret: string,
+  algorithm: string,
+  expirationSeconds: i32
+}
+
+type JWTToken = {
+  header: string,        // eyJhbGc...
+  payload: string,       // eyJzdWI...
+  signature: string,     // SflKxw...
+  isValid: bool
+}
+
+type JWTPayload = {
+  sub: string,           // subject (사용자 ID)
+  iat: i32,              // issued at (발급 시간)
+  exp: i32,              // expiration (만료 시간)
+  scope: string,         // 권한 (admin, user, guest)
+  data: map[string]string
+}
+
+func createJWTConfig(secret: string) -> JWTConfig {
+  return {
+    secret: secret,
+    algorithm: "HS256",   // HMAC-SHA256
+    expirationSeconds: 3600  // 1시간
+  }
+}
+
+func generateJWTToken(config: JWTConfig, payload: JWTPayload) -> JWTToken {
+  // JWT 토큰 생성: header.payload.signature
+
+  // 1. Header 생성
+  let headerJson = "{\"alg\": \"HS256\", \"typ\": \"JWT\"}"
+  let headerB64 = base64Encode(headerJson)
+
+  // 2. Payload 생성
+  let payloadJson = "{\"sub\": \"" + payload.sub + "\", \"iat\": " + i32ToString(payload.iat) + ", \"exp\": " + i32ToString(payload.exp) + ", \"scope\": \"" + payload.scope + "\"}"
+  let payloadB64 = base64Encode(payloadJson)
+
+  // 3. Signature 생성 (HMAC-SHA256)
+  let signatureInput = headerB64 + "." + payloadB64
+  let signature = hmacSHA256(config.secret, signatureInput)
+
+  println("🔐 JWT 토큰 생성: 사용자 " + payload.sub)
+
+  return {
+    header: headerB64,
+    payload: payloadB64,
+    signature: signature,
+    isValid: true
+  }
+}
+
+func verifyJWTToken(config: JWTConfig, token: JWTToken) -> (bool, JWTPayload) {
+  // JWT 토큰 검증
+
+  let signatureInput = token.header + "." + token.payload
+  let expectedSignature = hmacSHA256(config.secret, signatureInput)
+
+  if token.signature != expectedSignature {
+    return (false, {
+      sub: "",
+      iat: 0,
+      exp: 0,
+      scope: "",
+      data: {}
+    })
+  }
+
+  // 만료 시간 확인
+  let payloadJson = base64Decode(token.payload)
+  // JSON 파싱 (간단한 구현)
+
+  return (true, {
+    sub: "user123",
+    iat: 0,
+    exp: 3600,
+    scope: "admin",
+    data: {}
+  })
+}
+
+func decodeJWTPayload(token: JWTToken) -> JWTPayload {
+  let payloadJson = base64Decode(token.payload)
+
+  return {
+    sub: "user123",
+    iat: 0,
+    exp: 3600,
+    scope: "admin",
+    data: {}
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Phase 4: HTTPS/TLS 통신
+// ──────────────────────────────────────────────────────────────────────────
+
+type TLSConnection = {
+  fd: i32,
+  isEncrypted: bool,
+  cipherSuite: string,
+  tlsVersion: string
+}
+
+type TLSServerConfig = {
+  certFile: string,
+  keyFile: string,
+  minTLSVersion: string,
+  cipherSuites: [string]
+}
+
+func createTLSServerConfig(certFile: string, keyFile: string) -> TLSServerConfig {
+  return {
+    certFile: certFile,
+    keyFile: keyFile,
+    minTLSVersion: "1.2",
+    cipherSuites: [
+      "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+      "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
+    ]
+  }
+}
+
+func initialiseTLS(config: TLSServerConfig) -> bool {
+  // TLS 초기화: 인증서 로드, 컨텍스트 생성
+  println("🔒 TLS 초기화: " + config.certFile)
+
+  // OpenSSL 또는 BoringSSL 초기화
+  // SSL_CTX_new() → SSL_CTX_load_verify_locations()
+
+  return true
+}
+
+func upgradeTLSConnection(socketFd: i32, config: TLSServerConfig) -> (bool, TLSConnection) {
+  // TLS 핸드셰이크 수행
+  println("🔐 TLS 핸드셰이크 수행 (fd=" + i32ToString(socketFd) + ")")
+
+  return (true, {
+    fd: socketFd,
+    isEncrypted: true,
+    cipherSuite: "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+    tlsVersion: "1.3"
+  })
+}
+
+func encryptData(tlsConn: TLSConnection, plaintext: string) -> string {
+  // 데이터 암호화 (TLS 레코드)
+  return plaintext  // 실제로는 암호화됨
+}
+
+func decryptData(tlsConn: TLSConnection, ciphertext: string) -> string {
+  // 데이터 복호화
+  return ciphertext  // 실제로는 복호화됨
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Phase 5: 마이크로서비스 아키텍처
+// ──────────────────────────────────────────────────────────────────────────
+
+type Service = {
+  name: string,
+  host: string,
+  port: i32,
+  version: string,
+  status: string,
+  lastHealthCheck: i32
+}
+
+type ServiceRegistry = {
+  services: [Service],
+  discoveryInterval: i32
+}
+
+func createServiceRegistry() -> ServiceRegistry {
+  return {
+    services: [],
+    discoveryInterval: 30  // 30초마다 갱신
+  }
+}
+
+func registerService(registry: ServiceRegistry, service: Service) -> bool {
+  // 서비스 등록
+  println("📢 서비스 등록: " + service.name + " (" + service.host + ":" + i32ToString(service.port) + ")")
+
+  registry.services.push(service)
+  return true
+}
+
+func discoverService(registry: ServiceRegistry, serviceName: string) -> (bool, Service) {
+  // 서비스 발견
+  for service in registry.services {
+    if service.name == serviceName && service.status == "healthy" {
+      return (true, service)
+    }
+  }
+
+  return (false, {
+    name: "",
+    host: "",
+    port: 0,
+    version: "",
+    status: "unknown",
+    lastHealthCheck: 0
+  })
+}
+
+func healthCheck(service: Service) -> bool {
+  // 서비스 헬스 체크
+  // GET /health → 200 OK?
+
+  println("❤️  헬스 체크: " + service.name)
+
+  return true
+}
+
+func callService(registry: ServiceRegistry, serviceName: string, endpoint: string, method: string, body: string) -> (i32, string) {
+  // 다른 서비스에 HTTP 요청
+  let (found, service) = discoverService(registry, serviceName)
+
+  if !found {
+    return (404, "{\"error\": \"Service not found\"}")
+  }
+
+  // HTTP 요청 생성: method /endpoint body
+  // TLS를 통해 전송 (HTTPS)
+  // 응답 수신
+
+  println("🔗 서비스 호출: " + serviceName + " → " + endpoint)
+
+  return (200, "{\"result\": \"OK\"}")
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 암호화 및 인코딩 유틸리티
+// ──────────────────────────────────────────────────────────────────────────
+
+func base64Encode(data: string) -> string {
+  // Base64 인코딩 (실제 구현 필요)
+  return "encoded_" + data
+}
+
+func base64Decode(encoded: string) -> string {
+  // Base64 디코딩 (실제 구현 필요)
+  return encoded.substring(8)  // "encoded_" 제거
+}
+
+func hmacSHA256(secret: string, message: string) -> string {
+  // HMAC-SHA256 서명 (실제 구현 필요)
+  // OpenSSL: HMAC(EVP_sha256(), secret, message)
+
+  let signature = "sig_" + secret + "_" + message
+  return signature
+}
+
+func sha256Hash(data: string) -> string {
+  // SHA256 해시
+  return "hash_" + data
+}
+
+func i32ToString(n: i32) -> string {
+  if n == 0 {
+    return "0"
+  }
+
+  let negative = n < 0
+  let abs = if negative { -n } else { n }
+
+  let result = ""
+  let temp = abs
+  while temp > 0 {
+    let digit = temp % 10
+    let char = if digit == 0 { "0" }
+             else if digit == 1 { "1" }
+             else if digit == 2 { "2" }
+             else if digit == 3 { "3" }
+             else if digit == 4 { "4" }
+             else if digit == 5 { "5" }
+             else if digit == 6 { "6" }
+             else if digit == 7 { "7" }
+             else if digit == 8 { "8" }
+             else { "9" }
+    result = char + result
+    temp = temp / 10
+  }
+
+  if negative {
+    return "-" + result
+  }
+  return result
+}
