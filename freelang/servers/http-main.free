@@ -70,12 +70,15 @@ func createHTTPServer(host: string, port: i32) -> HTTPServer {
 // ──────────────────────────────────────────────────────────────────────────
 
 func startServer(server: HTTPServer) -> bool {
-  // std/net을 이용한 소켓 생성
-  // socket = net.socket(AF_INET, SOCK_STREAM)
-  // net.bind(socket, server.host, server.port)
-  // net.listen(socket, 128)
-
+  // 서버 상태 초기화
   server.running = true
+  server.requestCount = 0
+
+  println("🚀 서버 초기화 중...")
+  println("  호스트: " + server.host)
+  println("  포트: " + i32ToString(server.port))
+
+  // 실제 소켓 생성 및 바인드는 runServerLoop()에서 수행
   return true
 }
 
@@ -89,30 +92,50 @@ func stopServer(server: HTTPServer) -> void {
 // ──────────────────────────────────────────────────────────────────────────
 
 func parseHTTPRequest(rawRequest: string) -> (string, string, map[string]string, string) {
-  let lines = rawRequest.split("\n")
+  // CRLF(\r\n) 및 LF(\n) 모두 처리
+  let lines = rawRequest.split("\r\n")
+  if lines.length() < 1 {
+    lines = rawRequest.split("\n")
+  }
+
+  if lines.length() < 1 {
+    return ("GET", "/", {}, "")
+  }
 
   // 첫 줄: GET /path HTTP/1.1
   let requestLine = lines[0].split(" ")
-  let method = requestLine[0]
-  let path = requestLine[1]
+  let method = "GET"
+  let path = "/"
 
-  if path == "/" {
+  if requestLine.length() >= 2 {
+    method = requestLine[0]
+    path = requestLine[1]
+  }
+
+  if path == "/" || path.isEmpty() {
     path = "/blog.html"
   }
 
   // 헤더 파싱
   let headers: map[string]string = {}
-  for i in 1..lines.length() {
+  let i = 1
+
+  while i < lines.length() {
     let line = lines[i]
+
+    // 빈 줄이면 헤더 끝
     if line.isEmpty() || line == "\r" {
       break
     }
+
     let idx = line.indexOf(":")
     if idx > 0 {
       let key = line.substring(0, idx).trim()
       let value = line.substring(idx + 1).trim()
       headers[key] = value
     }
+
+    i = i + 1
   }
 
   return (method, path, headers, "")
@@ -258,28 +281,93 @@ func buildHTTPResponse(status: i32, contentType: string, body: string) -> string
 // ──────────────────────────────────────────────────────────────────────────
 
 func runServerLoop(server: HTTPServer) -> void {
+  // 🔧 Phase 1: TCP 소켓 통신 구현
+
+  // 1️⃣ 소켓 생성
+  println("📍 소켓 생성 중...")
+  server.socket = net.socket(2, 1)  // AF_INET=2, SOCK_STREAM=1
+
+  if server.socket < 0 {
+    println("❌ 소켓 생성 실패")
+    return
+  }
+  println("✅ 소켓 생성됨 (fd=" + i32ToString(server.socket) + ")")
+
+  // 2️⃣ SO_REUSEADDR 옵션 설정 (포트 재사용)
+  net.setsockopt(server.socket, 1, 15, 1)  // SOL_SOCKET=1, SO_REUSEADDR=15
+
+  // 3️⃣ 소켓 바인드
+  println("📍 바인드 중: " + server.host + ":" + i32ToString(server.port))
+  let bindResult = net.bind(server.socket, server.host, server.port)
+
+  if bindResult != 0 {
+    println("❌ 바인드 실패 (호스트/포트 이미 사용 중?)")
+    net.close(server.socket)
+    return
+  }
+  println("✅ 바인드 완료")
+
+  // 4️⃣ 리슨 시작
+  println("📍 리슨 시작 (backlog=128)")
+  let listenResult = net.listen(server.socket, 128)
+
+  if listenResult != 0 {
+    println("❌ 리슨 실패")
+    net.close(server.socket)
+    return
+  }
+  println("✅ 리슨 시작됨, 클라이언트 대기 중...")
+  println("")
+
+  // 5️⃣ 메인 수락 루프
   while server.running {
-    // clientSocket = net.accept(server.socket)
-    // rawRequest = net.read(clientSocket)
+    // 클라이언트 연결 수락
+    let (clientFd, clientHost, clientPort) = net.accept(server.socket)
 
-    // 요청 파싱
-    // (method, path, headers, body) = parseHTTPRequest(rawRequest)
+    if clientFd < 0 {
+      // 타임아웃 또는 에러
+      continue
+    }
 
-    // 요청 처리
-    // (statusCode, contentType, responseBody) = serveStaticFile(path)
+    // 6️⃣ HTTP 요청 읽기
+    let (readOk, rawRequest) = net.read(clientFd, 4096)
 
-    // HTTP 응답 생성
-    // httpResponse = buildHTTPResponse(statusCode, contentType, responseBody)
-
-    // 응답 전송
-    // net.write(clientSocket, httpResponse)
-    // net.close(clientSocket)
+    if !readOk || rawRequest.isEmpty() {
+      net.close(clientFd)
+      continue
+    }
 
     server.requestCount = server.requestCount + 1
 
-    // 실제 구현에서는 블로킹 accept()
-    // 여기서는 시뮬레이션만 수행
+    // 7️⃣ HTTP 요청 파싱
+    let (method, path, headers, body) = parseHTTPRequest(rawRequest)
+
+    println("📨 요청 #" + i32ToString(server.requestCount) + ": " + method + " " + path + " (from " + clientHost + ":" + i32ToString(clientPort) + ")")
+
+    // 8️⃣ 요청 처리 (파일 서빙)
+    let (statusCode, contentType, responseBody) = serveStaticFile(path)
+
+    // 9️⃣ HTTP 응답 생성
+    let httpResponse = buildHTTPResponse(statusCode, contentType, responseBody)
+
+    // 🔟 응답 전송
+    let writeOk = net.write(clientFd, httpResponse)
+
+    if writeOk {
+      println("✅ 응답 전송: " + i32ToString(statusCode))
+    } else {
+      println("❌ 응답 전송 실패")
+    }
+
+    // 1️⃣1️⃣ 연결 종료
+    net.close(clientFd)
   }
+
+  // 서버 종료 시 소켓 정리
+  println("")
+  println("🛑 서버 종료 중...")
+  net.close(server.socket)
+  println("✅ 소켓 닫음")
 }
 
 // ──────────────────────────────────────────────────────────────────────────

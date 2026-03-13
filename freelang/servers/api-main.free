@@ -133,6 +133,12 @@ func createSampleBlogs() -> [Blog] {
 
 func startAPIServer(server: APIServer) -> bool {
   server.running = true
+  server.requestCount = 0
+
+  println("🚀 API 서버 초기화 중...")
+  println("  호스트: " + server.host)
+  println("  포트: " + i32ToString(server.port))
+
   return true
 }
 
@@ -279,30 +285,173 @@ func getBlogById(blogs: [Blog], id: i32) -> Blog {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// 요청 파싱 헬퍼 함수
+// ──────────────────────────────────────────────────────────────────────────
+
+func parseRequestPath(rawRequest: string) -> string {
+  let lines = rawRequest.split("\r\n")
+  if lines.length() < 1 {
+    lines = rawRequest.split("\n")
+  }
+
+  if lines.length() < 1 {
+    return "/"
+  }
+
+  let requestLine = lines[0].split(" ")
+  if requestLine.length() >= 2 {
+    return requestLine[1]
+  }
+
+  return "/"
+}
+
+func parseQueryString(rawRequest: string) -> map[string]string {
+  let query: map[string]string = {}
+
+  let path = parseRequestPath(rawRequest)
+  let idx = path.indexOf("?")
+
+  if idx <= 0 {
+    return query
+  }
+
+  let queryStr = path.substring(idx + 1)
+  let pairs = queryStr.split("&")
+
+  for pair in pairs {
+    let eqIdx = pair.indexOf("=")
+    if eqIdx > 0 {
+      let key = pair.substring(0, eqIdx)
+      let value = pair.substring(eqIdx + 1)
+      query[key] = value
+    }
+  }
+
+  return query
+}
+
+func buildAPIHTTPResponse(status: i32, contentType: string, body: string) -> string {
+  let statusText = "OK"
+  if status == 400 {
+    statusText = "Bad Request"
+  }
+  if status == 401 {
+    statusText = "Unauthorized"
+  }
+  if status == 403 {
+    statusText = "Forbidden"
+  }
+  if status == 404 {
+    statusText = "Not Found"
+  }
+  if status == 429 {
+    statusText = "Too Many Requests"
+  }
+
+  let response = "HTTP/1.1 " + i32ToString(status) + " " + statusText + "\r\n"
+  response = response + "Content-Type: " + contentType + "\r\n"
+  response = response + "Content-Length: " + i32ToString(body.length()) + "\r\n"
+  response = response + "Access-Control-Allow-Origin: *\r\n"
+  response = response + "Connection: close\r\n"
+  response = response + "\r\n"
+  response = response + body
+
+  return response
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // 서버 메인 루프
 // ──────────────────────────────────────────────────────────────────────────
 
 func runAPILoop(server: APIServer) -> void {
+  // 🔧 Phase 1: TCP 소켓 통신 구현
+
+  // 1️⃣ 소켓 생성
+  println("📍 API 소켓 생성 중...")
+  server.socket = net.socket(2, 1)  // AF_INET=2, SOCK_STREAM=1
+
+  if server.socket < 0 {
+    println("❌ API 소켓 생성 실패")
+    return
+  }
+  println("✅ API 소켓 생성됨 (fd=" + i32ToString(server.socket) + ")")
+
+  // 2️⃣ SO_REUSEADDR 옵션 설정
+  net.setsockopt(server.socket, 1, 15, 1)
+
+  // 3️⃣ 소켓 바인드
+  println("📍 API 바인드 중: " + server.host + ":" + i32ToString(server.port))
+  let bindResult = net.bind(server.socket, server.host, server.port)
+
+  if bindResult != 0 {
+    println("❌ API 바인드 실패 (호스트/포트 이미 사용 중?)")
+    net.close(server.socket)
+    return
+  }
+  println("✅ API 바인드 완료")
+
+  // 4️⃣ 리슨 시작
+  println("📍 API 리슨 시작 (backlog=128)")
+  let listenResult = net.listen(server.socket, 128)
+
+  if listenResult != 0 {
+    println("❌ API 리슨 실패")
+    net.close(server.socket)
+    return
+  }
+  println("✅ API 리슨 시작됨, 클라이언트 대기 중...")
+  println("")
+
+  // 5️⃣ 메인 수락 루프
   while server.running {
-    // clientSocket = net.accept(server.socket)
-    // rawRequest = net.read(clientSocket)
+    // 클라이언트 연결 수락
+    let (clientFd, clientHost, clientPort) = net.accept(server.socket)
 
-    // 요청 파싱 (path와 query 추출)
-    // path = parseRequestPath(rawRequest)
-    // query = parseQueryString(rawRequest)
+    if clientFd < 0 {
+      continue
+    }
 
-    // API 처리
-    // response = handleAPIRequest(server, path, query)
+    // 6️⃣ HTTP 요청 읽기
+    let (readOk, rawRequest) = net.read(clientFd, 4096)
 
-    // HTTP 응답 생성
-    // httpResponse = buildHTTPResponse(response.status, response.contentType, response.body)
-
-    // 응답 전송
-    // net.write(clientSocket, httpResponse)
-    // net.close(clientSocket)
+    if !readOk || rawRequest.isEmpty() {
+      net.close(clientFd)
+      continue
+    }
 
     server.requestCount = server.requestCount + 1
+
+    // 7️⃣ 요청 파싱 (path와 query 추출)
+    let path = parseRequestPath(rawRequest)
+    let query = parseQueryString(rawRequest)
+
+    println("📨 요청 #" + i32ToString(server.requestCount) + ": " + path + " (from " + clientHost + ":" + i32ToString(clientPort) + ")")
+
+    // 8️⃣ API 처리
+    let response = handleAPIRequest(server, path, query)
+
+    // 9️⃣ HTTP 응답 생성
+    let httpResponse = buildAPIHTTPResponse(response.status, response.contentType, response.body)
+
+    // 🔟 응답 전송
+    let writeOk = net.write(clientFd, httpResponse)
+
+    if writeOk {
+      println("✅ API 응답 전송: " + i32ToString(response.status))
+    } else {
+      println("❌ API 응답 전송 실패")
+    }
+
+    // 1️⃣1️⃣ 연결 종료
+    net.close(clientFd)
   }
+
+  // 서버 종료 시 소켓 정리
+  println("")
+  println("🛑 API 서버 종료 중...")
+  net.close(server.socket)
+  println("✅ API 소켓 닫음")
 }
 
 // ──────────────────────────────────────────────────────────────────────────
